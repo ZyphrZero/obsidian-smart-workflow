@@ -27,7 +27,8 @@ export interface AIFileNamerSettings {
 }
 
 /**
- * 简洁的基础 Prompt 模板（不使用当前文件名上下文时）
+ * 基础 Prompt 模板（不使用文件名上下文）
+ * 仅根据笔记内容生成文件名
  */
 export const BASE_PROMPT_TEMPLATE = `Generate a concise and accurate filename for the following note content.
 
@@ -43,9 +44,13 @@ Requirements:
 6. Do not wrap the filename with quotes, angle brackets, or other symbols`;
 
 /**
- * 默认 Prompt 模板（使用当前文件名上下文时）
+ * 高级 Prompt 模板
+ * 支持文件名上下文和目录命名风格分析
+ * 根据设置动态包含：
+ * - 当前文件名（作为改进参考）
+ * - 同目录文件的命名风格
  */
-export const DEFAULT_PROMPT_TEMPLATE = `Generate a concise and accurate filename for the following note content.
+export const ADVANCED_PROMPT_TEMPLATE = `Generate a concise and accurate filename for the following note content.
 {{#if currentFileName}}
 Current filename: {{currentFileName}}
 Please improve upon this filename to create a more accurate one.
@@ -78,13 +83,13 @@ export const DEFAULT_SETTINGS: AIFileNamerSettings = {
       apiKey: '',
       model: 'gpt-3.5-turbo',
       temperature: 0.7,
-      maxTokens: 100,
+      maxTokens: 300,
       topP: 1.0,
-      promptTemplate: DEFAULT_PROMPT_TEMPLATE
+      promptTemplate: ADVANCED_PROMPT_TEMPLATE
     }
   ],
   activeConfigId: 'default',
-  defaultPromptTemplate: DEFAULT_PROMPT_TEMPLATE,
+  defaultPromptTemplate: ADVANCED_PROMPT_TEMPLATE,
   useCurrentFileNameContext: true,  // 默认使用当前文件名上下文
   analyzeDirectoryNamingStyle: false, // 默认不分析目录命名风格（性能考虑）
   debugMode: false, // 默认关闭调试模式
