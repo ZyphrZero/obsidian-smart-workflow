@@ -37,7 +37,7 @@
 
 ### 手动安装（推荐）
 1.  从 [Releases](https://github.com/ZyphrZero/obsidian-smart-workflow/releases) 下载 `main.js`, `manifest.json`, `styles.css`。
-2.  将文件放入您的插件目录：`.obsidian/plugins/smart-workflow/`。
+2.  将文件放入您的插件目录：`.obsidian/plugins/obsidian-smart-workflow/`。
 3.  重启 Obsidian 并在设置中启用插件。
 
 ### 源码编译
