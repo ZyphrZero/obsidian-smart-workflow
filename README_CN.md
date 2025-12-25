@@ -43,11 +43,27 @@
 
 ### 源码编译
 ```bash
+# 克隆仓库
 git clone https://github.com/ZyphrZero/obsidian-smart-workflow.git
 cd obsidian-smart-workflow
+
+# 安装依赖
 npm install
+
+# 构建插件
 npm run build
+
+# 构建 PTY 服务器二进制（终端功能需要）
+node scripts/build-rust.js win32-x64      # Windows
+node scripts/build-rust.js darwin-arm64   # macOS Apple Silicon
+node scripts/build-rust.js darwin-x64     # macOS Intel
+node scripts/build-rust.js linux-x64      # Linux
+
+# 安装到 Obsidian（交互式）
+npm run install:dev
 ```
+
+更多详情请参阅 [构建脚本指南](./scripts/README.md)。
 
 ## 📖 使用指南
 
@@ -102,11 +118,33 @@ npm run build
 
 ## 🧩 常见问题
 
+### AI 文件命名
 **Q: 支持 DeepSeek 或 Claude 吗？**
 A: 支持。本插件兼容 OpenAI 格式接口。对于 DeepSeek 等输出 "思考过程" 的模型，插件会自动过滤 `<think>` 标签，只保留最终结果。
 
 **Q: 为什么生成的标题没变化？**
 A: 请检查 Prompt 模板是否合理，或者开启调试模式并按下 `Ctrl+Shift+I` 打开控制台，查看 AI 实际返回的内容。
+
+### 终端功能
+**Q: 终端无法启动怎么办？**
+A: 请检查以下几点：
+1. 确认 Shell 路径是否正确（设置中会自动验证路径有效性）。
+2. 查看开发者控制台（Ctrl+Shift+I）是否有错误信息。
+3. 尝试使用诊断脚本：`node scripts/diagnose-terminal.js`。
+
+**Q: 如何更换终端 Shell？**
+A: 在设置 > 终端 > Shell 配置中，输入自定义 Shell 路径。例如：
+- Windows PowerShell: `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`
+- Windows CMD: `C:\Windows\System32\cmd.exe`
+- Git Bash: `C:\Program Files\Git\bin\bash.exe`
+
+**Q: 如何设置终端背景图片？**
+A: 在设置 > 终端 > 外观中，输入图片 URL（支持本地路径或网络地址）。可以调节透明度和模糊效果，实现毛玻璃效果。
+
+**Q: canvas 和 WebGL 渲染器应该选哪个？**
+A: 
+- **canvas**: 兼容性更好，适合大多数场景。
+- **WebGL**: 性能更佳，但某些系统可能不支持。建议先尝试 WebGL，如遇问题再切换到 canvas。
 
 ---
 <div align="center">

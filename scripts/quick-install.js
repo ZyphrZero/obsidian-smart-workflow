@@ -1,12 +1,25 @@
 /**
  * 快速安装脚本 - 直接安装到指定的 vault
+ * 
+ * 使用方法:
+ *   node scripts/quick-install.js [vault路径]
+ * 
+ * 示例:
+ *   node scripts/quick-install.js "D:\MyVault\.obsidian\plugins\obsidian-smart-workflow"
+ *   node scripts/quick-install.js "/Users/username/MyVault/.obsidian/plugins/obsidian-smart-workflow"
+ * 
+ * 或者设置环境变量:
+ *   set OBSIDIAN_PLUGIN_PATH=D:\MyVault\.obsidian\plugins\obsidian-smart-workflow
+ *   npm run quick-install
  */
 
 const fs = require('fs');
 const path = require('path');
 
 const ROOT_DIR = path.join(__dirname, '..');
-const TARGET_VAULT = 'D:\\OneDrive\\obsidian-zyphrzero\\.obsidian\\plugins\\obsidian-smart-workflow';
+
+// 从命令行参数、环境变量或提示用户获取目标路径
+const TARGET_VAULT = process.argv[2] || process.env.OBSIDIAN_PLUGIN_PATH;
 
 // 颜色输出
 const colors = {
@@ -23,6 +36,21 @@ function log(message, color = 'reset') {
 
 function main() {
   log('\n📦 快速安装到 Obsidian\n', 'cyan');
+
+  // 0. 检查目标路径
+  if (!TARGET_VAULT) {
+    log('❌ 错误: 未指定目标路径', 'red');
+    log('\n使用方法:', 'yellow');
+    log('  1. 命令行参数:', 'cyan');
+    log('     node scripts/quick-install.js "路径"', 'yellow');
+    log('\n  2. 环境变量:', 'cyan');
+    log('     set OBSIDIAN_PLUGIN_PATH=路径', 'yellow');
+    log('     npm run quick-install', 'yellow');
+    log('\n示例路径:', 'cyan');
+    log('  Windows: D:\\MyVault\\.obsidian\\plugins\\obsidian-smart-workflow', 'yellow');
+    log('  macOS/Linux: /Users/username/MyVault/.obsidian/plugins/obsidian-smart-workflow\n', 'yellow');
+    process.exit(1);
+  }
 
   // 1. 检查必需文件
   log('🔍 检查必需文件...', 'cyan');

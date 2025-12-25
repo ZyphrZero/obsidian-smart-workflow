@@ -45,11 +45,27 @@
 
 ### Source Code Compilation
 ```bash
+# Clone repository
 git clone https://github.com/ZyphrZero/obsidian-smart-workflow.git
 cd obsidian-smart-workflow
+
+# Install dependencies
 npm install
+
+# Build plugin
 npm run build
+
+# Build PTY server binary (for terminal feature)
+node scripts/build-rust.js win32-x64      # Windows
+node scripts/build-rust.js darwin-arm64   # macOS Apple Silicon
+node scripts/build-rust.js darwin-x64     # macOS Intel
+node scripts/build-rust.js linux-x64      # Linux
+
+# Install to Obsidian (interactive)
+npm run install:dev
 ```
+
+For more details, see [Build Scripts Guide](./scripts/README.md).
 
 ## 📖 User Guide
 
