@@ -105,9 +105,9 @@ jobs:
           cat "${BINARY_NAME}.sha256"
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: binaries
+          name: pty-server-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
             binaries/pty-server-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}
             binaries/pty-server-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}.sha256
@@ -130,10 +130,11 @@ jobs:
           node-version: '18'
 
       - name: Download all Rust binaries
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
-          name: binaries
+          pattern: pty-server-*
           path: binaries
+          merge-multiple: true
 
       - name: Set executable permissions
         run: |
