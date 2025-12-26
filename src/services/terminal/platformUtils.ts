@@ -76,7 +76,7 @@ export function getShellPath(shellType: string): string {
         return 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
       case 'wsl':
         return 'C:\\Windows\\System32\\wsl.exe';
-      case 'gitbash':
+      case 'gitbash': {
         // Git Bash 常见安装路径
         const gitBashPaths = [
           'C:\\Program Files\\Git\\bin\\bash.exe',
@@ -93,6 +93,7 @@ export function getShellPath(shellType: string): string {
         
         // 如果都不存在，返回最常见的路径
         return 'C:\\Program Files\\Git\\bin\\bash.exe';
+      }
       default:
         // 如果是自定义路径，直接返回
         return shellType;

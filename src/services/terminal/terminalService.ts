@@ -16,6 +16,17 @@ import { TerminalInstance } from './terminalInstance';
 import { debugLog, debugWarn, errorLog } from '../../utils/logger';
 import { t } from '../../i18n';
 
+// 预加载 TerminalInstance 模块，避免首次创建终端时的动态 import 延迟
+let terminalInstanceModule: typeof import('./terminalInstance') | null = null;
+const preloadTerminalInstance = async () => {
+  if (!terminalInstanceModule) {
+    terminalInstanceModule = await import('./terminalInstance');
+  }
+  return terminalInstanceModule;
+};
+// 立即开始预加载
+preloadTerminalInstance();
+
 /**
  * 服务器信息
  */
@@ -305,8 +316,8 @@ export class TerminalService {
       
       debugLog(`[TerminalService] 创建终端，使用服务器端口: ${port}`);
 
-      // 导入 TerminalInstance
-      const { TerminalInstance } = await import('./terminalInstance');
+      // 使用预加载的模块
+      const { TerminalInstance } = await preloadTerminalInstance();
       
       // 获取工作目录（如果启用了自动进入项目目录）
       let cwd: string | undefined;

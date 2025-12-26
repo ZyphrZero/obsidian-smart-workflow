@@ -5,16 +5,17 @@ edition = "2021"
 
 [dependencies]
 portable-pty = "0.9"
-tokio = { version = "1", features = ["full"] }
+# 只启用必要的 tokio 特性，减少初始化开销
+tokio = { version = "1", features = ["rt", "net", "sync", "signal", "macros"] }
 tokio-tungstenite = "0.21"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 futures-util = "0.3"
-clap = { version = "4.5", features = ["derive"] }
+# 移除 clap，使用手动参数解析减少启动开销
 
 [profile.release]
-opt-level = "z"     # 优化体积
-lto = true          # 链接时优化
+opt-level = 3       # 优化速度而非体积
+lto = "thin"        # 使用 thin LTO，平衡编译速度和运行性能
 codegen-units = 1   # 更好的优化
 strip = true        # 移除符号表
 panic = "abort"     # 减小体积

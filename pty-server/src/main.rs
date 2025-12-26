@@ -3,22 +3,8 @@ mod server;
 mod pty_session;
 mod shell;
 
-use clap::Parser;
 use server::{Server, ServerConfig};
-
-/// PTY 服务器命令行参数
-#[derive(Parser, Debug)]
-#[command(name = "pty-server")]
-#[command(about = "基于 portable-pty 的 WebSocket PTY 服务器", long_about = None)]
-struct Args {
-    /// 监听端口（0 表示随机端口）
-    #[arg(short, long, default_value_t = 0)]
-    port: u16,
-
-    /// 禁用彩色日志
-    #[arg(long, default_value_t = false)]
-    no_color: bool,
-}
+use std::env;
 
 /// 简单的日志宏
 macro_rules! log_info {
@@ -35,17 +21,47 @@ macro_rules! log_debug {
     };
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 解析命令行参数
-    let args = Args::parse();
+/// 手动解析命令行参数（比 clap 快约 10-20ms）
+fn parse_args() -> u16 {
+    let args: Vec<String> = env::args().collect();
+    let mut port: u16 = 0;
+    
+    let mut i = 1;
+    while i < args.len() {
+        match args[i].as_str() {
+            "-p" | "--port" => {
+                if i + 1 < args.len() {
+                    port = args[i + 1].parse().unwrap_or(0);
+                    i += 1;
+                }
+            }
+            arg if arg.starts_with("--port=") => {
+                port = arg.trim_start_matches("--port=").parse().unwrap_or(0);
+            }
+            "-h" | "--help" => {
+                eprintln!("Usage: pty-server [OPTIONS]");
+                eprintln!("Options:");
+                eprintln!("  -p, --port <PORT>  监听端口（0 表示随机端口）[default: 0]");
+                eprintln!("  -h, --help         显示帮助信息");
+                std::process::exit(0);
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    
+    port
+}
 
-    log_debug!("启动参数: {:?}", args);
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // 手动解析命令行参数
+    let port = parse_args();
+
+    log_debug!("启动参数: port={}", port);
 
     // 创建服务器配置
-    let config = ServerConfig {
-        port: args.port,
-    };
+    let config = ServerConfig { port };
 
     // 创建并启动服务器
     let server = Server::new(config);

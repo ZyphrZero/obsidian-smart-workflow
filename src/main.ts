@@ -8,6 +8,7 @@ import { TerminalService } from './services/terminal/terminalService';
 import { TerminalView, TERMINAL_VIEW_TYPE } from './ui/terminal/terminalView';
 import { setDebugMode, debugLog, errorLog } from './utils/logger';
 import { i18n, t } from './i18n';
+import * as path from 'path';
 
 /**
  * AI 文件名生成器插件主类
@@ -289,19 +290,18 @@ export default class SmartWorkflowPlugin extends Plugin {
       })
     );
 
-    // 启动 PTY 服务器
-    try {
-      await this.terminalService.ensurePtyServer();
-      debugLog('[Plugin] PTY 服务器已启动');
-    } catch (error) {
-      errorLog('[Plugin] 启动 PTY 服务器失败:', error);
-      NoticeHelper.error(t('notices.ptyServerStartFailed'));
-    }
-
     // 注册新标签页中的"打开终端"选项
     if (this.settings.featureVisibility.terminal.showInNewTab) {
       this.registerNewTabTerminalAction();
     }
+
+    // 异步启动 PTY 服务器（不阻塞插件加载）
+    this.terminalService.ensurePtyServer().then(() => {
+      debugLog('[Plugin] PTY 服务器已启动');
+    }).catch((error) => {
+      errorLog('[Plugin] 启动 PTY 服务器失败:', error);
+      // 不显示通知，等用户实际使用终端时再提示
+    });
   }
 
   /**
@@ -505,14 +505,14 @@ export default class SmartWorkflowPlugin extends Plugin {
    * @returns 插件目录的绝对路径
    */
   private getPluginDir(): string {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const adapter = this.app.vault.adapter as any;
     const vaultPath = adapter.getBasePath();
     
-    // @ts-ignore - manifest.dir 在运行时存在
     const manifestDir = this.manifest.dir || `.obsidian/plugins/${this.manifest.id}`;
     
     // 转换为绝对路径
-    return require('path').join(vaultPath, manifestDir);
+    return path.join(vaultPath, manifestDir);
   }
 
   /**

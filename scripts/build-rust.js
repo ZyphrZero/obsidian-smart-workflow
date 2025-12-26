@@ -131,7 +131,9 @@ for (const platform of platformsToBuild) {
 // 总结
 console.log('📊 构建总结:');
 console.log(`  ✅ 成功: ${successCount}`);
-console.log(`  ❌ 失败: ${failCount}`);
+if (failCount > 0) {
+  console.log(`  ❌ 失败: ${failCount}`);
+}
 console.log('');
 
 if (successCount > 0) {
@@ -148,7 +150,23 @@ function buildPlatform(platform) {
   const binaryName = `pty-server-${platform.name}${platform.ext}`;
   const outputPath = path.join(BINARIES_DIR, binaryName);
   
-  // 1. 编译
+  // 1. 清理该目标平台的缓存，强制重新编译
+  console.log('  🧹 清理缓存...');
+  try {
+    execSync(
+      `cargo clean --release --target ${platform.target}`,
+      {
+        cwd: PTY_SERVER_DIR,
+        stdio: 'pipe',
+        encoding: 'utf8'
+      }
+    );
+  } catch (error) {
+    // 清理失败不影响构建，可能是首次构建
+    console.log('  ⚠️  清理缓存跳过（可能是首次构建）');
+  }
+  
+  // 2. 编译
   console.log('  📦 编译中...');
   const startTime = Date.now();
   

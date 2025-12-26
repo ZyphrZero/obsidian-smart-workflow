@@ -9,6 +9,7 @@ import { SearchAddon } from '@xterm/addon-search';
 import { CanvasAddon } from '@xterm/addon-canvas';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { platform } from 'os';
+import { exec } from 'child_process';
 import { debugLog, debugWarn, errorLog } from '../../utils/logger';
 import { t } from '../../i18n';
 
@@ -470,7 +471,8 @@ export class TerminalInstance {
 
     const preferredRenderer = this.options.preferredRenderer || 'canvas';
     
-    setTimeout(() => {
+    // 使用 requestAnimationFrame 替代 setTimeout，更快响应
+    requestAnimationFrame(() => {
       try {
         this.loadRenderer(preferredRenderer);
         this.fit();
@@ -479,7 +481,7 @@ export class TerminalInstance {
         this.xterm.write(`\r\n\x1b[1;31m[渲染器错误] ${errorMsg}\x1b[0m\r\n`);
         throw error;
       }
-    }, 50);
+    });
   }
 
   /**
@@ -1207,6 +1209,7 @@ export class TerminalInstance {
    */
   private extractCwdFromOutput(data: string): void {
     // OSC 0 格式 (窗口标题，Git Bash 使用): \x1b]0;MINGW64:/path\x07
+    // eslint-disable-next-line no-control-regex
     const osc0Match = data.match(/\x1b\]0;(?:MINGW(?:64|32)|MSYS):([^\x07]+)\x07/);
     if (osc0Match) {
       let path = osc0Match[1];
@@ -1221,6 +1224,7 @@ export class TerminalInstance {
     }
     
     // OSC 7 格式: \x1b]7;file://hostname/path\x07
+    // eslint-disable-next-line no-control-regex
     const osc7Match = data.match(/\x1b\]7;file:\/\/[^/]*([^\x07\x1b]+)[\x07\x1b]/);
     if (osc7Match) {
       try {
@@ -1234,6 +1238,7 @@ export class TerminalInstance {
     }
     
     // OSC 9;9 格式 (Windows Terminal): \x1b]9;9;path\x07
+    // eslint-disable-next-line no-control-regex
     const osc9Match = data.match(/\x1b\]9;9;([^\x07\x1b]+)[\x07\x1b]/);
     if (osc9Match) {
       this.currentCwd = osc9Match[1];
@@ -1262,7 +1267,7 @@ export class TerminalInstance {
     }
     
     // Git Bash prompt (清理后): user@host MINGW64 /path\n$
-    const gitBashMatch = cleanData.match(/(?:MINGW(?:64|32)|MSYS)\s+([\/~][^\r\n]*)\r?\n/);
+    const gitBashMatch = cleanData.match(/(?:MINGW(?:64|32)|MSYS)\s+([/~][^\r\n]*)\r?\n/);
     if (gitBashMatch) {
       let path = gitBashMatch[1].trimEnd();
       // 转换 Git Bash 路径格式到 Windows 格式
@@ -1279,7 +1284,7 @@ export class TerminalInstance {
     }
     
     // 通用 Bash/Zsh prompt: user@host:path$
-    const bashPromptMatch = cleanData.match(/[:]\s*([~\/][^\s$#>\r\n]*)\s*[$#>]\s*$/m);
+    const bashPromptMatch = cleanData.match(/[:]\s*([~/][^\s$#>\r\n]*)\s*[$#>]\s*$/m);
     if (bashPromptMatch) {
       let path = bashPromptMatch[1];
       if (path.startsWith('~')) {
@@ -1373,40 +1378,39 @@ export class TerminalInstance {
    * 在文件管理器中打开指定路径
    * @param path 要打开的路径
    */
-  private openInFileManager(path: string): void {
+  private openInFileManager(targetPath: string): void {
     const currentPlatform = platform();
-    const { exec } = require('child_process');
     
-    debugLog('[Terminal] Opening in file manager, original path:', path);
+    debugLog('[Terminal] Opening in file manager, original path:', targetPath);
     
-    let targetPath = path;
+    let finalPath = targetPath;
     
     // 如果是 WSL 终端，需要将 WSL 路径转换为 Windows 路径
-    if (currentPlatform === 'win32' && this.shellType === 'wsl' && path.startsWith('/mnt/')) {
-      targetPath = this.convertWslPathToWindows(path);
-      debugLog('[Terminal] Converted WSL path to Windows path:', { original: path, converted: targetPath });
+    if (currentPlatform === 'win32' && this.shellType === 'wsl' && targetPath.startsWith('/mnt/')) {
+      finalPath = this.convertWslPathToWindows(targetPath);
+      debugLog('[Terminal] Converted WSL path to Windows path:', { original: targetPath, converted: finalPath });
     }
     
-    debugLog('[Terminal] Final path for file manager:', targetPath);
+    debugLog('[Terminal] Final path for file manager:', finalPath);
     
     if (currentPlatform === 'win32') {
       // Windows: 使用 explorer 命令，会前台打开窗口
       // 注意: explorer 即使成功也可能返回非零退出码，忽略错误
-      exec(`explorer "${targetPath}"`);
+      exec(`explorer "${finalPath}"`);
     } else if (currentPlatform === 'darwin') {
       // macOS: 使用 open 命令
-      exec(`open "${targetPath}"`, (error: Error | null) => {
+      exec(`open "${finalPath}"`, (error: Error | null) => {
         if (error) {
           errorLog('[Terminal] Failed to open in Finder:', error);
-          shell.openPath(targetPath);
+          shell.openPath(finalPath);
         }
       });
     } else {
       // Linux: 使用 xdg-open
-      exec(`xdg-open "${targetPath}"`, (error: Error | null) => {
+      exec(`xdg-open "${finalPath}"`, (error: Error | null) => {
         if (error) {
           errorLog('[Terminal] Failed to open in file manager:', error);
-          shell.openPath(targetPath);
+          shell.openPath(finalPath);
         }
       });
     }
