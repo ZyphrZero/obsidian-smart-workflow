@@ -1282,6 +1282,16 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
               this.plugin.settings.featureVisibility.terminal.showInRibbon = value;
               await this.plugin.saveSettings();
             }));
+
+        new Setting(contentEl)
+          .setName(t('settingsDetails.advanced.showInNewTab'))
+          .setDesc(t('settingsDetails.advanced.showInNewTabDesc'))
+          .addToggle(toggle => toggle
+            .setValue(this.plugin.settings.featureVisibility.terminal.showInNewTab)
+            .onChange(async (value) => {
+              this.plugin.settings.featureVisibility.terminal.showInNewTab = value;
+              await this.plugin.saveSettings();
+            }));
       }
     );
   }

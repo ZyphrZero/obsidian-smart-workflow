@@ -37,6 +37,7 @@ export const zhCN: TranslationKeys = {
     terminalFontReset: '终端：重置字体大小',
     terminalSplitHorizontal: '终端：水平拆分',
     terminalSplitVertical: '终端：垂直拆分',
+    terminalClearBuffer: '终端：清空缓冲区',
   },
 
   menu: {
@@ -89,7 +90,9 @@ export const zhCN: TranslationKeys = {
       copyAsPlainText: '复制为纯文本',
       paste: '粘贴',
       selectAll: '全选',
+      selectLine: '选择当前行',
       clear: '清屏',
+      clearBuffer: '清空缓冲区',
       search: '搜索',
       copyPath: '复制当前路径',
       openInExplorer: '在文件管理器中打开',
@@ -253,6 +256,8 @@ export const zhCN: TranslationKeys = {
       showInRibbon: '侧边栏图标',
       showInRibbonDesc: '在左侧边栏显示 AI 文件名生成快捷图标',
       showInRibbonTerminalDesc: '在左侧边栏显示打开终端快捷图标',
+      showInNewTab: '新标签页',
+      showInNewTabDesc: '在新标签页中显示"打开终端"选项',
     },
   },
 

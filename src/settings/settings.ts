@@ -92,6 +92,7 @@ export interface FeatureVisibilitySettings {
   terminal: {
     showInCommandPalette: boolean;    // 命令面板
     showInRibbon: boolean;            // 侧边栏图标
+    showInNewTab: boolean;            // 新标签页
   };
 }
 
@@ -195,7 +196,8 @@ export const DEFAULT_FEATURE_VISIBILITY: FeatureVisibilitySettings = {
   },
   terminal: {
     showInCommandPalette: true,
-    showInRibbon: true
+    showInRibbon: true,
+    showInNewTab: true
   }
 };
 

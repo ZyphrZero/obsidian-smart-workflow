@@ -48,6 +48,7 @@ export interface TranslationKeys {
     terminalFontReset: string;
     terminalSplitHorizontal: string;
     terminalSplitVertical: string;
+    terminalClearBuffer: string;
   };
 
   // 菜单
@@ -106,7 +107,9 @@ export interface TranslationKeys {
       copyAsPlainText: string;
       paste: string;
       selectAll: string;
+      selectLine: string;
       clear: string;
+      clearBuffer: string;
       search: string;
       copyPath: string;
       openInExplorer: string;
@@ -272,6 +275,8 @@ export interface TranslationKeys {
       showInRibbon: string;
       showInRibbonDesc: string;
       showInRibbonTerminalDesc: string;
+      showInNewTab: string;
+      showInNewTabDesc: string;
     };
   };
 

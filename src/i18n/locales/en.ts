@@ -37,6 +37,7 @@ export const en: TranslationKeys = {
     terminalFontReset: 'Terminal: Reset Font Size',
     terminalSplitHorizontal: 'Terminal: Split Horizontally',
     terminalSplitVertical: 'Terminal: Split Vertically',
+    terminalClearBuffer: 'Terminal: Clear Buffer',
   },
 
   menu: {
@@ -89,7 +90,9 @@ export const en: TranslationKeys = {
       copyAsPlainText: 'Copy as Plain Text',
       paste: 'Paste',
       selectAll: 'Select All',
+      selectLine: 'Select Current Line',
       clear: 'Clear',
+      clearBuffer: 'Clear Buffer',
       search: 'Search',
       copyPath: 'Copy Current Path',
       openInExplorer: 'Open in File Explorer',
@@ -253,6 +256,8 @@ export const en: TranslationKeys = {
       showInRibbon: 'Sidebar Icon',
       showInRibbonDesc: 'Show AI filename generation shortcut icon in left sidebar',
       showInRibbonTerminalDesc: 'Show open terminal shortcut icon in left sidebar',
+      showInNewTab: 'New Tab Page',
+      showInNewTabDesc: 'Show "Open Terminal" option in new tab page',
     },
   },
 

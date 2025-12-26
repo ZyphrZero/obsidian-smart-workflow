@@ -489,6 +489,14 @@ export class TerminalInstance {
     container.addEventListener('keydown', (e: KeyboardEvent) => {
       const isCtrlOrCmd = e.ctrlKey || e.metaKey;
       
+      // Ctrl+Shift+A: 全选
+      if (isCtrlOrCmd && e.shiftKey && e.key === 'A') {
+        e.preventDefault();
+        e.stopPropagation();
+        this.xterm.selectAll();
+        return;
+      }
+      
       // Ctrl+F: 搜索
       if (isCtrlOrCmd && e.key === 'f') {
         e.preventDefault();
@@ -546,7 +554,16 @@ export class TerminalInstance {
     container.addEventListener('contextmenu', (e: MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      this.showContextMenu(e.clientX, e.clientY);
+      
+      // 计算鼠标点击位置对应的终端行列坐标
+      const rect = container.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      
+      // 使用 xterm.js 的内部方法计算坐标
+      const coords = this.getTerminalCoordinates(x, y);
+      
+      this.showContextMenu(e.clientX, e.clientY, coords);
     });
   }
 
@@ -554,7 +571,7 @@ export class TerminalInstance {
   /**
    * 显示右键菜单
    */
-  private showContextMenu(x: number, y: number): void {
+  private showContextMenu(x: number, y: number, coords?: { col: number; row: number }): void {
     // 移除已存在的菜单
     const existingMenu = document.querySelector('.terminal-context-menu');
     if (existingMenu) {
@@ -590,7 +607,7 @@ export class TerminalInstance {
           this.xterm.clearSelection();
         }
       },
-      'Ctrl+C'
+      'Ctrl+Shift+C'
     ));
 
     // 复制为纯文本（去除 ANSI 转义序列）
@@ -622,19 +639,29 @@ export class TerminalInstance {
           errorLog('[Terminal] Paste failed:', error);
         }
       },
-      'Ctrl+V'
+      'Ctrl+Shift+V'
     ));
 
     menu.appendChild(this.createSeparator());
 
-    // 全选
+    // 全选所有内容
     menu.appendChild(this.createMenuItem(
       t('terminal.contextMenu.selectAll'),
       'select-all',
       true,
       () => this.xterm.selectAll(),
-      'Ctrl+A'
+      'Ctrl+Shift+A'
     ));
+
+    // 选择当前行
+    if (coords) {
+      menu.appendChild(this.createMenuItem(
+        t('terminal.contextMenu.selectLine'),
+        'minus',
+        true,
+        () => this.selectLine(coords.row)
+      ));
+    }
 
     // 搜索
     menu.appendChild(this.createMenuItem(
@@ -665,7 +692,7 @@ export class TerminalInstance {
       true,
       () => {
         const cwd = this.getCwd();
-        shell.openPath(cwd);
+        this.openInFileManager(cwd);
       }
     ));
 
@@ -676,7 +703,8 @@ export class TerminalInstance {
       t('terminal.contextMenu.newTerminal'),
       'terminal',
       true,
-      () => this.contextMenuCallbacks.onNewTerminal?.()
+      () => this.contextMenuCallbacks.onNewTerminal?.(),
+      'Ctrl+O'
     ));
 
     // 拆分终端子菜单
@@ -687,12 +715,14 @@ export class TerminalInstance {
         {
           label: t('terminal.contextMenu.splitHorizontal'),
           icon: 'separator-horizontal',
-          onClick: () => this.contextMenuCallbacks.onSplitTerminal?.('horizontal')
+          onClick: () => this.contextMenuCallbacks.onSplitTerminal?.('horizontal'),
+          shortcut: 'Ctrl+Shift+H'
         },
         {
           label: t('terminal.contextMenu.splitVertical'),
           icon: 'separator-vertical',
-          onClick: () => this.contextMenuCallbacks.onSplitTerminal?.('vertical')
+          onClick: () => this.contextMenuCallbacks.onSplitTerminal?.('vertical'),
+          shortcut: 'Ctrl+Shift+J'
         }
       ]
     );
@@ -709,7 +739,7 @@ export class TerminalInstance {
           label: t('terminal.contextMenu.fontIncrease'),
           icon: 'plus',
           onClick: () => this.increaseFontSize(),
-          shortcut: 'Ctrl++'
+          shortcut: 'Ctrl+='
         },
         {
           label: t('terminal.contextMenu.fontDecrease'),
@@ -732,7 +762,17 @@ export class TerminalInstance {
       t('terminal.contextMenu.clear'),
       'trash',
       true,
-      () => this.xterm.clear()
+      () => this.clearScreen(),
+      'Ctrl+Shift+R'
+    ));
+
+    // 清空缓冲区
+    menu.appendChild(this.createMenuItem(
+      t('terminal.contextMenu.clearBuffer'),
+      'trash',
+      true,
+      () => this.clearBuffer(),
+      'Ctrl+Shift+K'
     ));
 
     document.body.appendChild(menu);
@@ -807,8 +847,10 @@ export class TerminalInstance {
       const shortcutEl = document.createElement('span');
       shortcutEl.textContent = shortcut;
       shortcutEl.style.cssText = `
-        color: var(--text-muted);
-        font-size: 11px;
+        color: var(--text-faint);
+        font-size: 12px;
+        opacity: 0.7;
+        margin-left: 12px;
       `;
       item.appendChild(shortcutEl);
     }
@@ -886,9 +928,10 @@ export class TerminalInstance {
       border-radius: 6px;
       padding: 4px 0;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-      min-width: 150px;
+      min-width: 200px;
       display: none;
       z-index: 10001;
+      white-space: nowrap;
     `;
 
     items.forEach(subItem => {
@@ -1281,6 +1324,122 @@ export class TerminalInstance {
   getCurrentRenderer(): 'canvas' | 'webgl' {
     if (this.renderer instanceof WebglAddon) return 'webgl';
     return 'canvas';
+  }
+
+  /**
+   * 将鼠标像素坐标转换为终端行列坐标
+   */
+  private getTerminalCoordinates(x: number, y: number): { col: number; row: number } {
+    const fontSize = this.xterm.options.fontSize || 14;
+    const lineHeight = Math.ceil(fontSize * 1.2); // xterm.js 默认行高约为字体大小的 1.2 倍
+    
+    // 计算字符宽度(等宽字体,宽度约为字体大小的 0.6 倍)
+    const charWidth = fontSize * 0.6;
+    
+    const col = Math.floor(x / charWidth);
+    const row = Math.floor(y / lineHeight);
+    
+    debugLog('[Terminal] Mouse coordinates:', { x, y, col, row, fontSize, charWidth, lineHeight });
+    
+    return { col, row };
+  }
+
+  /**
+   * 在文件管理器中打开指定路径
+   * @param path 要打开的路径
+   */
+  private openInFileManager(path: string): void {
+    const currentPlatform = platform();
+    
+    if (currentPlatform === 'win32') {
+      // Windows: 使用 explorer 命令打开并选中文件夹
+      // /select 参数会打开父文件夹并选中指定项
+      // 如果路径是文件夹,则直接打开该文件夹
+      const { exec } = require('child_process');
+      exec(`explorer "${path}"`, (error: Error | null) => {
+        if (error) {
+          errorLog('[Terminal] Failed to open in explorer:', error);
+          // 降级方案: 使用 shell.openPath
+          shell.openPath(path);
+        }
+      });
+    } else if (currentPlatform === 'darwin') {
+      // macOS: 使用 open 命令
+      const { exec } = require('child_process');
+      exec(`open "${path}"`, (error: Error | null) => {
+        if (error) {
+          errorLog('[Terminal] Failed to open in Finder:', error);
+          shell.openPath(path);
+        }
+      });
+    } else {
+      // Linux: 使用 xdg-open
+      const { exec } = require('child_process');
+      exec(`xdg-open "${path}"`, (error: Error | null) => {
+        if (error) {
+          errorLog('[Terminal] Failed to open in file manager:', error);
+          shell.openPath(path);
+        }
+      });
+    }
+    
+    debugLog('[Terminal] Opening in file manager:', path);
+  }
+
+  /**
+   * 选中指定行的完整内容
+   * @param row 行号
+   */
+  private selectLine(row: number): void {
+    const buffer = this.xterm.buffer.active;
+    
+    // 确保行号有效
+    if (row < 0 || row >= buffer.length) {
+      debugLog('[Terminal] Invalid row:', row);
+      return;
+    }
+    
+    this.xterm.selectLines(row, row);
+    debugLog('[Terminal] Selected line:', row);
+  }
+
+  /**
+   * 清屏
+   * 清除当前屏幕内容,但保留滚动历史
+   */
+  private clearScreen(): void {
+    // 先发送 Ctrl+C 中断当前输入
+    this.sendMessage('\x03');
+    
+    // 等待一小段时间让中断生效,然后发送清屏命令
+    setTimeout(() => {
+      const clearCommand = platform() === 'win32' ? 'cls\r' : 'clear\r';
+      this.sendMessage(clearCommand);
+      debugLog('[Terminal] Screen cleared');
+    }, 50);
+  }
+
+  /**
+   * 清空缓冲区
+   * 完全重置终端状态,清除所有内容和历史记录
+   */
+  clearBuffer(): void {
+    // 先发送 Ctrl+C 中断当前输入
+    this.sendMessage('\x03');
+    
+    // 等待一小段时间让中断生效
+    setTimeout(() => {
+      // 发送清屏命令到 shell
+      const clearCommand = platform() === 'win32' ? 'cls\r' : 'clear\r';
+      this.sendMessage(clearCommand);
+      
+      // 清除 xterm.js 的滚动缓冲区和状态
+      this.xterm.clear();
+      this.xterm.reset();
+      this.xterm.clearSelection();
+      
+      debugLog('[Terminal] Buffer cleared and terminal reset');
+    }, 50);
   }
 
   updateTheme(): void {

@@ -50,7 +50,7 @@ export class TerminalService {
     
     // 从 package.json 读取版本号，GitHub repo 需要配置
     const version = '1.0.0'; // TODO: 从 manifest.json 或 package.json 读取
-    const githubRepo = 'user/obsidian-terminal'; // TODO: 配置实际的 GitHub repo
+    const githubRepo = 'ZyphrZero/obsidian-smart-workflow'; // TODO: 配置实际的 GitHub repo
     
     this.binaryManager = new BinaryManager(pluginDir, version, githubRepo);
   }

@@ -83,6 +83,7 @@ export default class SmartWorkflowPlugin extends Plugin {
       this.addCommand({
         id: 'open-terminal',
         name: t('commands.openTerminal'),
+        hotkeys: [{ modifiers: ['Ctrl'], key: 'o' }],
         callback: async () => {
           await this.activateTerminalView();
         }
@@ -91,23 +92,9 @@ export default class SmartWorkflowPlugin extends Plugin {
 
     // 终端快捷键命令
     this.addCommand({
-      id: 'terminal-search',
-      name: t('commands.terminalSearch'),
-      checkCallback: (checking: boolean) => {
-        const terminalView = this.getActiveTerminalView();
-        if (terminalView) {
-          if (!checking) {
-            terminalView.showSearch();
-          }
-          return true;
-        }
-        return false;
-      }
-    });
-
-    this.addCommand({
       id: 'terminal-clear',
       name: t('commands.terminalClear'),
+      hotkeys: [{ modifiers: ['Ctrl', 'Shift'], key: 'r' }],
       checkCallback: (checking: boolean) => {
         const terminalView = this.getActiveTerminalView();
         if (terminalView?.getTerminalInstance()) {
@@ -123,6 +110,7 @@ export default class SmartWorkflowPlugin extends Plugin {
     this.addCommand({
       id: 'terminal-copy',
       name: t('commands.terminalCopy'),
+      hotkeys: [{ modifiers: ['Ctrl', 'Shift'], key: 'c' }],
       checkCallback: (checking: boolean) => {
         const terminalView = this.getActiveTerminalView();
         const terminal = terminalView?.getTerminalInstance();
@@ -141,6 +129,7 @@ export default class SmartWorkflowPlugin extends Plugin {
     this.addCommand({
       id: 'terminal-paste',
       name: t('commands.terminalPaste'),
+      hotkeys: [{ modifiers: ['Ctrl', 'Shift'], key: 'v' }],
       checkCallback: (checking: boolean) => {
         const terminalView = this.getActiveTerminalView();
         const terminal = terminalView?.getTerminalInstance();
@@ -159,6 +148,7 @@ export default class SmartWorkflowPlugin extends Plugin {
     this.addCommand({
       id: 'terminal-font-increase',
       name: t('commands.terminalFontIncrease'),
+      hotkeys: [{ modifiers: ['Ctrl'], key: '=' }],
       checkCallback: (checking: boolean) => {
         const terminalView = this.getActiveTerminalView();
         const terminal = terminalView?.getTerminalInstance();
@@ -175,6 +165,7 @@ export default class SmartWorkflowPlugin extends Plugin {
     this.addCommand({
       id: 'terminal-font-decrease',
       name: t('commands.terminalFontDecrease'),
+      hotkeys: [{ modifiers: ['Ctrl'], key: '-' }],
       checkCallback: (checking: boolean) => {
         const terminalView = this.getActiveTerminalView();
         const terminal = terminalView?.getTerminalInstance();
@@ -191,6 +182,7 @@ export default class SmartWorkflowPlugin extends Plugin {
     this.addCommand({
       id: 'terminal-font-reset',
       name: t('commands.terminalFontReset'),
+      hotkeys: [{ modifiers: ['Ctrl'], key: '0' }],
       checkCallback: (checking: boolean) => {
         const terminalView = this.getActiveTerminalView();
         const terminal = terminalView?.getTerminalInstance();
@@ -207,6 +199,7 @@ export default class SmartWorkflowPlugin extends Plugin {
     this.addCommand({
       id: 'terminal-split-horizontal',
       name: t('commands.terminalSplitHorizontal'),
+      hotkeys: [{ modifiers: ['Ctrl', 'Shift'], key: 'h' }],
       checkCallback: (checking: boolean) => {
         const terminalView = this.getActiveTerminalView();
         if (terminalView) {
@@ -222,11 +215,29 @@ export default class SmartWorkflowPlugin extends Plugin {
     this.addCommand({
       id: 'terminal-split-vertical',
       name: t('commands.terminalSplitVertical'),
+      hotkeys: [{ modifiers: ['Ctrl', 'Shift'], key: 'j' }],
       checkCallback: (checking: boolean) => {
         const terminalView = this.getActiveTerminalView();
         if (terminalView) {
           if (!checking) {
             this.splitTerminal('vertical');
+          }
+          return true;
+        }
+        return false;
+      }
+    });
+
+    this.addCommand({
+      id: 'terminal-clear-buffer',
+      name: t('commands.terminalClearBuffer'),
+      hotkeys: [{ modifiers: ['Ctrl', 'Shift'], key: 'k' }],
+      checkCallback: (checking: boolean) => {
+        const terminalView = this.getActiveTerminalView();
+        const terminal = terminalView?.getTerminalInstance();
+        if (terminal) {
+          if (!checking) {
+            terminal.clearBuffer();
           }
           return true;
         }
@@ -285,6 +296,11 @@ export default class SmartWorkflowPlugin extends Plugin {
     } catch (error) {
       errorLog('[Plugin] 启动 PTY 服务器失败:', error);
       NoticeHelper.error(t('notices.ptyServerStartFailed'));
+    }
+
+    // 注册新标签页中的"打开终端"选项
+    if (this.settings.featureVisibility.terminal.showInNewTab) {
+      this.registerNewTabTerminalAction();
     }
   }
 
@@ -493,7 +509,6 @@ export default class SmartWorkflowPlugin extends Plugin {
 
   /**
    * 激活终端视图
-   * 参考 obsidian-terminal 的实现逻辑
    */
   async activateTerminalView(): Promise<void> {
     const { workspace } = this.app;
@@ -539,8 +554,53 @@ export default class SmartWorkflowPlugin extends Plugin {
   }
 
   /**
+   * 注册新标签页中的"打开终端"选项
+   * 通过监听 layout-change 事件，在空标签页中注入自定义按钮
+   */
+  private registerNewTabTerminalAction(): void {
+    this.registerEvent(
+      this.app.workspace.on('layout-change', () => {
+        this.injectTerminalButtonToEmptyViews();
+      })
+    );
+
+    // 初始注入
+    this.injectTerminalButtonToEmptyViews();
+  }
+
+  /**
+   * 向所有空标签页注入"打开终端"按钮
+   */
+  private injectTerminalButtonToEmptyViews(): void {
+    const emptyViews = document.querySelectorAll('.empty-state');
+    
+    emptyViews.forEach((emptyView) => {
+      // 检查是否已经注入过
+      if (emptyView.querySelector('.smart-workflow-terminal-action')) {
+        return;
+      }
+
+      // 查找操作容器
+      const actionsContainer = emptyView.querySelector('.empty-state-action-list');
+      if (!actionsContainer) {
+        return;
+      }
+
+      // 创建"打开终端"按钮
+      const terminalAction = document.createElement('div');
+      terminalAction.className = 'empty-state-action smart-workflow-terminal-action';
+      terminalAction.textContent = t('commands.openTerminal') + ' (Ctrl+O)';
+      terminalAction.addEventListener('click', async () => {
+        await this.activateTerminalView();
+      });
+
+      // 添加到操作列表
+      actionsContainer.appendChild(terminalAction);
+    });
+  }
+
+  /**
    * 根据配置获取新终端的 WorkspaceLeaf
-   * 完全参考 obsidian-terminal 的 TerminalView.getLeaf() 实现
    */
   private getLeafForNewTerminal(): WorkspaceLeaf {
     const { workspace } = this.app;
