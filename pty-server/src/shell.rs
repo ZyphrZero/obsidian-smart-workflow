@@ -4,14 +4,18 @@ use portable_pty::CommandBuilder;
 /// Shell Integration 脚本（通过 PTY 注入）
 /// 使用空格前缀让命令不进入历史记录，使用重定向隐藏输出
 /// 注意：bash/zsh 默认配置下，以空格开头的命令不会记录到历史
+/// 仅在 Unix 平台使用，Windows 平台依赖前端 prompt 解析
 
 // Bash: 定义函数并设置 PROMPT_COMMAND，静默执行
+#[cfg(not(windows))]
 const SHELL_INTEGRATION_BASH: &str = " eval '__sw_cwd(){ printf \"\\e]7;file://%s%s\\e\\\\\" \"${HOSTNAME:-localhost}\" \"$PWD\";};PROMPT_COMMAND=\"__sw_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}\"' 2>/dev/null;__sw_cwd;printf '\\ec'\n";
 
 // Zsh: 使用 precmd hook，静默执行
+#[cfg(not(windows))]
 const SHELL_INTEGRATION_ZSH: &str = " eval '__sw_cwd(){ printf \"\\e]7;file://%s%s\\e\\\\\" \"${HOST:-localhost}\" \"$PWD\";};autoload -Uz add-zsh-hook;add-zsh-hook precmd __sw_cwd;add-zsh-hook chpwd __sw_cwd' 2>/dev/null;__sw_cwd;printf '\\ec'\n";
 
 // Fish: 使用事件监听
+#[cfg(not(windows))]
 const SHELL_INTEGRATION_FISH: &str = " eval 'function __sw_cwd --on-variable PWD; printf \"\\e]7;file://%s%s\\e\\\\\" (hostname) $PWD; end' 2>/dev/null;__sw_cwd;printf '\\ec'\n";
 
 /// 获取 shell integration 脚本
