@@ -14,19 +14,25 @@ const SHELL_INTEGRATION_ZSH: &str = " eval '__sw_cwd(){ printf \"\\e]7;file://%s
 // Fish: 使用事件监听
 const SHELL_INTEGRATION_FISH: &str = " eval 'function __sw_cwd --on-variable PWD; printf \"\\e]7;file://%s%s\\e\\\\\" (hostname) $PWD; end' 2>/dev/null;__sw_cwd;printf '\\ec'\n";
 
-// 注意：Windows shells (cmd/pwsh) 不支持可靠的 Shell Integration
-// 依赖前端的 prompt 解析来获取 CWD
-
 /// 获取 shell integration 脚本
-/// 注意：Windows 原生 shells (pwsh/cmd) 不使用 Shell Integration，依赖前端 prompt 解析
-/// WSL 运行 Linux shell，支持 Shell Integration
+/// 注意：Windows 平台所有 shells 都不使用 Shell Integration，依赖前端 prompt 解析
 pub fn get_shell_integration_script(shell_type: &str) -> Option<&'static str> {
-    match shell_type {
-        "bash" | "gitbash" | "wsl" => Some(SHELL_INTEGRATION_BASH),
-        "zsh" => Some(SHELL_INTEGRATION_ZSH),
-        "fish" => Some(SHELL_INTEGRATION_FISH),
-        // Windows 原生 shells 不注入脚本，使用前端 prompt 解析
-        _ => None,
+    // Windows 平台不注入脚本
+    #[cfg(windows)]
+    {
+        let _ = shell_type; // 避免未使用警告
+        None
+    }
+    
+    // Unix 平台使用 Shell Integration
+    #[cfg(not(windows))]
+    {
+        match shell_type {
+            "bash" => Some(SHELL_INTEGRATION_BASH),
+            "zsh" => Some(SHELL_INTEGRATION_ZSH),
+            "fish" => Some(SHELL_INTEGRATION_FISH),
+            _ => None,
+        }
     }
 }
 

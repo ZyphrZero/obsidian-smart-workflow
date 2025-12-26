@@ -1246,7 +1246,7 @@ export class TerminalInstance {
       return;
     }
     
-    // Windows shells prompt 解析 (fallback)
+    // Prompt 解析 (fallback for Windows shells)
     // eslint-disable-next-line no-control-regex
     const cleanData = data.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
     
@@ -1263,6 +1263,29 @@ export class TerminalInstance {
     if (cmdMatch) {
       this.currentCwd = cmdMatch[1].trimEnd();
       debugLog('[Terminal CWD] CMD prompt matched:', this.currentCwd);
+      return;
+    }
+    
+    // Git Bash prompt: user@host MINGW64 /path
+    const gitBashMatch = cleanData.match(/(?:MINGW(?:64|32)|MSYS)\s+([/~][^\r\n$]*)/);
+    if (gitBashMatch) {
+      let path = gitBashMatch[1].trimEnd();
+      if (/^\/[a-zA-Z]\//.test(path)) {
+        const driveLetter = path[1].toUpperCase();
+        path = `${driveLetter}:${path.substring(2).replace(/\//g, '\\')}`;
+      } else if (path.startsWith('~')) {
+        path = path.replace('~', process.env.USERPROFILE || '');
+      }
+      this.currentCwd = path;
+      debugLog('[Terminal CWD] Git Bash prompt matched:', this.currentCwd);
+      return;
+    }
+    
+    // WSL prompt: user@host:/mnt/c/path$ 或 user@host:~$
+    const wslMatch = cleanData.match(/:\s*(\/[^\s$#>\r\n]+)\s*[$#]/);
+    if (wslMatch) {
+      this.currentCwd = wslMatch[1];
+      debugLog('[Terminal CWD] WSL prompt matched:', this.currentCwd);
     }
   }
 
