@@ -110,13 +110,40 @@ export default class SmartWorkflowPlugin extends Plugin {
   settings: SmartWorkflowSettings;
   aiService: AIService;
   fileNameService: FileNameService;
-  terminalService: TerminalService;
-  selectionToolbarManager: SelectionToolbarManager;
   generatingFiles: Set<string> = new Set();
+  
+  // 延迟初始化的服务
+  private _terminalService: TerminalService | null = null;
+  private _selectionToolbarManager: SelectionToolbarManager | null = null;
   
   // Ribbon 图标引用
   private aiNamingRibbonIcon: HTMLElement | null = null;
   private terminalRibbonIcon: HTMLElement | null = null;
+
+  /**
+   * 获取终端服务（延迟初始化）
+   */
+  get terminalService(): TerminalService {
+    if (!this._terminalService) {
+      const pluginDir = this.getPluginDir();
+      this._terminalService = new TerminalService(this.app, this.settings.terminal, pluginDir);
+    }
+    return this._terminalService;
+  }
+
+  /**
+   * 获取选中工具栏管理器（延迟初始化）
+   */
+  get selectionToolbarManager(): SelectionToolbarManager {
+    if (!this._selectionToolbarManager) {
+      this._selectionToolbarManager = new SelectionToolbarManager(
+        this.app,
+        this.settings.selectionToolbar
+      );
+      this._selectionToolbarManager.initialize();
+    }
+    return this._selectionToolbarManager;
+  }
 
 
   /**
@@ -134,26 +161,15 @@ export default class SmartWorkflowPlugin extends Plugin {
     // 初始化调试模式
     setDebugMode(this.settings.debugMode);
 
-    // 初始化服务
+    // 初始化核心服务（AI 功能）
     this.aiService = new AIService(this.app, this.settings, () => this.saveSettings());
     this.fileNameService = new FileNameService(
       this.app,
       this.aiService,
       this.settings
     );
-    
-    // 初始化终端服务（使用 Rust PTY 服务器架构）
-    const pluginDir = this.getPluginDir();
-    this.terminalService = new TerminalService(this.app, this.settings.terminal, pluginDir);
 
-    // 初始化选中文字浮动工具栏
-    this.selectionToolbarManager = new SelectionToolbarManager(
-      this.app,
-      this.settings.selectionToolbar
-    );
-    this.selectionToolbarManager.initialize();
-
-    // 注册终端视图
+    // 注册终端视图（视图注册不触发服务初始化）
     this.registerView(
       TERMINAL_VIEW_TYPE,
       (leaf: WorkspaceLeaf) => new TerminalView(leaf, this.terminalService)
@@ -458,6 +474,9 @@ export default class SmartWorkflowPlugin extends Plugin {
    * @param file 目标文件
    */
   async handleGenerateForFile(file: TFile) {
+    // 延迟验证功能绑定配置
+    this.validateFeatureBindings();
+    
     // 添加到生成中的文件集合
     this.generatingFiles.add(file.path);
 
@@ -534,348 +553,93 @@ export default class SmartWorkflowPlugin extends Plugin {
 
   /**
    * 加载设置
-   * 实现深度合并逻辑，确保新字段有默认值，处理无效配置回退
+   * 优化版：使用简洁的深度合并，延迟验证到首次使用时
    */
   async loadSettings() {
-    let loadedData: Partial<SmartWorkflowSettings> | null = null;
-    let needsSave = false;
-
-    try {
-      loadedData = await this.loadData();
-    } catch (error) {
-      // JSON 解析失败，使用默认配置
-      errorLog('[Settings] 配置数据解析失败，使用默认配置:', error);
-      loadedData = null;
+    const loaded = await this.loadData() as Partial<SmartWorkflowSettings> | null;
+    
+    if (!loaded) {
+      this.settings = { ...DEFAULT_SETTINGS };
+      return;
     }
 
-    // 初始化为默认设置的浅拷贝
-    this.settings = { ...DEFAULT_SETTINGS };
-
-    if (loadedData) {
-      // 深度合并加载的数据
-      this.settings = this.deepMergeSettings(DEFAULT_SETTINGS, loadedData);
-      
-      // 验证并修复供应商配置
-      const providersValid = this.validateAndFixProviders();
-      if (!providersValid) {
-        needsSave = true;
-      }
-
-      // 验证并修复功能绑定配置
-      const bindingsValid = this.validateAndFixFeatureBindings();
-      if (!bindingsValid) {
-        needsSave = true;
-      }
-    }
-
-    // 确保终端设置完整（深度合并）
-    if (!this.settings.terminal) {
-      this.settings.terminal = { ...DEFAULT_SETTINGS.terminal };
-      needsSave = true;
-    } else {
-      // 合并终端设置，确保所有字段都存在
-      this.settings.terminal = {
+    // 一次性深度合并所有设置
+    this.settings = {
+      ...DEFAULT_SETTINGS,
+      ...loaded,
+      // 确保 prompt 模板非空
+      defaultPromptTemplate: loaded.defaultPromptTemplate?.trim() || DEFAULT_SETTINGS.defaultPromptTemplate,
+      basePromptTemplate: loaded.basePromptTemplate || DEFAULT_SETTINGS.basePromptTemplate,
+      advancedPromptTemplate: loaded.advancedPromptTemplate || DEFAULT_SETTINGS.advancedPromptTemplate,
+      // 供应商配置：直接使用，确保 models 数组存在
+      providers: (loaded.providers || []).map(p => ({
+        ...p,
+        models: p.models || []
+      })),
+      // 功能绑定：直接使用
+      featureBindings: loaded.featureBindings || {},
+      // 嵌套对象深度合并
+      terminal: {
         ...DEFAULT_SETTINGS.terminal,
-        ...this.settings.terminal,
+        ...loaded.terminal,
         platformShells: {
           ...DEFAULT_SETTINGS.terminal.platformShells,
-          ...(this.settings.terminal.platformShells || {})
+          ...loaded.terminal?.platformShells
         },
         platformCustomShellPaths: {
           ...DEFAULT_SETTINGS.terminal.platformCustomShellPaths,
-          ...(this.settings.terminal.platformCustomShellPaths || {})
+          ...loaded.terminal?.platformCustomShellPaths
         }
-      };
-    }
-
-    // 确保功能显示设置完整（深度合并）
-    if (!this.settings.featureVisibility) {
-      this.settings.featureVisibility = { ...DEFAULT_SETTINGS.featureVisibility };
-      needsSave = true;
-    } else {
-      // 合并功能显示设置，确保所有字段都存在
-      this.settings.featureVisibility = {
+      },
+      featureVisibility: {
         aiNaming: {
           ...DEFAULT_SETTINGS.featureVisibility.aiNaming,
-          ...(this.settings.featureVisibility.aiNaming || {})
+          ...loaded.featureVisibility?.aiNaming
         },
         terminal: {
           ...DEFAULT_SETTINGS.featureVisibility.terminal,
-          ...(this.settings.featureVisibility.terminal || {})
+          ...loaded.featureVisibility?.terminal
         }
-      };
-    }
-
-    // 确保选中工具栏设置完整（深度合并）
-    if (!this.settings.selectionToolbar) {
-      this.settings.selectionToolbar = { ...DEFAULT_SETTINGS.selectionToolbar };
-      needsSave = true;
-    } else {
-      // 合并选中工具栏设置，确保所有字段都存在
-      this.settings.selectionToolbar = {
+      },
+      selectionToolbar: {
         ...DEFAULT_SETTINGS.selectionToolbar,
-        ...this.settings.selectionToolbar,
-        actions: {
-          ...DEFAULT_SETTINGS.selectionToolbar.actions,
-          ...(this.settings.selectionToolbar.actions || {})
-        }
-      };
-    }
-
-    // 如果 defaultPromptTemplate 为空，使用代码中的默认值
-    if (!this.settings.defaultPromptTemplate || this.settings.defaultPromptTemplate.trim() === '') {
-      this.settings.defaultPromptTemplate = DEFAULT_SETTINGS.defaultPromptTemplate;
-      needsSave = true;
-    }
-
-    // 保存修复后的配置
-    if (loadedData && needsSave) {
-      await this.saveSettings();
-    }
-  }
-
-  /**
-   * 深度合并设置对象
-   * @param defaults 默认设置
-   * @param loaded 加载的设置
-   * @returns 合并后的设置
-   */
-  private deepMergeSettings(
-    defaults: SmartWorkflowSettings,
-    loaded: Partial<SmartWorkflowSettings>
-  ): SmartWorkflowSettings {
-    const result = { ...defaults };
-
-    // 合并基本类型字段
-    if (typeof loaded.defaultPromptTemplate === 'string') {
-      result.defaultPromptTemplate = loaded.defaultPromptTemplate;
-    }
-    if (typeof loaded.useCurrentFileNameContext === 'boolean') {
-      result.useCurrentFileNameContext = loaded.useCurrentFileNameContext;
-    }
-    if (typeof loaded.analyzeDirectoryNamingStyle === 'boolean') {
-      result.analyzeDirectoryNamingStyle = loaded.analyzeDirectoryNamingStyle;
-    }
-    if (typeof loaded.timeout === 'number' && loaded.timeout > 0) {
-      result.timeout = loaded.timeout;
-    }
-    if (typeof loaded.debugMode === 'boolean') {
-      result.debugMode = loaded.debugMode;
-    }
-
-    // 合并供应商配置
-    if (Array.isArray(loaded.providers) && loaded.providers.length > 0) {
-      result.providers = this.mergeProviders(defaults.providers, loaded.providers);
-    }
-
-    // 合并功能绑定配置
-    if (loaded.featureBindings && typeof loaded.featureBindings === 'object') {
-      result.featureBindings = this.mergeFeatureBindings(
-        defaults.featureBindings,
-        loaded.featureBindings
-      );
-    }
-
-    // 合并终端设置
-    if (loaded.terminal && typeof loaded.terminal === 'object') {
-      result.terminal = {
-        ...defaults.terminal,
-        ...loaded.terminal,
-        platformShells: {
-          ...defaults.terminal.platformShells,
-          ...(loaded.terminal.platformShells || {})
-        },
-        platformCustomShellPaths: {
-          ...defaults.terminal.platformCustomShellPaths,
-          ...(loaded.terminal.platformCustomShellPaths || {})
-        }
-      };
-    }
-
-    // 合并功能显示设置
-    if (loaded.featureVisibility && typeof loaded.featureVisibility === 'object') {
-      result.featureVisibility = {
-        aiNaming: {
-          ...defaults.featureVisibility.aiNaming,
-          ...(loaded.featureVisibility.aiNaming || {})
-        },
-        terminal: {
-          ...defaults.featureVisibility.terminal,
-          ...(loaded.featureVisibility.terminal || {})
-        }
-      };
-    }
-
-    // 合并选中工具栏设置
-    if (loaded.selectionToolbar && typeof loaded.selectionToolbar === 'object') {
-      result.selectionToolbar = {
-        ...defaults.selectionToolbar,
         ...loaded.selectionToolbar,
         actions: {
-          ...defaults.selectionToolbar.actions,
-          ...(loaded.selectionToolbar.actions || {})
+          ...DEFAULT_SETTINGS.selectionToolbar.actions,
+          ...loaded.selectionToolbar?.actions
         }
-      };
-    }
-
-    return result;
-  }
-
-  /**
-   * 合并供应商配置
-   * @param defaults 默认供应商列表
-   * @param loaded 加载的供应商列表
-   * @returns 合并后的供应商列表
-   */
-  private mergeProviders(
-    defaults: import('./settings/settings').Provider[],
-    loaded: import('./settings/settings').Provider[]
-  ): import('./settings/settings').Provider[] {
-    // 验证每个供应商的结构
-    const validProviders = loaded.filter(provider => {
-      if (!provider || typeof provider !== 'object') return false;
-      if (!provider.id || typeof provider.id !== 'string') return false;
-      if (!provider.name || typeof provider.name !== 'string') return false;
-      if (!provider.endpoint || typeof provider.endpoint !== 'string') return false;
-      if (typeof provider.apiKey !== 'string') return false;
-      return true;
-    }).map(provider => {
-      // 确保每个供应商的 models 数组有效
-      const models = Array.isArray(provider.models) 
-        ? provider.models.filter(model => this.isValidModelConfig(model))
-        : [];
-      
-      return {
-        ...provider,
-        models // 保留有效的模型，即使为空数组
-      };
-    });
-
-    // 如果没有有效的供应商，返回默认值
-    if (validProviders.length === 0) {
-      debugLog('[Settings] 没有有效的供应商配置，使用默认值');
-      return [...defaults];
-    }
-
-    return validProviders;
-  }
-
-  /**
-   * 验证模型配置是否有效
-   * @param model 模型配置
-   * @returns 是否有效
-   */
-  private isValidModelConfig(model: unknown): model is import('./settings/settings').ModelConfig {
-    if (!model || typeof model !== 'object') return false;
-    const m = model as Record<string, unknown>;
-    if (!m.id || typeof m.id !== 'string') return false;
-    if (!m.name || typeof m.name !== 'string') return false;
-    // displayName 是可选的
-    if (m.displayName !== undefined && typeof m.displayName !== 'string') return false;
-    if (typeof m.temperature !== 'number' || m.temperature < 0 || m.temperature > 2) return false;
-    if (typeof m.maxTokens !== 'number' || m.maxTokens < 0) return false;
-    if (typeof m.topP !== 'number' || m.topP < 0 || m.topP > 1) return false;
-    return true;
-  }
-
-  /**
-   * 合并功能绑定配置
-   * @param defaults 默认功能绑定
-   * @param loaded 加载的功能绑定
-   * @returns 合并后的功能绑定
-   */
-  private mergeFeatureBindings(
-    defaults: Partial<Record<import('./settings/settings').AIFeature, import('./settings/settings').FeatureBinding>>,
-    loaded: Partial<Record<import('./settings/settings').AIFeature, import('./settings/settings').FeatureBinding>>
-  ): Partial<Record<import('./settings/settings').AIFeature, import('./settings/settings').FeatureBinding>> {
-    const result = { ...defaults };
-
-    // 验证并合并每个功能绑定
-    const features: import('./settings/settings').AIFeature[] = ['naming', 'translation'];
-    for (const feature of features) {
-      const binding = loaded[feature];
-      if (binding && this.isValidFeatureBinding(binding)) {
-        result[feature] = binding;
       }
-    }
-
-    return result;
+    };
   }
 
   /**
-   * 验证功能绑定是否有效
-   * @param binding 功能绑定
-   * @returns 是否有效
+   * 验证功能绑定配置（延迟验证，在首次使用 AI 功能时调用）
+   * @returns 配置是否有效
    */
-  private isValidFeatureBinding(binding: unknown): binding is import('./settings/settings').FeatureBinding {
-    if (!binding || typeof binding !== 'object') return false;
-    const b = binding as Record<string, unknown>;
-    if (!b.providerId || typeof b.providerId !== 'string') return false;
-    if (!b.modelId || typeof b.modelId !== 'string') return false;
-    if (typeof b.promptTemplate !== 'string') return false;
-    return true;
-  }
-
-  /**
-   * 验证并修复供应商配置
-   * @returns 配置是否有效（无需修复）
-   */
-  private validateAndFixProviders(): boolean {
-    let isValid = true;
-
-    // 确保 providers 数组存在
-    if (!this.settings.providers) {
-      this.settings.providers = [];
-      isValid = false;
-    }
-
-    // 验证每个供应商的模型列表
-    for (const provider of this.settings.providers) {
-      if (!provider.models) {
-        provider.models = [];
-        isValid = false;
-      }
-    }
-
-    return isValid;
-  }
-
-  /**
-   * 验证并修复功能绑定配置
-   * 确保绑定引用的供应商和模型存在
-   * @returns 配置是否有效（无需修复）
-   */
-  private validateAndFixFeatureBindings(): boolean {
-    let isValid = true;
-
-    // 确保功能绑定对象存在
-    if (!this.settings.featureBindings) {
-      this.settings.featureBindings = {};
-      isValid = false;
-    }
-
-    // 验证 naming 功能绑定（仅当有供应商时）
+  validateFeatureBindings(): boolean {
     const namingBinding = this.settings.featureBindings.naming;
-    if (namingBinding && this.settings.providers.length > 0) {
-      const provider = this.settings.providers.find(p => p.id === namingBinding.providerId);
-      if (!provider) {
-        debugLog(`[Settings] naming 绑定的供应商 "${namingBinding.providerId}" 不存在，清除绑定`);
-        delete this.settings.featureBindings.naming;
-        isValid = false;
-      } else if (provider.models.length > 0) {
-        const model = provider.models.find(m => m.id === namingBinding.modelId);
-        if (!model) {
-          debugLog(`[Settings] naming 绑定的模型 "${namingBinding.modelId}" 不存在，使用第一个模型`);
-          this.settings.featureBindings.naming = {
-            ...namingBinding,
-            modelId: provider.models[0].id
-          };
-          isValid = false;
-        }
+    if (!namingBinding) return true;
+    
+    const provider = this.settings.providers.find(p => p.id === namingBinding.providerId);
+    if (!provider) {
+      debugLog(`[Settings] naming 绑定的供应商 "${namingBinding.providerId}" 不存在，清除绑定`);
+      delete this.settings.featureBindings.naming;
+      return false;
+    }
+    
+    if (provider.models.length > 0) {
+      const model = provider.models.find(m => m.id === namingBinding.modelId);
+      if (!model) {
+        debugLog(`[Settings] naming 绑定的模型 "${namingBinding.modelId}" 不存在，使用第一个模型`);
+        this.settings.featureBindings.naming = {
+          ...namingBinding,
+          modelId: provider.models[0].id
+        };
+        return false;
       }
     }
-
-    return isValid;
+    
+    return true;
   }
 
   /**
@@ -887,14 +651,14 @@ export default class SmartWorkflowPlugin extends Plugin {
     // 更新调试模式
     setDebugMode(this.settings.debugMode);
     
-    // 更新终端服务的设置（如果已初始化）
-    if (this.terminalService) {
-      this.terminalService.updateSettings(this.settings.terminal);
+    // 更新终端服务的设置（仅当已初始化时）
+    if (this._terminalService) {
+      this._terminalService.updateSettings(this.settings.terminal);
     }
     
-    // 更新选中工具栏的设置（如果已初始化）
-    if (this.selectionToolbarManager) {
-      this.selectionToolbarManager.updateSettings(this.settings.selectionToolbar);
+    // 更新选中工具栏的设置（仅当已初始化时）
+    if (this._selectionToolbarManager) {
+      this._selectionToolbarManager.updateSettings(this.settings.selectionToolbar);
     }
   }
 
@@ -904,8 +668,8 @@ export default class SmartWorkflowPlugin extends Plugin {
    * Requirements: 4.5
    */
   updateSelectionToolbarSettings(): void {
-    if (this.selectionToolbarManager) {
-      this.selectionToolbarManager.updateSettings(this.settings.selectionToolbar);
+    if (this._selectionToolbarManager) {
+      this._selectionToolbarManager.updateSettings(this.settings.selectionToolbar);
     }
   }
 
@@ -949,29 +713,23 @@ export default class SmartWorkflowPlugin extends Plugin {
   async onunload() {
     debugLog(t('plugin.unloadingMessage'));
 
-    // 销毁选中文字浮动工具栏
-    try {
-      if (this.selectionToolbarManager) {
-        this.selectionToolbarManager.destroy();
+    // 销毁选中文字浮动工具栏（仅当已初始化时）
+    if (this._selectionToolbarManager) {
+      try {
+        this._selectionToolbarManager.destroy();
+      } catch (error) {
+        errorLog('销毁选中工具栏失败:', error);
       }
-    } catch (error) {
-      errorLog('销毁选中工具栏失败:', error);
     }
 
-    // 清理所有终端
-    try {
-      if (this.terminalService) {
-        await this.terminalService.destroyAllTerminals();
+    // 清理终端相关资源（仅当已初始化时）
+    if (this._terminalService) {
+      try {
+        await this._terminalService.destroyAllTerminals();
+        await this._terminalService.stopPtyServer();
+      } catch (error) {
+        errorLog('清理终端失败:', error);
       }
-    } catch (error) {
-      errorLog('清理终端失败:', error);
-    }
-
-    // 停止 PTY 服务器
-    try {
-      await this.terminalService.stopPtyServer();
-    } catch (error) {
-      errorLog(error);
     }
   }
 

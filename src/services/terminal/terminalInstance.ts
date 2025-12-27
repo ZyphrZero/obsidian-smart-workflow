@@ -2,22 +2,65 @@
  * 终端实例类 - 基于 Rust PTY 服务器的 WebSocket 通信实现
  */
 
-import { Terminal } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
-import { WebLinksAddon } from '@xterm/addon-web-links';
-import { SearchAddon } from '@xterm/addon-search';
-import { CanvasAddon } from '@xterm/addon-canvas';
-import { WebglAddon } from '@xterm/addon-webgl';
 import { platform } from 'os';
 import { exec } from 'child_process';
 import { debugLog, debugWarn, errorLog } from '../../utils/logger';
 import { t } from '../../i18n';
 
+// xterm.js CSS（静态导入，esbuild 会处理）
+import '@xterm/xterm/css/xterm.css';
+
 // electron 是外部模块，使用 require 导入
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { shell } = require('electron');
 
-import '@xterm/xterm/css/xterm.css';
+// xterm.js 模块类型声明（动态导入）
+type Terminal = import('@xterm/xterm').Terminal;
+type FitAddon = import('@xterm/addon-fit').FitAddon;
+type SearchAddon = import('@xterm/addon-search').SearchAddon;
+type CanvasAddon = import('@xterm/addon-canvas').CanvasAddon;
+type WebglAddon = import('@xterm/addon-webgl').WebglAddon;
+type WebLinksAddon = import('@xterm/addon-web-links').WebLinksAddon;
+
+// xterm.js 模块缓存
+let xtermModules: {
+  Terminal: typeof import('@xterm/xterm').Terminal;
+  FitAddon: typeof import('@xterm/addon-fit').FitAddon;
+  SearchAddon: typeof import('@xterm/addon-search').SearchAddon;
+  CanvasAddon: typeof import('@xterm/addon-canvas').CanvasAddon;
+  WebglAddon: typeof import('@xterm/addon-webgl').WebglAddon;
+  WebLinksAddon: typeof import('@xterm/addon-web-links').WebLinksAddon;
+} | null = null;
+
+/**
+ * 动态加载 xterm.js 模块（首次调用时加载，后续使用缓存）
+ */
+async function loadXtermModules() {
+  if (xtermModules) return xtermModules;
+  
+  debugLog('[Terminal] 动态加载 xterm.js 模块...');
+  
+  const [
+    { Terminal },
+    { FitAddon },
+    { SearchAddon },
+    { CanvasAddon },
+    { WebglAddon },
+    { WebLinksAddon }
+  ] = await Promise.all([
+    import('@xterm/xterm'),
+    import('@xterm/addon-fit'),
+    import('@xterm/addon-search'),
+    import('@xterm/addon-canvas'),
+    import('@xterm/addon-webgl'),
+    import('@xterm/addon-web-links')
+  ]);
+  
+  xtermModules = { Terminal, FitAddon, SearchAddon, CanvasAddon, WebglAddon, WebLinksAddon };
+  debugLog('[Terminal] xterm.js 模块加载完成');
+  
+  return xtermModules;
+}
 
 export interface TerminalOptions {
   shellType?: string;
@@ -55,9 +98,9 @@ export class TerminalInstance {
   readonly id: string;
   readonly shellType: string;
 
-  private xterm: Terminal;
-  private fitAddon: FitAddon;
-  private searchAddon: SearchAddon;
+  private xterm!: Terminal;
+  private fitAddon!: FitAddon;
+  private searchAddon!: SearchAddon;
   private renderer: CanvasAddon | WebglAddon | null = null;
   private ws: WebSocket | null = null;
   private serverPort = 0;
@@ -98,19 +141,26 @@ export class TerminalInstance {
     this.shellType = options.shellType || 'default';
     this.title = t('terminal.defaultTitle');
     this.currentFontSize = options.fontSize ?? 14;
+  }
 
+  /**
+   * 初始化 xterm.js 实例（动态加载模块）
+   */
+  private async initXterm(): Promise<void> {
+    const { Terminal, FitAddon, SearchAddon, WebLinksAddon } = await loadXtermModules();
+    
     this.xterm = new Terminal({
-      cursorBlink: options.cursorBlink ?? true,
-      cursorStyle: options.cursorStyle ?? 'block',
+      cursorBlink: this.options.cursorBlink ?? true,
+      cursorStyle: this.options.cursorStyle ?? 'block',
       fontSize: this.currentFontSize,
-      fontFamily: options.fontFamily ?? 'Consolas, "Courier New", monospace',
+      fontFamily: this.options.fontFamily ?? 'Consolas, "Courier New", monospace',
       theme: this.getTheme(),
-      scrollback: options.scrollback ?? 1000,
-      allowTransparency: !!options.backgroundImage,
+      scrollback: this.options.scrollback ?? 1000,
+      allowTransparency: !!this.options.backgroundImage,
       convertEol: true,
-      windowsMode: false, // 禁用 Windows 模式，确保 Ctrl+C 正确发送中断信号
+      windowsMode: false,
       rightClickSelectsWord: true,
-      allowProposedApi: true, // 启用提议的 API,用于搜索高亮装饰
+      allowProposedApi: true,
     });
 
     this.fitAddon = new FitAddon();
@@ -119,14 +169,11 @@ export class TerminalInstance {
     this.xterm.loadAddon(this.fitAddon);
     this.xterm.loadAddon(this.searchAddon);
     
-    // 配置 WebLinksAddon，使用 electron shell 打开链接
     const webLinksAddon = new WebLinksAddon((event, uri) => {
       event.preventDefault();
       shell.openExternal(uri);
     });
     this.xterm.loadAddon(webLinksAddon);
-    
-    this.options.preferredRenderer = options.preferredRenderer ?? 'canvas';
   }
 
   private getTheme() {
@@ -163,10 +210,12 @@ export class TerminalInstance {
     return (r * 299 + g * 587 + b * 114) / 1000 < 128;
   }
 
-  private loadRenderer(renderer: 'canvas' | 'webgl'): void {
+  private async loadRenderer(renderer: 'canvas' | 'webgl'): Promise<void> {
     if (!this.checkRendererSupport(renderer)) {
       throw new Error(t('terminalInstance.rendererNotSupported', { renderer: renderer.toUpperCase() }));
     }
+
+    const { CanvasAddon, WebglAddon } = await loadXtermModules();
 
     try {
       if (renderer === 'canvas') {
@@ -203,6 +252,9 @@ export class TerminalInstance {
     if (this.isInitialized || this.isDestroyed) return;
 
     try {
+      // 动态加载 xterm.js 模块
+      await this.initXterm();
+      
       this.serverPort = serverPort;
       await this.connectToServer();
       this.setupXtermHandlers();
@@ -210,7 +262,9 @@ export class TerminalInstance {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       errorLog('[Terminal] Init failed:', error);
-      this.xterm.write(`\r\n\x1b[1;31m[Error] ${errorMessage}\x1b[0m\r\n`);
+      if (this.xterm) {
+        this.xterm.write(`\r\n\x1b[1;31m[Error] ${errorMessage}\x1b[0m\r\n`);
+      }
       throw new Error(t('terminalInstance.startFailed', { message: errorMessage }));
     }
   }
@@ -471,15 +525,14 @@ export class TerminalInstance {
 
     const preferredRenderer = this.options.preferredRenderer || 'canvas';
     
-    // 使用 requestAnimationFrame 替代 setTimeout，更快响应
-    requestAnimationFrame(() => {
+    // 异步加载渲染器
+    requestAnimationFrame(async () => {
       try {
-        this.loadRenderer(preferredRenderer);
+        await this.loadRenderer(preferredRenderer);
         this.fit();
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
         this.xterm.write(`\r\n\x1b[1;31m[渲染器错误] ${errorMsg}\x1b[0m\r\n`);
-        throw error;
       }
     });
   }
@@ -1312,7 +1365,8 @@ export class TerminalInstance {
   getSearchAddon(): SearchAddon { return this.searchAddon; }
 
   getCurrentRenderer(): 'canvas' | 'webgl' {
-    if (this.renderer instanceof WebglAddon) return 'webgl';
+    // 通过检查渲染器的构造函数名称判断类型
+    if (this.renderer && this.renderer.constructor.name === 'WebglAddon') return 'webgl';
     return 'canvas';
   }
 
