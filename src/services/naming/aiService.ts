@@ -753,15 +753,21 @@ export class AIService {
    * @returns Chat Completions API 请求体
    */
   buildChatCompletionsRequest(model: ModelConfig, prompt: string): ChatCompletionsRequest {
-    return {
+    const request: ChatCompletionsRequest = {
       model: model.name,
       messages: [
         { role: 'user', content: prompt }
       ],
       temperature: model.temperature,
-      max_tokens: model.maxTokens,
       top_p: model.topP
     };
+
+    // 仅当 maxTokens 为正整数时才添加该参数
+    if (model.maxTokens && model.maxTokens > 0) {
+      request.max_tokens = model.maxTokens;
+    }
+
+    return request;
   }
 
   // ============================================================================

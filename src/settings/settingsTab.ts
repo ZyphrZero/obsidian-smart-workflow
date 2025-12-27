@@ -2702,6 +2702,78 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
           this.plugin.updateSelectionToolbarSettings();
         }));
+
+    // 加粗按钮
+    new Setting(toolbarCard)
+      .setName(t('selectionToolbar.settings.actionBold'))
+      .setDesc(t('selectionToolbar.settings.actionBoldDesc'))
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.selectionToolbar.actions.bold)
+        .onChange(async (value) => {
+          this.plugin.settings.selectionToolbar.actions.bold = value;
+          await this.plugin.saveSettings();
+          this.plugin.updateSelectionToolbarSettings();
+        }));
+
+    // 斜体按钮
+    new Setting(toolbarCard)
+      .setName(t('selectionToolbar.settings.actionItalic'))
+      .setDesc(t('selectionToolbar.settings.actionItalicDesc'))
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.selectionToolbar.actions.italic)
+        .onChange(async (value) => {
+          this.plugin.settings.selectionToolbar.actions.italic = value;
+          await this.plugin.saveSettings();
+          this.plugin.updateSelectionToolbarSettings();
+        }));
+
+    // 删除线按钮
+    new Setting(toolbarCard)
+      .setName(t('selectionToolbar.settings.actionStrikethrough'))
+      .setDesc(t('selectionToolbar.settings.actionStrikethroughDesc'))
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.selectionToolbar.actions.strikethrough)
+        .onChange(async (value) => {
+          this.plugin.settings.selectionToolbar.actions.strikethrough = value;
+          await this.plugin.saveSettings();
+          this.plugin.updateSelectionToolbarSettings();
+        }));
+
+    // 行内代码按钮
+    new Setting(toolbarCard)
+      .setName(t('selectionToolbar.settings.actionInlineCode'))
+      .setDesc(t('selectionToolbar.settings.actionInlineCodeDesc'))
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.selectionToolbar.actions.inlineCode)
+        .onChange(async (value) => {
+          this.plugin.settings.selectionToolbar.actions.inlineCode = value;
+          await this.plugin.saveSettings();
+          this.plugin.updateSelectionToolbarSettings();
+        }));
+
+    // 行内公式按钮
+    new Setting(toolbarCard)
+      .setName(t('selectionToolbar.settings.actionInlineMath'))
+      .setDesc(t('selectionToolbar.settings.actionInlineMathDesc'))
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.selectionToolbar.actions.inlineMath)
+        .onChange(async (value) => {
+          this.plugin.settings.selectionToolbar.actions.inlineMath = value;
+          await this.plugin.saveSettings();
+          this.plugin.updateSelectionToolbarSettings();
+        }));
+
+    // 清除格式按钮
+    new Setting(toolbarCard)
+      .setName(t('selectionToolbar.settings.actionClearFormat'))
+      .setDesc(t('selectionToolbar.settings.actionClearFormatDesc'))
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.selectionToolbar.actions.clearFormat)
+        .onChange(async (value) => {
+          this.plugin.settings.selectionToolbar.actions.clearFormat = value;
+          await this.plugin.saveSettings();
+          this.plugin.updateSelectionToolbarSettings();
+        }));
   }
 
   /**

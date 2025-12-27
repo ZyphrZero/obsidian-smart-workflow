@@ -645,7 +645,7 @@ export default class SmartWorkflowPlugin extends Plugin {
     if (!m.name || typeof m.name !== 'string') return false;
     if (!m.displayName || typeof m.displayName !== 'string') return false;
     if (typeof m.temperature !== 'number' || m.temperature < 0 || m.temperature > 2) return false;
-    if (typeof m.maxTokens !== 'number' || m.maxTokens <= 0) return false;
+    if (typeof m.maxTokens !== 'number' || m.maxTokens < 0) return false;
     if (typeof m.topP !== 'number' || m.topP < 0 || m.topP > 1) return false;
     return true;
   }

@@ -224,8 +224,8 @@ export class ConfigManager {
     if (model.temperature < 0 || model.temperature > 2) {
       throw new Error('Invalid parameter: temperature must be between 0 and 2');
     }
-    if (!Number.isInteger(model.maxTokens) || model.maxTokens <= 0) {
-      throw new Error('Invalid parameter: maxTokens must be a positive integer');
+    if (!Number.isInteger(model.maxTokens) || model.maxTokens < 0) {
+      throw new Error('Invalid parameter: maxTokens must be a non-negative integer');
     }
     if (model.topP < 0 || model.topP > 1) {
       throw new Error('Invalid parameter: topP must be between 0 and 1');
