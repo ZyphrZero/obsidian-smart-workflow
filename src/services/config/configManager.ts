@@ -267,23 +267,24 @@ export class ConfigManager {
   /**
    * 解析功能配置
    * 返回完整的供应商和模型信息，供 AIService 使用
+   * 如果没有绑定，返回 undefined（不自动回退）
    */
   resolveFeatureConfig(feature: AIFeature): ResolvedConfig | undefined {
     const binding = this.getFeatureBinding(feature);
     
-    // 如果没有绑定，使用默认配置
+    // 如果没有绑定，返回 undefined
     if (!binding) {
-      return this.getDefaultResolvedConfig(feature);
+      return undefined;
     }
 
     const provider = this.getProvider(binding.providerId);
     if (!provider) {
-      return this.getDefaultResolvedConfig(feature);
+      return undefined;
     }
 
     const model = provider.models.find(m => m.id === binding.modelId);
     if (!model) {
-      return this.getDefaultResolvedConfig(feature);
+      return undefined;
     }
 
     return {

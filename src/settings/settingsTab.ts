@@ -1410,6 +1410,16 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
     namingSetting.addDropdown(dropdown => {
       const selectEl = dropdown.selectEl;
       selectEl.empty();
+      
+      // 设置最小宽度
+      selectEl.style.minWidth = '200px';
+
+      // 添加空选项（不绑定）
+      const emptyOption = selectEl.createEl('option', {
+        value: '',
+        text: t('settingsDetails.general.noBinding')
+      });
+      emptyOption.setAttribute('value', '');
 
       // 按供应商分组添加选项
       const providers = this.configManager.getProviders();
@@ -1434,20 +1444,22 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
       const currentValue = currentProvider && currentModel 
         ? `${currentProvider.id}|${currentModel.id}`
         : '';
-      if (currentValue) {
-        dropdown.setValue(currentValue);
-      }
+      // 使用原生方式设置选中值，确保空值也能正确选中
+      selectEl.value = currentValue;
 
       // 监听变化
       dropdown.onChange(async (value) => {
-        const [providerId, modelId] = value.split('|');
-        const namingBinding = this.plugin.settings.featureBindings.naming;
-        if (namingBinding) {
-          this.configManager.setFeatureBinding('naming', {
-            ...namingBinding,
+        if (!value) {
+          // 清除绑定
+          delete this.plugin.settings.featureBindings.naming;
+        } else {
+          const [providerId, modelId] = value.split('|');
+          const existingBinding = this.plugin.settings.featureBindings.naming;
+          this.plugin.settings.featureBindings.naming = {
             providerId,
-            modelId
-          });
+            modelId,
+            promptTemplate: existingBinding?.promptTemplate ?? this.plugin.settings.defaultPromptTemplate
+          };
         }
         await this.plugin.saveSettings();
         // 刷新视图以更新绑定状态显示
@@ -1913,15 +1925,12 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
    * 渲染命名设置
    */
   private renderNamingSettings(containerEl: HTMLElement): void {
-    // 获取当前 naming 功能的绑定配置
+    // 获取当前 naming 功能的绑定配置，如果没有则使用默认模板
     const namingBinding = this.plugin.settings.featureBindings.naming;
+    const currentPromptTemplate = namingBinding?.promptTemplate ?? this.plugin.settings.defaultPromptTemplate;
 
-    if (!namingBinding) {
-      return;
-    }
-
-    // AI 命名功能区块（可折叠）
-    const isNamingExpanded = this.expandedSections.has('naming-feature');
+    // AI 命名功能区块（可折叠，默认展开）
+    const isNamingExpanded = !this.expandedSections.has('naming-feature-collapsed');
     
     // 功能卡片
     const namingCard = this.createSettingCard(containerEl);
@@ -1934,7 +1943,7 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
       gap: '8px',
       cursor: 'pointer',
       'user-select': 'none',
-      'margin-bottom': isNamingExpanded ? '12px' : '0'
+      'margin-bottom': isNamingExpanded ? '20px' : '0'
     });
 
     // 展开/收缩图标
@@ -1957,15 +1966,17 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
     // 点击切换展开状态
     headerEl.addEventListener('click', () => {
       if (isNamingExpanded) {
-        this.expandedSections.delete('naming-feature');
+        this.expandedSections.add('naming-feature-collapsed');
       } else {
-        this.expandedSections.add('naming-feature');
+        this.expandedSections.delete('naming-feature-collapsed');
       }
       this.display();
     });
 
-    // 如果未展开，不渲染内容
+    // 如果未展开，不渲染内容，但继续渲染选中工具栏设置
     if (!isNamingExpanded) {
+      // 选中工具栏功能设置（独立卡片）
+      this.renderSelectionToolbarFunctionSettings(containerEl);
       return;
     }
 
@@ -1988,6 +1999,17 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
+    // 重命名前确认
+    new Setting(contentEl)
+      .setName(t('settingsDetails.naming.confirmBeforeRename'))
+      .setDesc(t('settingsDetails.naming.confirmBeforeRenameDesc'))
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.confirmBeforeRename)
+        .onChange(async (value) => {
+          this.plugin.settings.confirmBeforeRename = value;
+          await this.plugin.saveSettings();
+        }));
+
     // 分析目录命名风格
     new Setting(contentEl)
       .setName(t('settingsDetails.naming.analyzeDirectory'))
@@ -1998,6 +2020,57 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
           this.plugin.settings.analyzeDirectoryNamingStyle = value;
           await this.plugin.saveSettings();
         }));
+
+    // 请求超时设置
+    const timeoutSetting = new Setting(contentEl)
+      .setName(t('settingsDetails.general.timeout'))
+      .setDesc(t('settingsDetails.general.timeoutDesc'));
+    
+    let timeoutTextComponent: any;
+    timeoutSetting.addText(text => {
+      timeoutTextComponent = text;
+      text
+        .setPlaceholder('15')
+        .setValue(String(Math.round(this.plugin.settings.timeout / 1000)))
+        .onChange(async (value) => {
+          const numValue = parseInt(value);
+          if (!isNaN(numValue)) {
+            // 范围约束：5-120秒
+            const clampedValue = Math.max(5, Math.min(120, numValue));
+            this.plugin.settings.timeout = clampedValue * 1000;
+            await this.plugin.saveSettings();
+          }
+        });
+      
+      // 失去焦点时验证并修正
+      text.inputEl.addEventListener('blur', async () => {
+        const value = text.inputEl.value;
+        const numValue = parseInt(value);
+        if (isNaN(numValue) || numValue < 5 || numValue > 120) {
+          const clampedValue = isNaN(numValue) ? 15 : Math.max(5, Math.min(120, numValue));
+          this.plugin.settings.timeout = clampedValue * 1000;
+          await this.plugin.saveSettings();
+          text.setValue(String(clampedValue));
+        }
+      });
+      
+      text.inputEl.setCssProps({ width: '60px' });
+      return text;
+    });
+
+    // 重置按钮
+    timeoutSetting.addExtraButton(button => {
+      button
+        .setIcon('rotate-ccw')
+        .setTooltip(t('common.reset'))
+        .onClick(async () => {
+          this.plugin.settings.timeout = 15000;
+          await this.plugin.saveSettings();
+          if (timeoutTextComponent) {
+            timeoutTextComponent.setValue('15');
+          }
+        });
+    });
 
     // Prompt 模板设置
     new Setting(contentEl)
@@ -2020,18 +2093,47 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
     promptDesc.createEl('code', { text: '{{#if currentFileName}}...{{/if}}' });
     promptDesc.appendText(' - ' + t('settingsDetails.naming.promptVariables.conditionalBlock').replace('{{#if currentFileName}}...{{/if}} - ', ''));
 
-    // 当前使用的模板编辑器
+    // 基础模板编辑器
     new Setting(contentEl)
-      .setName(t('settingsDetails.naming.currentPromptTemplate'))
-      .setDesc(t('settingsDetails.naming.currentPromptTemplateDesc'))
+      .setName(t('settingsDetails.naming.basePromptTemplate'))
+      .setDesc(t('settingsDetails.naming.basePromptTemplateDesc'))
       .setHeading();
 
     new Setting(contentEl)
       .addTextArea(text => {
         text
-          .setValue(namingBinding.promptTemplate)
+          .setValue(this.plugin.settings.basePromptTemplate ?? BASE_PROMPT_TEMPLATE)
           .onChange(async (value) => {
-            namingBinding.promptTemplate = value;
+            this.plugin.settings.basePromptTemplate = value;
+            await this.plugin.saveSettings();
+          });
+        text.inputEl.rows = 8;
+        text.inputEl.cols = 50;
+        text.inputEl.style.width = '100%';
+      });
+
+    // 基础模板重置按钮
+    new Setting(contentEl)
+      .addButton(button => button
+        .setButtonText(t('settingsDetails.naming.resetToDefault'))
+        .onClick(async () => {
+          this.plugin.settings.basePromptTemplate = BASE_PROMPT_TEMPLATE;
+          await this.plugin.saveSettings();
+          this.display();
+        }));
+
+    // 高级模板编辑器
+    new Setting(contentEl)
+      .setName(t('settingsDetails.naming.advancedPromptTemplate'))
+      .setDesc(t('settingsDetails.naming.advancedPromptTemplateDesc'))
+      .setHeading();
+
+    new Setting(contentEl)
+      .addTextArea(text => {
+        text
+          .setValue(this.plugin.settings.advancedPromptTemplate ?? ADVANCED_PROMPT_TEMPLATE)
+          .onChange(async (value) => {
+            this.plugin.settings.advancedPromptTemplate = value;
             await this.plugin.saveSettings();
           });
         text.inputEl.rows = 10;
@@ -2039,24 +2141,18 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
         text.inputEl.style.width = '100%';
       });
 
-    // 重置按钮
+    // 高级模板重置按钮
     new Setting(contentEl)
-      .setName(t('settingsDetails.naming.quickReset'))
-      .setDesc(t('settingsDetails.naming.quickResetDesc'))
       .addButton(button => button
-        .setButtonText(t('settingsDetails.naming.resetToRecommended'))
+        .setButtonText(t('settingsDetails.naming.resetToDefault'))
         .onClick(async () => {
-          // 根据设置选择对应的模板
-          if (this.plugin.settings.useCurrentFileNameContext) {
-            // 使用高级模板
-            namingBinding.promptTemplate = ADVANCED_PROMPT_TEMPLATE;
-          } else {
-            // 使用基础模板
-            namingBinding.promptTemplate = BASE_PROMPT_TEMPLATE;
-          }
+          this.plugin.settings.advancedPromptTemplate = ADVANCED_PROMPT_TEMPLATE;
           await this.plugin.saveSettings();
           this.display();
         }));
+
+    // 选中工具栏功能设置
+    this.renderSelectionToolbarFunctionSettings(containerEl);
   }
 
   /**
@@ -2549,37 +2645,72 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
   }
 
   /**
-   * 渲染选中工具栏设置
-   * Requirements: 4.1, 4.2, 4.3, 4.4
+   * 渲染选中工具栏功能设置（最小选中字符数、显示延迟）
+   * 可折叠卡片，与文件命名设置风格一致
+   * Requirements: 4.3, 4.4
    */
-  private renderSelectionToolbarSettings(containerEl: HTMLElement): void {
+  private renderSelectionToolbarFunctionSettings(containerEl: HTMLElement): void {
+    // 选中工具栏功能区块（可折叠，默认收起）
+    const isExpanded = !this.expandedSections.has('selection-toolbar-collapsed');
+    
+    // 功能卡片
     const toolbarCard = this.createSettingCard(containerEl);
+    
+    // 可折叠标题
+    const headerEl = toolbarCard.createDiv({ cls: 'feature-header' });
+    headerEl.setCssProps({
+      display: 'flex',
+      'align-items': 'center',
+      gap: '8px',
+      cursor: 'pointer',
+      'user-select': 'none',
+      'margin-bottom': isExpanded ? '20px' : '0'
+    });
 
-    new Setting(toolbarCard)
-      .setName(t('selectionToolbar.settings.title'))
-      .setDesc(t('selectionToolbar.settings.titleDesc'))
-      .setHeading();
+    // 展开/收缩图标
+    const chevronEl = headerEl.createSpan({ cls: 'feature-chevron' });
+    setIcon(chevronEl, isExpanded ? 'chevron-down' : 'chevron-right');
+    chevronEl.setCssProps({
+      width: '18px',
+      height: '18px',
+      display: 'inline-flex',
+      'align-items': 'center'
+    });
 
-    // 启用/禁用开关 - Requirements: 4.1
-    new Setting(toolbarCard)
-      .setName(t('selectionToolbar.settings.enabled'))
-      .setDesc(t('selectionToolbar.settings.enabledDesc'))
-      .addToggle(toggle => toggle
-        .setValue(this.plugin.settings.selectionToolbar.enabled)
-        .onChange(async (value) => {
-          this.plugin.settings.selectionToolbar.enabled = value;
-          await this.plugin.saveSettings();
-          // 通知 SelectionToolbarManager 更新设置
-          this.plugin.updateSelectionToolbarSettings();
-        }));
+    // 功能名称
+    const titleEl = headerEl.createSpan({ text: t('selectionToolbar.settings.title') });
+    titleEl.setCssProps({
+      'font-weight': '600',
+      'font-size': '1em'
+    });
+
+    // 点击切换展开状态
+    headerEl.addEventListener('click', () => {
+      if (isExpanded) {
+        this.expandedSections.add('selection-toolbar-collapsed');
+      } else {
+        this.expandedSections.delete('selection-toolbar-collapsed');
+      }
+      this.display();
+    });
+
+    // 如果未展开，不渲染内容
+    if (!isExpanded) {
+      return;
+    }
+
+    // 内容容器
+    const contentEl = toolbarCard.createDiv({ cls: 'feature-content' });
 
     // 最小选中字符数 - Requirements: 4.3
-    const minLengthSetting = new Setting(toolbarCard)
+    const minLengthSetting = new Setting(contentEl)
       .setName(t('selectionToolbar.settings.minSelectionLength'))
       .setDesc(t('selectionToolbar.settings.minSelectionLengthDesc'));
     
+    let minLengthTextComponent: any;
     minLengthSetting.addText(text => {
-      const inputEl = text
+      minLengthTextComponent = text;
+      text
         .setPlaceholder('1')
         .setValue(String(this.plugin.settings.selectionToolbar.minSelectionLength))
         .onChange(async (value) => {
@@ -2608,16 +2739,33 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
       });
       
       text.inputEl.setCssProps({ width: '60px' });
-      return inputEl;
+      return text;
+    });
+
+    // 重置按钮
+    minLengthSetting.addExtraButton(button => {
+      button
+        .setIcon('rotate-ccw')
+        .setTooltip(t('common.reset'))
+        .onClick(async () => {
+          this.plugin.settings.selectionToolbar.minSelectionLength = 1;
+          await this.plugin.saveSettings();
+          this.plugin.updateSelectionToolbarSettings();
+          if (minLengthTextComponent) {
+            minLengthTextComponent.setValue('1');
+          }
+        });
     });
 
     // 显示延迟 - Requirements: 4.4
-    const showDelaySetting = new Setting(toolbarCard)
+    const showDelaySetting = new Setting(contentEl)
       .setName(t('selectionToolbar.settings.showDelay'))
       .setDesc(t('selectionToolbar.settings.showDelayDesc'));
     
+    let showDelayTextComponent: any;
     showDelaySetting.addText(text => {
-      const inputEl = text
+      showDelayTextComponent = text;
+      text
         .setPlaceholder('0')
         .setValue(String(this.plugin.settings.selectionToolbar.showDelay))
         .onChange(async (value) => {
@@ -2646,17 +2794,46 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
       });
       
       text.inputEl.setCssProps({ width: '60px' });
-      return inputEl;
+      return text;
     });
 
-    // 按钮显隐设置 - Requirements: 4.2
-    new Setting(toolbarCard)
-      .setName(t('selectionToolbar.settings.actionsTitle'))
-      .setDesc(t('selectionToolbar.settings.actionsDesc'))
-      .setHeading();
+    // 重置按钮
+    showDelaySetting.addExtraButton(button => {
+      button
+        .setIcon('rotate-ccw')
+        .setTooltip(t('common.reset'))
+        .onClick(async () => {
+          this.plugin.settings.selectionToolbar.showDelay = 0;
+          await this.plugin.saveSettings();
+          this.plugin.updateSelectionToolbarSettings();
+          if (showDelayTextComponent) {
+            showDelayTextComponent.setValue('0');
+          }
+        });
+    });
+  }
+
+  /**
+   * 渲染选中工具栏显示设置（启用开关、按钮显隐）
+   * 用于功能显示区域的可折叠内容
+   * Requirements: 4.1, 4.2
+   */
+  private renderSelectionToolbarVisibilityContent(contentEl: HTMLElement): void {
+    // 启用/禁用开关 - Requirements: 4.1
+    new Setting(contentEl)
+      .setName(t('selectionToolbar.settings.enabled'))
+      .setDesc(t('selectionToolbar.settings.enabledDesc'))
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.selectionToolbar.enabled)
+        .onChange(async (value) => {
+          this.plugin.settings.selectionToolbar.enabled = value;
+          await this.plugin.saveSettings();
+          // 通知 SelectionToolbarManager 更新设置
+          this.plugin.updateSelectionToolbarSettings();
+        }));
 
     // 复制按钮
-    new Setting(toolbarCard)
+    new Setting(contentEl)
       .setName(t('selectionToolbar.settings.actionCopy'))
       .setDesc(t('selectionToolbar.settings.actionCopyDesc'))
       .addToggle(toggle => toggle
@@ -2668,7 +2845,7 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
         }));
 
     // 搜索按钮
-    new Setting(toolbarCard)
+    new Setting(contentEl)
       .setName(t('selectionToolbar.settings.actionSearch'))
       .setDesc(t('selectionToolbar.settings.actionSearchDesc'))
       .addToggle(toggle => toggle
@@ -2680,7 +2857,7 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
         }));
 
     // 创建链接按钮
-    new Setting(toolbarCard)
+    new Setting(contentEl)
       .setName(t('selectionToolbar.settings.actionCreateLink'))
       .setDesc(t('selectionToolbar.settings.actionCreateLinkDesc'))
       .addToggle(toggle => toggle
@@ -2692,7 +2869,7 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
         }));
 
     // 高亮按钮
-    new Setting(toolbarCard)
+    new Setting(contentEl)
       .setName(t('selectionToolbar.settings.actionHighlight'))
       .setDesc(t('selectionToolbar.settings.actionHighlightDesc'))
       .addToggle(toggle => toggle
@@ -2704,7 +2881,7 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
         }));
 
     // 加粗按钮
-    new Setting(toolbarCard)
+    new Setting(contentEl)
       .setName(t('selectionToolbar.settings.actionBold'))
       .setDesc(t('selectionToolbar.settings.actionBoldDesc'))
       .addToggle(toggle => toggle
@@ -2716,7 +2893,7 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
         }));
 
     // 斜体按钮
-    new Setting(toolbarCard)
+    new Setting(contentEl)
       .setName(t('selectionToolbar.settings.actionItalic'))
       .setDesc(t('selectionToolbar.settings.actionItalicDesc'))
       .addToggle(toggle => toggle
@@ -2728,7 +2905,7 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
         }));
 
     // 删除线按钮
-    new Setting(toolbarCard)
+    new Setting(contentEl)
       .setName(t('selectionToolbar.settings.actionStrikethrough'))
       .setDesc(t('selectionToolbar.settings.actionStrikethroughDesc'))
       .addToggle(toggle => toggle
@@ -2740,7 +2917,7 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
         }));
 
     // 行内代码按钮
-    new Setting(toolbarCard)
+    new Setting(contentEl)
       .setName(t('selectionToolbar.settings.actionInlineCode'))
       .setDesc(t('selectionToolbar.settings.actionInlineCodeDesc'))
       .addToggle(toggle => toggle
@@ -2752,7 +2929,7 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
         }));
 
     // 行内公式按钮
-    new Setting(toolbarCard)
+    new Setting(contentEl)
       .setName(t('selectionToolbar.settings.actionInlineMath'))
       .setDesc(t('selectionToolbar.settings.actionInlineMathDesc'))
       .addToggle(toggle => toggle
@@ -2764,7 +2941,7 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
         }));
 
     // 清除格式按钮
-    new Setting(toolbarCard)
+    new Setting(contentEl)
       .setName(t('selectionToolbar.settings.actionClearFormat'))
       .setDesc(t('selectionToolbar.settings.actionClearFormatDesc'))
       .addToggle(toggle => toggle
@@ -2780,9 +2957,6 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
    * 渲染高级设置
    */
   private renderAdvancedSettings(containerEl: HTMLElement): void {
-    // 选中工具栏设置
-    this.renderSelectionToolbarSettings(containerEl);
-
     // 性能与调试设置
     const performanceCard = this.createSettingCard(containerEl);
 
@@ -2894,6 +3068,17 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
               this.plugin.settings.featureVisibility.terminal.showInNewTab = value;
               await this.plugin.saveSettings();
             }));
+      }
+    );
+
+    // 选中工具栏功能 - 可折叠区块
+    this.createCollapsibleSection(
+      visibilityCard,
+      'selectionToolbar',
+      t('selectionToolbar.visibility'),
+      t('selectionToolbar.visibilityDesc'),
+      (contentEl) => {
+        this.renderSelectionToolbarVisibilityContent(contentEl);
       }
     );
   }

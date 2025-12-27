@@ -67,6 +67,7 @@ export interface TranslationKeys {
     noOpenFile: string;
     generatingFilename: string;
     filenameGenerated: string;
+    renameCancelled: string;
     operationFailed: string;
     connectionSuccess: string;
     connectionFailed: string;
@@ -178,6 +179,7 @@ export interface TranslationKeys {
       // 新增：功能绑定
       featureBindings: string;
       featureBindingsDesc: string;
+      noBinding: string;
       namingFeature: string;
       namingFeatureDesc: string;
       currentBindingStatus: string;
@@ -212,9 +214,12 @@ export interface TranslationKeys {
       modelsAdded: string;
     };
     naming: {
+      noBindingConfigured: string;
       namingBehavior: string;
       useCurrentFilename: string;
       useCurrentFilenameDesc: string;
+      confirmBeforeRename: string;
+      confirmBeforeRenameDesc: string;
       analyzeDirectory: string;
       analyzeDirectoryDesc: string;
       promptTemplate: string;
@@ -226,6 +231,11 @@ export interface TranslationKeys {
       };
       currentPromptTemplate: string;
       currentPromptTemplateDesc: string;
+      basePromptTemplate: string;
+      basePromptTemplateDesc: string;
+      advancedPromptTemplate: string;
+      advancedPromptTemplateDesc: string;
+      resetToDefault: string;
       quickReset: string;
       quickResetDesc: string;
       resetToRecommended: string;
@@ -319,6 +329,11 @@ export interface TranslationKeys {
 
   // 模态框
   modals: {
+    renameConfirm: {
+      title: string;
+      oldName: string;
+      newName: string;
+    };
     renameConfig: {
       title: string;
     };
@@ -549,6 +564,9 @@ export interface TranslationKeys {
 
   // 选中文字工具栏
   selectionToolbar: {
+    // 功能显示区域
+    visibility: string;
+    visibilityDesc: string;
     actions: {
       copy: string;
       search: string;

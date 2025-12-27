@@ -6,6 +6,18 @@ import { debugLog, debugWarn } from '../../utils/logger';
 import { t } from '../../i18n';
 
 /**
+ * 生成文件名结果接口
+ */
+export interface GenerateResult {
+  /** 原文件名（不含扩展名） */
+  oldName: string;
+  /** 新文件名（不含扩展名） */
+  newName: string;
+  /** 新文件名是否与原文件名相同 */
+  isSame: boolean;
+}
+
+/**
  * 重命名结果接口
  */
 export interface RenameResult {
@@ -35,7 +47,86 @@ export class FileNameService {
   }
 
   /**
-   * 生成文件名并重命名文件
+   * 仅生成文件名（不执行重命名）
+   * @param file 目标文件
+   * @returns 生成结果
+   */
+  async generateFileName(file: TFile): Promise<GenerateResult> {
+    // 读取文件内容
+    const content = await this.app.vault.read(file);
+
+    // 获取当前文件名（不含扩展名）
+    const currentFileName = file.basename;
+
+    // 根据配置决定是否分析目录命名风格
+    let directoryNamingStyle: string | undefined = undefined;
+    if (this.settings.analyzeDirectoryNamingStyle) {
+      if (this.settings.debugMode) {
+        debugLog('[FileNameService] 开始分析目录命名风格...');
+      }
+      try {
+        directoryNamingStyle = this.fileAnalyzer.analyzeDirectoryNamingStyle(file, this.settings.debugMode);
+        if (this.settings.debugMode) {
+          debugLog('[FileNameService] 目录命名风格分析完成:', directoryNamingStyle || '(空)');
+        }
+      } catch (error) {
+        debugWarn('[FileNameService] 分析目录命名风格失败:', error);
+      }
+    }
+
+    // 调用 AI 服务生成新文件名
+    const newFileName = await this.aiService.generateFileName(
+      content,
+      currentFileName,
+      directoryNamingStyle
+    );
+
+    // 验证和清理文件名
+    const sanitizedFileName = this.sanitizeFileName(newFileName);
+    const sanitizedCurrentFileName = this.sanitizeFileName(currentFileName);
+
+    // 检查文件名是否实际改变
+    const isSame = sanitizedFileName.toLowerCase() === sanitizedCurrentFileName.toLowerCase();
+
+    return {
+      oldName: currentFileName,
+      newName: sanitizedFileName,
+      isSame
+    };
+  }
+
+  /**
+   * 执行文件重命名
+   * @param file 目标文件
+   * @param newFileName 新文件名（不含扩展名）
+   * @returns 重命名结果
+   */
+  async renameFile(file: TFile, newFileName: string): Promise<RenameResult> {
+    const currentFileName = file.basename;
+    const sanitizedFileName = this.sanitizeFileName(newFileName);
+
+    // 构建新路径
+    const newPath = this.buildNewPath(file, sanitizedFileName);
+
+    // 检查文件名冲突
+    const finalPath = await this.resolveConflict(newPath);
+
+    // 执行重命名
+    await this.app.fileManager.renameFile(file, finalPath);
+
+    // 提取最终文件名
+    const finalFileName = finalPath.split('/').pop()?.replace(/\.[^.]+$/, '') || sanitizedFileName;
+
+    return {
+      renamed: true,
+      oldName: currentFileName,
+      newName: finalFileName,
+      message: t('fileNameService.fileRenamed', { fileName: finalFileName })
+    };
+  }
+
+  /**
+   * 生成文件名并重命名文件（兼容旧接口）
    * @param file 目标文件
    * @returns 重命名结果
    */

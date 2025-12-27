@@ -53,6 +53,7 @@ export const en: TranslationKeys = {
     noOpenFile: 'No file is open',
     generatingFilename: 'Generating filename...',
     filenameGenerated: 'Filename generated',
+    renameCancelled: 'Rename cancelled',
     operationFailed: 'Operation failed: {{message}}',
     connectionSuccess: 'Connection successful!',
     connectionFailed: 'Connection failed: {{message}}',
@@ -159,8 +160,9 @@ export const en: TranslationKeys = {
       // Feature bindings
       featureBindings: 'Feature Bindings',
       featureBindingsDesc: 'Assign AI providers and models to different features',
-      namingFeature: 'File Naming',
-      namingFeatureDesc: 'Select provider and model for AI filename generation',
+      noBinding: '-- No Binding --',
+      namingFeature: 'AI Filename Generation',
+      namingFeatureDesc: 'Select provider and model for AI filename generation. Recommend using fast models like Flash or Air for better response speed',
       currentBindingStatus: 'Currently using: {{provider}} / {{model}}',
       // Provider management
       providerManagement: 'Provider Management',
@@ -193,9 +195,12 @@ export const en: TranslationKeys = {
       modelsAdded: 'Added {{count}} models',
     },
     naming: {
+      noBindingConfigured: 'Please add a provider and model in "General" settings first, then bind it to the naming feature',
       namingBehavior: 'Naming Behavior',
       useCurrentFilename: 'Use current filename as context',
       useCurrentFilenameDesc: 'When enabled, AI will reference the current filename for improvement; when disabled, generates title based on note content only',
+      confirmBeforeRename: 'Confirm before rename',
+      confirmBeforeRenameDesc: 'When enabled, a confirmation dialog appears after AI generates the filename; when disabled, renames directly',
       analyzeDirectory: 'Analyze directory naming style',
       analyzeDirectoryDesc: 'When enabled, AI analyzes naming patterns of other files in the same directory to generate consistent filenames (may affect performance)',
       promptTemplate: 'Prompt Template',
@@ -207,6 +212,11 @@ export const en: TranslationKeys = {
       },
       currentPromptTemplate: '✏️ Current Prompt Template',
       currentPromptTemplateDesc: 'Edit the template used by current configuration below',
+      basePromptTemplate: '📝 Base Template',
+      basePromptTemplateDesc: 'Template used when filename context is disabled',
+      advancedPromptTemplate: '🚀 Advanced Template',
+      advancedPromptTemplateDesc: 'Template used when filename context is enabled (supports conditional blocks)',
+      resetToDefault: 'Reset to Default',
       quickReset: 'Quick Reset',
       quickResetDesc: 'Automatically select appropriate template based on "Use current filename as context" setting',
       resetToRecommended: 'Reset to Recommended Template',
@@ -282,8 +292,8 @@ export const en: TranslationKeys = {
       featureVisibilityDesc: 'Control where plugin features are displayed, customize your workflow. Requires plugin reload to take effect.',
       aiNamingVisibility: 'AI Filename Generation',
       aiNamingVisibilityDesc: 'Click to expand, configure display locations for AI filename generation',
-      terminalVisibility: 'Terminal',
-      terminalVisibilityDesc: 'Click to expand, configure display locations for terminal feature',
+      terminalVisibility: 'Local Terminal',
+      terminalVisibilityDesc: 'Click to expand, configure display locations for local terminal feature',
       showInCommandPalette: 'Command Palette',
       showInCommandPaletteDesc: 'Show "Generate AI Filename" command in command palette (Ctrl/Cmd+P)',
       showInEditorMenu: 'Editor Context Menu',
@@ -299,6 +309,11 @@ export const en: TranslationKeys = {
   },
 
   modals: {
+    renameConfirm: {
+      title: 'Confirm Rename',
+      oldName: 'Original Name',
+      newName: 'New Name',
+    },
     renameConfig: {
       title: 'Rename Configuration',
     },
@@ -511,6 +526,9 @@ export const en: TranslationKeys = {
   },
 
   selectionToolbar: {
+    // Visibility section
+    visibility: 'Selection Toolbar',
+    visibilityDesc: 'Configure selection toolbar enable state and button visibility',
     actions: {
       copy: 'Copy',
       search: 'Search',

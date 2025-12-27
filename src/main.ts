@@ -1,8 +1,8 @@
-import { Plugin, TFile, Menu, MarkdownView, WorkspaceLeaf } from 'obsidian';
+import { Plugin, TFile, Menu, MarkdownView, WorkspaceLeaf, Modal, Setting } from 'obsidian';
 import { SmartWorkflowSettings, DEFAULT_SETTINGS } from './settings/settings';
 import { SmartWorkflowSettingTab } from './settings/settingsTab';
 import { AIService } from './services/naming/aiService';
-import { FileNameService, RenameResult } from './services/naming/fileNameService';
+import { FileNameService } from './services/naming/fileNameService';
 import { NoticeHelper } from './ui/noticeHelper';
 import { TerminalService } from './services/terminal/terminalService';
 import { TerminalView, TERMINAL_VIEW_TYPE } from './ui/terminal/terminalView';
@@ -13,6 +13,95 @@ import * as path from 'path';
 
 // 导入选择工具栏样式
 import './ui/selection/selectionToolbar.css';
+
+/**
+ * 重命名确认对话框
+ */
+class RenameConfirmModal extends Modal {
+  private oldName: string;
+  private newName: string;
+  private onResult: (confirmed: boolean) => void;
+  private resolved = false;
+
+  constructor(app: import('obsidian').App, oldName: string, newName: string, onResult: (confirmed: boolean) => void) {
+    super(app);
+    this.oldName = oldName;
+    this.newName = newName;
+    this.onResult = onResult;
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+
+    // 设置弹窗宽度
+    this.modalEl.style.width = '450px';
+    this.modalEl.style.maxWidth = '90vw';
+
+    // 标题
+    new Setting(contentEl)
+      .setName(t('modals.renameConfirm.title'))
+      .setHeading();
+
+    // 原文件名
+    const oldNameEl = contentEl.createDiv({ cls: 'rename-confirm-item' });
+    oldNameEl.style.marginBottom = '12px';
+    oldNameEl.createEl('div', { 
+      text: t('modals.renameConfirm.oldName'),
+      cls: 'setting-item-name'
+    });
+    oldNameEl.createEl('div', { 
+      text: this.oldName,
+      cls: 'setting-item-description'
+    }).style.fontFamily = 'var(--font-monospace)';
+
+    // 新文件名
+    const newNameEl = contentEl.createDiv({ cls: 'rename-confirm-item' });
+    newNameEl.style.marginBottom = '16px';
+    newNameEl.createEl('div', { 
+      text: t('modals.renameConfirm.newName'),
+      cls: 'setting-item-name'
+    });
+    newNameEl.createEl('div', { 
+      text: this.newName,
+      cls: 'setting-item-description'
+    }).style.fontFamily = 'var(--font-monospace)';
+
+    // 按钮容器
+    const buttonContainer = contentEl.createDiv({ cls: 'modal-button-container' });
+    buttonContainer.style.display = 'flex';
+    buttonContainer.style.justifyContent = 'flex-end';
+    buttonContainer.style.gap = '8px';
+
+    // 取消按钮
+    const cancelButton = buttonContainer.createEl('button', { text: t('common.cancel') });
+    cancelButton.addEventListener('click', () => {
+      this.resolved = true;
+      this.onResult(false);
+      this.close();
+    });
+
+    // 确认按钮
+    const confirmButton = buttonContainer.createEl('button', {
+      text: t('common.confirm'),
+      cls: 'mod-cta'
+    });
+    confirmButton.addEventListener('click', () => {
+      this.resolved = true;
+      this.onResult(true);
+      this.close();
+    });
+  }
+
+  onClose() {
+    const { contentEl } = this;
+    contentEl.empty();
+    // 如果未通过按钮关闭（ESC、点击外部、关闭按钮），视为取消
+    if (!this.resolved) {
+      this.onResult(false);
+    }
+  }
+}
 
 /**
  * AI 文件名生成器插件主类
@@ -377,14 +466,33 @@ export default class SmartWorkflowPlugin extends Plugin {
     try {
       NoticeHelper.info(t('notices.generatingFilename'));
 
-      const result: RenameResult = await this.fileNameService.generateAndRename(file);
+      // 先生成文件名
+      const generateResult = await this.fileNameService.generateFileName(file);
 
-      // 根据结果显示不同的提示
-      if (result.renamed) {
-        NoticeHelper.success(result.message);
-      } else {
-        NoticeHelper.info(result.message);
+      // 如果文件名相同，直接返回
+      if (generateResult.isSame) {
+        NoticeHelper.info(t('fileNameService.noChangeNeeded'));
+        return;
       }
+
+      // 根据设置决定是否需要确认
+      if (this.settings.confirmBeforeRename) {
+        // 显示确认对话框
+        const confirmed = await this.showRenameConfirmDialog(
+          generateResult.oldName,
+          generateResult.newName
+        );
+        
+        if (!confirmed) {
+          NoticeHelper.info(t('notices.renameCancelled'));
+          return;
+        }
+      }
+
+      // 执行重命名
+      const result = await this.fileNameService.renameFile(file, generateResult.newName);
+      NoticeHelper.success(result.message);
+
     } catch (error) {
       if (error instanceof Error) {
         NoticeHelper.error(t('notices.operationFailed', { message: error.message }));
@@ -403,6 +511,21 @@ export default class SmartWorkflowPlugin extends Plugin {
         inlineTitle.removeClass('ai-generating-title');
       }
     }
+  }
+
+  /**
+   * 显示重命名确认对话框
+   * @param oldName 原文件名
+   * @param newName 新文件名
+   * @returns 用户是否确认
+   */
+  private showRenameConfirmDialog(oldName: string, newName: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      const modal = new RenameConfirmModal(this.app, oldName, newName, (confirmed) => {
+        resolve(confirmed);
+      });
+      modal.open();
+    });
   }
 
   /**
@@ -620,7 +743,7 @@ export default class SmartWorkflowPlugin extends Plugin {
       
       return {
         ...provider,
-        models: models.length > 0 ? models : [...defaults[0]?.models || []]
+        models // 保留有效的模型，即使为空数组
       };
     });
 
@@ -643,7 +766,8 @@ export default class SmartWorkflowPlugin extends Plugin {
     const m = model as Record<string, unknown>;
     if (!m.id || typeof m.id !== 'string') return false;
     if (!m.name || typeof m.name !== 'string') return false;
-    if (!m.displayName || typeof m.displayName !== 'string') return false;
+    // displayName 是可选的
+    if (m.displayName !== undefined && typeof m.displayName !== 'string') return false;
     if (typeof m.temperature !== 'number' || m.temperature < 0 || m.temperature > 2) return false;
     if (typeof m.maxTokens !== 'number' || m.maxTokens < 0) return false;
     if (typeof m.topP !== 'number' || m.topP < 0 || m.topP > 1) return false;

@@ -262,7 +262,10 @@ export interface SmartWorkflowSettings {
 
   // 通用 AI 设置
   defaultPromptTemplate: string; // 默认 Prompt 模板
+  basePromptTemplate: string;    // 基础 Prompt 模板
+  advancedPromptTemplate: string; // 高级 Prompt 模板
   useCurrentFileNameContext: boolean;  // 是否使用当前文件名作为上下文
+  confirmBeforeRename: boolean;  // 重命名前是否确认
   analyzeDirectoryNamingStyle: boolean; // 是否分析目录下其他文件命名风格
   timeout: number;               // 请求超时时间（毫秒）
 
@@ -461,7 +464,10 @@ export const DEFAULT_SETTINGS: SmartWorkflowSettings = {
   providers: [],
   featureBindings: {},
   defaultPromptTemplate: ADVANCED_PROMPT_TEMPLATE,
+  basePromptTemplate: BASE_PROMPT_TEMPLATE,
+  advancedPromptTemplate: ADVANCED_PROMPT_TEMPLATE,
   useCurrentFileNameContext: true,  // 默认使用当前文件名上下文
+  confirmBeforeRename: true,  // 默认重命名前确认
   analyzeDirectoryNamingStyle: false, // 默认不分析目录命名风格（性能考虑）
   debugMode: false, // 默认关闭调试模式
   timeout: 15000, // 默认超时时间 15 秒

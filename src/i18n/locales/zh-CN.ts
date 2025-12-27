@@ -53,6 +53,7 @@ export const zhCN: TranslationKeys = {
     noOpenFile: '没有打开的文件',
     generatingFilename: '正在生成文件名...',
     filenameGenerated: '文件名已生成',
+    renameCancelled: '已取消重命名',
     operationFailed: '操作失败：{{message}}',
     connectionSuccess: '连接成功！',
     connectionFailed: '连接失败：{{message}}',
@@ -159,8 +160,9 @@ export const zhCN: TranslationKeys = {
       // 功能绑定
       featureBindings: '功能绑定',
       featureBindingsDesc: '为不同功能分配 AI 供应商和模型',
-      namingFeature: '文件命名',
-      namingFeatureDesc: '选择用于 AI 文件名生成的供应商和模型',
+      noBinding: '-- 不绑定 --',
+      namingFeature: 'AI 文件名生成',
+      namingFeatureDesc: '选择用于 AI 文件名生成的供应商和模型。建议使用 Flash、Air 等快速模型以获得更好的响应速度',
       currentBindingStatus: '当前使用：{{provider}} / {{model}}',
       // 供应商管理
       providerManagement: '供应商管理',
@@ -193,9 +195,12 @@ export const zhCN: TranslationKeys = {
       modelsAdded: '已添加 {{count}} 个模型',
     },
     naming: {
+      noBindingConfigured: '请先在「常规设置」中添加供应商和模型，然后绑定到命名功能',
       namingBehavior: '命名行为',
       useCurrentFilename: '使用当前文件名作为上下文',
       useCurrentFilenameDesc: '启用后，AI 会参考当前文件名进行改进；禁用后，仅根据笔记内容生成标题',
+      confirmBeforeRename: '重命名前确认',
+      confirmBeforeRenameDesc: '启用后，AI 生成文件名后会弹出确认对话框；禁用后直接重命名',
       analyzeDirectory: '分析目录命名风格',
       analyzeDirectoryDesc: '启用后，AI 会分析同目录下其他文件的命名模式，生成风格一致的文件名（可能影响性能）',
       promptTemplate: 'Prompt 模板',
@@ -207,6 +212,11 @@ export const zhCN: TranslationKeys = {
       },
       currentPromptTemplate: '✏️ 当前 Prompt 模板',
       currentPromptTemplateDesc: '在下方编辑当前配置使用的模板',
+      basePromptTemplate: '📝 基础模板',
+      basePromptTemplateDesc: '不使用文件名上下文时使用的模板',
+      advancedPromptTemplate: '🚀 高级模板',
+      advancedPromptTemplateDesc: '使用文件名上下文时使用的模板（支持条件块）',
+      resetToDefault: '重置为默认',
       quickReset: '快速重置',
       quickResetDesc: '根据"使用当前文件名作为上下文"设置自动选择合适的模板',
       resetToRecommended: '重置为推荐模板',
@@ -282,8 +292,8 @@ export const zhCN: TranslationKeys = {
       featureVisibilityDesc: '控制插件功能的显示位置，自定义您的工作流程。需要重新加载插件才能生效。',
       aiNamingVisibility: 'AI 文件名生成',
       aiNamingVisibilityDesc: '点击展开，配置 AI 文件名生成的显示位置',
-      terminalVisibility: '终端',
-      terminalVisibilityDesc: '点击展开，配置终端功能的显示位置',
+      terminalVisibility: '本地终端',
+      terminalVisibilityDesc: '点击展开，配置本地终端功能的显示位置',
       showInCommandPalette: '命令面板',
       showInCommandPaletteDesc: '在命令面板中显示"生成 AI 文件名"命令（Ctrl/Cmd+P）',
       showInEditorMenu: '编辑器右键菜单',
@@ -299,6 +309,11 @@ export const zhCN: TranslationKeys = {
   },
 
   modals: {
+    renameConfirm: {
+      title: '确认重命名',
+      oldName: '原文件名',
+      newName: '新文件名',
+    },
     renameConfig: {
       title: '重命名配置',
     },
@@ -511,6 +526,9 @@ export const zhCN: TranslationKeys = {
   },
 
   selectionToolbar: {
+    // 功能显示区域
+    visibility: '选中工具栏',
+    visibilityDesc: '配置选中工具栏的启用状态和按钮显示',
     actions: {
       copy: '复制',
       search: '搜索',
