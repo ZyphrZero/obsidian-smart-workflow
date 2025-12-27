@@ -4,6 +4,7 @@ node_modules/
 .kiro/
 *.bat
 main.css
+docs/
 
 # Rust
 target/

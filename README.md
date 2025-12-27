@@ -9,34 +9,19 @@
 ## ✨ Features
 
 ### 🧠 Intelligent Note Naming
-*   **Smart Analysis**: Based on OpenAI-compatible APIs (supports GPT, Claude, DeepSeek, etc.), deeply understands note content and generates the best filenames.
-*   **Convenient Triggers**:
-    *   **Multiple Entry Points**: Supports sidebar icon, command palette, editor right-click, and file list right-click menus.
-*   **Multi-Config Management**: Supports saving multiple sets of API configurations and quick switching.
-*   **Highly Customizable**:
-    *   Custom Prompt templates, supporting variable injection.
-    *   Fine-grained control of AI parameters (Temperature, Top P, Max Tokens).
-    *   **Context Awareness**: Option to reference the current filename for optimization.
-*   **Robust Design**:
-    *   Supports "Chain of Thought" models (like DeepSeek R1), automatically filtering out `<think>` tags.
-    *   Intelligent API endpoint completion and correction.
-    *   Customizable request timeout settings.
+- OpenAI-compatible API support (GPT, Claude, DeepSeek, etc.)
+- Multiple triggers: sidebar, command palette, right-click menu
+- Multi-config management with quick switching
+- Custom Prompt templates with variable injection
+- Chain-of-thought model support (auto-filters `<think>` tags)
 
 ### 💻 Integrated Terminal
-*   **Cross-Platform Support**: Works seamlessly on Windows, macOS, and Linux.
-*   **Native Experience**: Powered by Rust-based PTY server with WebSocket communication.
-*   **Multiple Renderers**: Choose between canvas and WebGL rendering for optimal performance.
-*   **Auto-Recovery**: Automatic crash detection and server restart.
-*   **Multiple Sessions**: Support for multiple terminal instances.
-*   **Highly Customizable**:
-    *   Custom Shell path (supports PowerShell, CMD, Bash, etc.).
-    *   Adjustable scrollback buffer size (100-10000 lines).
-    *   Custom terminal panel default height (100-1000 pixels).
-    *   Option to restore terminals on startup.
-*   **Themes & Appearance**:
-    *   Use Obsidian theme colors or custom color schemes.
-    *   Support for background images with opacity and blur effects.
-    *   Adaptive light/dark theme switching.
+- Cross-platform: Windows, macOS, Linux
+- Rust-based PTY server with WebSocket communication
+- Multiple shell support: PowerShell, CMD, Bash, Zsh, WSL
+- Canvas/WebGL rendering options
+- Auto crash recovery and multi-session support
+- Customizable themes and background images
 
 ## 🚀 Installation
 
