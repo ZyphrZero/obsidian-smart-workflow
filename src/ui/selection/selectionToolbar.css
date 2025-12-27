@@ -1,0 +1,55 @@
+/**
+ * Selection Toolbar Styles
+ * 选中文字浮动工具栏样式
+ * Requirements: 2.4, 2.5
+ */
+
+/* 工具栏容器 */
+.selection-toolbar {
+  position: fixed;
+  z-index: 1000;
+  display: flex;
+  gap: 4px;
+  padding: 4px 8px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  opacity: 0;
+  transition: opacity 150ms ease-in-out;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* 工具栏可见状态 */
+.selection-toolbar.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 工具栏隐藏动画（更快的淡出） */
+.selection-toolbar.hiding {
+  opacity: 0;
+  transition: opacity 100ms ease-in-out;
+}
+
+/* 工具栏按钮 - 样式通过 toolbarView.ts 内联设置 */
+
+/* 按钮图标 */
+.selection-toolbar .selection-toolbar-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* 分隔线 */
+.selection-toolbar-separator {
+  width: 1px;
+  height: 20px;
+  margin: 4px 2px;
+  background: var(--background-modifier-border);
+}
+
+/* Tooltip 样式（使用 Obsidian 原生 tooltip） */
+.selection-toolbar-btn[aria-label] {
+  position: relative;
+}

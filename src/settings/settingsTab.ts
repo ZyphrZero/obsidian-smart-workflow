@@ -2549,9 +2549,168 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
   }
 
   /**
+   * 渲染选中工具栏设置
+   * Requirements: 4.1, 4.2, 4.3, 4.4
+   */
+  private renderSelectionToolbarSettings(containerEl: HTMLElement): void {
+    const toolbarCard = this.createSettingCard(containerEl);
+
+    new Setting(toolbarCard)
+      .setName(t('selectionToolbar.settings.title'))
+      .setDesc(t('selectionToolbar.settings.titleDesc'))
+      .setHeading();
+
+    // 启用/禁用开关 - Requirements: 4.1
+    new Setting(toolbarCard)
+      .setName(t('selectionToolbar.settings.enabled'))
+      .setDesc(t('selectionToolbar.settings.enabledDesc'))
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.selectionToolbar.enabled)
+        .onChange(async (value) => {
+          this.plugin.settings.selectionToolbar.enabled = value;
+          await this.plugin.saveSettings();
+          // 通知 SelectionToolbarManager 更新设置
+          this.plugin.updateSelectionToolbarSettings();
+        }));
+
+    // 最小选中字符数 - Requirements: 4.3
+    const minLengthSetting = new Setting(toolbarCard)
+      .setName(t('selectionToolbar.settings.minSelectionLength'))
+      .setDesc(t('selectionToolbar.settings.minSelectionLengthDesc'));
+    
+    minLengthSetting.addText(text => {
+      const inputEl = text
+        .setPlaceholder('1')
+        .setValue(String(this.plugin.settings.selectionToolbar.minSelectionLength))
+        .onChange(async (value) => {
+          const numValue = parseInt(value);
+          if (!isNaN(numValue)) {
+            // 范围约束：1-100
+            const clampedValue = Math.max(1, Math.min(100, numValue));
+            this.plugin.settings.selectionToolbar.minSelectionLength = clampedValue;
+            await this.plugin.saveSettings();
+            this.plugin.updateSelectionToolbarSettings();
+          }
+        });
+      
+      // 失去焦点时验证并修正
+      text.inputEl.addEventListener('blur', async () => {
+        const value = text.inputEl.value;
+        const numValue = parseInt(value);
+        if (isNaN(numValue) || numValue < 1 || numValue > 100) {
+          // 恢复到有效范围
+          const clampedValue = isNaN(numValue) ? 1 : Math.max(1, Math.min(100, numValue));
+          this.plugin.settings.selectionToolbar.minSelectionLength = clampedValue;
+          await this.plugin.saveSettings();
+          text.setValue(String(clampedValue));
+          this.plugin.updateSelectionToolbarSettings();
+        }
+      });
+      
+      text.inputEl.setCssProps({ width: '60px' });
+      return inputEl;
+    });
+
+    // 显示延迟 - Requirements: 4.4
+    const showDelaySetting = new Setting(toolbarCard)
+      .setName(t('selectionToolbar.settings.showDelay'))
+      .setDesc(t('selectionToolbar.settings.showDelayDesc'));
+    
+    showDelaySetting.addText(text => {
+      const inputEl = text
+        .setPlaceholder('0')
+        .setValue(String(this.plugin.settings.selectionToolbar.showDelay))
+        .onChange(async (value) => {
+          const numValue = parseInt(value);
+          if (!isNaN(numValue)) {
+            // 范围约束：0-1000
+            const clampedValue = Math.max(0, Math.min(1000, numValue));
+            this.plugin.settings.selectionToolbar.showDelay = clampedValue;
+            await this.plugin.saveSettings();
+            this.plugin.updateSelectionToolbarSettings();
+          }
+        });
+      
+      // 失去焦点时验证并修正
+      text.inputEl.addEventListener('blur', async () => {
+        const value = text.inputEl.value;
+        const numValue = parseInt(value);
+        if (isNaN(numValue) || numValue < 0 || numValue > 1000) {
+          // 恢复到有效范围
+          const clampedValue = isNaN(numValue) ? 0 : Math.max(0, Math.min(1000, numValue));
+          this.plugin.settings.selectionToolbar.showDelay = clampedValue;
+          await this.plugin.saveSettings();
+          text.setValue(String(clampedValue));
+          this.plugin.updateSelectionToolbarSettings();
+        }
+      });
+      
+      text.inputEl.setCssProps({ width: '60px' });
+      return inputEl;
+    });
+
+    // 按钮显隐设置 - Requirements: 4.2
+    new Setting(toolbarCard)
+      .setName(t('selectionToolbar.settings.actionsTitle'))
+      .setDesc(t('selectionToolbar.settings.actionsDesc'))
+      .setHeading();
+
+    // 复制按钮
+    new Setting(toolbarCard)
+      .setName(t('selectionToolbar.settings.actionCopy'))
+      .setDesc(t('selectionToolbar.settings.actionCopyDesc'))
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.selectionToolbar.actions.copy)
+        .onChange(async (value) => {
+          this.plugin.settings.selectionToolbar.actions.copy = value;
+          await this.plugin.saveSettings();
+          this.plugin.updateSelectionToolbarSettings();
+        }));
+
+    // 搜索按钮
+    new Setting(toolbarCard)
+      .setName(t('selectionToolbar.settings.actionSearch'))
+      .setDesc(t('selectionToolbar.settings.actionSearchDesc'))
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.selectionToolbar.actions.search)
+        .onChange(async (value) => {
+          this.plugin.settings.selectionToolbar.actions.search = value;
+          await this.plugin.saveSettings();
+          this.plugin.updateSelectionToolbarSettings();
+        }));
+
+    // 创建链接按钮
+    new Setting(toolbarCard)
+      .setName(t('selectionToolbar.settings.actionCreateLink'))
+      .setDesc(t('selectionToolbar.settings.actionCreateLinkDesc'))
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.selectionToolbar.actions.createLink)
+        .onChange(async (value) => {
+          this.plugin.settings.selectionToolbar.actions.createLink = value;
+          await this.plugin.saveSettings();
+          this.plugin.updateSelectionToolbarSettings();
+        }));
+
+    // 高亮按钮
+    new Setting(toolbarCard)
+      .setName(t('selectionToolbar.settings.actionHighlight'))
+      .setDesc(t('selectionToolbar.settings.actionHighlightDesc'))
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.selectionToolbar.actions.highlight)
+        .onChange(async (value) => {
+          this.plugin.settings.selectionToolbar.actions.highlight = value;
+          await this.plugin.saveSettings();
+          this.plugin.updateSelectionToolbarSettings();
+        }));
+  }
+
+  /**
    * 渲染高级设置
    */
   private renderAdvancedSettings(containerEl: HTMLElement): void {
+    // 选中工具栏设置
+    this.renderSelectionToolbarSettings(containerEl);
+
     // 性能与调试设置
     const performanceCard = this.createSettingCard(containerEl);
 

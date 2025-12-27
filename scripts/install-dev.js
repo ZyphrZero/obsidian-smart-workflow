@@ -5,7 +5,8 @@
  * ⚠️  WARNING: This script will OVERWRITE existing files by default!
  * 
  * Usage:
- *   node scripts/install-dev.js              # Default: force overwrite + build
+ *   node scripts/install-dev.js              # Default: force overwrite + build (no lint/type check)
+ *   node scripts/install-dev.js --check      # Run ESLint and TypeScript check before build
  *   node scripts/install-dev.js --kill       # Auto-close Obsidian process
  *   node scripts/install-dev.js --no-build   # Skip build step
  *   node scripts/install-dev.js --reset      # Reset saved configuration
@@ -26,6 +27,7 @@ const INTERACTIVE_MODE = args.includes('-i') || args.includes('--interactive');
 const KILL_OBSIDIAN = args.includes('--kill');
 const RESET_CONFIG = args.includes('--reset');
 const SKIP_BUILD = args.includes('--no-build');
+const RUN_CHECK = args.includes('--check');
 
 // Color output
 const colors = {
@@ -223,11 +225,12 @@ async function main() {
   log('   ⚠️  WARNING: Will OVERWRITE existing files by default!', 'yellow');
   log('   Use -i flag for interactive mode\n', 'gray');
   
-  if (INTERACTIVE_MODE || KILL_OBSIDIAN || SKIP_BUILD) {
+  if (INTERACTIVE_MODE || KILL_OBSIDIAN || SKIP_BUILD || RUN_CHECK) {
     const modes = [];
     if (INTERACTIVE_MODE) modes.push('Interactive mode');
     if (KILL_OBSIDIAN) modes.push('Auto-close Obsidian');
     if (SKIP_BUILD) modes.push('Skip build');
+    if (RUN_CHECK) modes.push('Run lint/type check');
     log(`   Mode: ${modes.join(' + ')}`, 'gray');
   }
 
@@ -244,26 +247,28 @@ async function main() {
 
   // 0. Build the plugin
   if (!SKIP_BUILD) {
-    // 0.1 ESLint check
-    log('🔍 Running ESLint check...', 'cyan');
-    try {
-      execSync('npx eslint src --ext .ts', { cwd: ROOT_DIR, stdio: 'inherit' });
-      log('  ✓ ESLint check passed\n', 'green');
-    } catch (error) {
-      log('\n❌ ESLint check failed', 'red');
-      closeReadline();
-      process.exit(1);
-    }
+    // 0.1 ESLint check (only when --check flag is provided)
+    if (RUN_CHECK) {
+      log('🔍 Running ESLint check...', 'cyan');
+      try {
+        execSync('npx eslint src --ext .ts', { cwd: ROOT_DIR, stdio: 'inherit' });
+        log('  ✓ ESLint check passed\n', 'green');
+      } catch (error) {
+        log('\n❌ ESLint check failed', 'red');
+        closeReadline();
+        process.exit(1);
+      }
 
-    // 0.2 TypeScript type check
-    log('🔍 Running TypeScript type check...', 'cyan');
-    try {
-      execSync('npx tsc --noEmit', { cwd: ROOT_DIR, stdio: 'inherit' });
-      log('  ✓ TypeScript check passed\n', 'green');
-    } catch (error) {
-      log('\n❌ TypeScript type check failed', 'red');
-      closeReadline();
-      process.exit(1);
+      // 0.2 TypeScript type check
+      log('🔍 Running TypeScript type check...', 'cyan');
+      try {
+        execSync('npx tsc --noEmit', { cwd: ROOT_DIR, stdio: 'inherit' });
+        log('  ✓ TypeScript check passed\n', 'green');
+      } catch (error) {
+        log('\n❌ TypeScript type check failed', 'red');
+        closeReadline();
+        process.exit(1);
+      }
     }
 
     // 0.3 Build

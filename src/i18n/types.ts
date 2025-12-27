@@ -546,4 +546,61 @@ export interface TranslationKeys {
     webSearchDesc: string;
     filesDesc: string;
   };
+
+  // 选中文字工具栏
+  selectionToolbar: {
+    actions: {
+      copy: string;
+      search: string;
+      createLink: string;
+      highlight: string;
+      bold: string;
+      italic: string;
+      strikethrough: string;
+      inlineCode: string;
+      inlineMath: string;
+      clearFormat: string;
+      copySuccess: string;
+      copyFailed: string;
+      searchSuccess: string;
+      searchFallback: string;
+      searchFailed: string;
+      linkCreated: string;
+      linkFailed: string;
+      highlightAdded: string;
+      highlightFailed: string;
+    };
+    settings: {
+      title: string;
+      titleDesc: string;
+      enabled: string;
+      enabledDesc: string;
+      minSelectionLength: string;
+      minSelectionLengthDesc: string;
+      showDelay: string;
+      showDelayDesc: string;
+      actionsTitle: string;
+      actionsDesc: string;
+      actionCopy: string;
+      actionCopyDesc: string;
+      actionSearch: string;
+      actionSearchDesc: string;
+      actionCreateLink: string;
+      actionCreateLinkDesc: string;
+      actionHighlight: string;
+      actionHighlightDesc: string;
+      actionBold: string;
+      actionBoldDesc: string;
+      actionItalic: string;
+      actionItalicDesc: string;
+      actionStrikethrough: string;
+      actionStrikethroughDesc: string;
+      actionInlineCode: string;
+      actionInlineCodeDesc: string;
+      actionInlineMath: string;
+      actionInlineMathDesc: string;
+      actionClearFormat: string;
+      actionClearFormatDesc: string;
+    };
+  };
 }

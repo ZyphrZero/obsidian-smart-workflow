@@ -6,9 +6,13 @@ import { FileNameService, RenameResult } from './services/naming/fileNameService
 import { NoticeHelper } from './ui/noticeHelper';
 import { TerminalService } from './services/terminal/terminalService';
 import { TerminalView, TERMINAL_VIEW_TYPE } from './ui/terminal/terminalView';
+import { SelectionToolbarManager } from './ui/selection';
 import { setDebugMode, debugLog, errorLog } from './utils/logger';
 import { i18n, t } from './i18n';
 import * as path from 'path';
+
+// 导入选择工具栏样式
+import './ui/selection/selectionToolbar.css';
 
 /**
  * AI 文件名生成器插件主类
@@ -18,6 +22,7 @@ export default class SmartWorkflowPlugin extends Plugin {
   aiService: AIService;
   fileNameService: FileNameService;
   terminalService: TerminalService;
+  selectionToolbarManager: SelectionToolbarManager;
   generatingFiles: Set<string> = new Set();
 
 
@@ -47,6 +52,13 @@ export default class SmartWorkflowPlugin extends Plugin {
     // 初始化终端服务（使用 Rust PTY 服务器架构）
     const pluginDir = this.getPluginDir();
     this.terminalService = new TerminalService(this.app, this.settings.terminal, pluginDir);
+
+    // 初始化选中文字浮动工具栏
+    this.selectionToolbarManager = new SelectionToolbarManager(
+      this.app,
+      this.settings.selectionToolbar
+    );
+    this.selectionToolbarManager.initialize();
 
     // 注册终端视图
     this.registerView(
@@ -467,6 +479,22 @@ export default class SmartWorkflowPlugin extends Plugin {
       };
     }
 
+    // 确保选中工具栏设置完整（深度合并）
+    if (!this.settings.selectionToolbar) {
+      this.settings.selectionToolbar = { ...DEFAULT_SETTINGS.selectionToolbar };
+      needsSave = true;
+    } else {
+      // 合并选中工具栏设置，确保所有字段都存在
+      this.settings.selectionToolbar = {
+        ...DEFAULT_SETTINGS.selectionToolbar,
+        ...this.settings.selectionToolbar,
+        actions: {
+          ...DEFAULT_SETTINGS.selectionToolbar.actions,
+          ...(this.settings.selectionToolbar.actions || {})
+        }
+      };
+    }
+
     // 如果 defaultPromptTemplate 为空，使用代码中的默认值
     if (!this.settings.defaultPromptTemplate || this.settings.defaultPromptTemplate.trim() === '') {
       this.settings.defaultPromptTemplate = DEFAULT_SETTINGS.defaultPromptTemplate;
@@ -547,6 +575,18 @@ export default class SmartWorkflowPlugin extends Plugin {
         terminal: {
           ...defaults.featureVisibility.terminal,
           ...(loaded.featureVisibility.terminal || {})
+        }
+      };
+    }
+
+    // 合并选中工具栏设置
+    if (loaded.selectionToolbar && typeof loaded.selectionToolbar === 'object') {
+      result.selectionToolbar = {
+        ...defaults.selectionToolbar,
+        ...loaded.selectionToolbar,
+        actions: {
+          ...defaults.selectionToolbar.actions,
+          ...(loaded.selectionToolbar.actions || {})
         }
       };
     }
@@ -723,6 +763,22 @@ export default class SmartWorkflowPlugin extends Plugin {
     if (this.terminalService) {
       this.terminalService.updateSettings(this.settings.terminal);
     }
+    
+    // 更新选中工具栏的设置（如果已初始化）
+    if (this.selectionToolbarManager) {
+      this.selectionToolbarManager.updateSettings(this.settings.selectionToolbar);
+    }
+  }
+
+  /**
+   * 更新选中工具栏设置
+   * 供设置面板调用，实现设置实时生效
+   * Requirements: 4.5
+   */
+  updateSelectionToolbarSettings(): void {
+    if (this.selectionToolbarManager) {
+      this.selectionToolbarManager.updateSettings(this.settings.selectionToolbar);
+    }
   }
 
   /**
@@ -730,6 +786,15 @@ export default class SmartWorkflowPlugin extends Plugin {
    */
   async onunload() {
     debugLog(t('plugin.unloadingMessage'));
+
+    // 销毁选中文字浮动工具栏
+    try {
+      if (this.selectionToolbarManager) {
+        this.selectionToolbarManager.destroy();
+      }
+    } catch (error) {
+      errorLog('销毁选中工具栏失败:', error);
+    }
 
     // 清理所有终端
     try {

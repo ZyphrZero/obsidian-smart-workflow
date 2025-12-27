@@ -187,6 +187,53 @@ export interface TerminalSettings {
 }
 
 /**
+ * 选中工具栏设置接口
+ * Requirements: 4.1-4.4
+ */
+export interface SelectionToolbarSettings {
+  /** 是否启用选中工具栏 */
+  enabled: boolean;
+  /** 最小选中字符数 */
+  minSelectionLength: number;
+  /** 显示延迟 (ms) */
+  showDelay: number;
+  /** 各按钮的显示状态 */
+  actions: {
+    copy: boolean;
+    search: boolean;
+    createLink: boolean;
+    highlight: boolean;
+    bold: boolean;
+    italic: boolean;
+    strikethrough: boolean;
+    inlineCode: boolean;
+    inlineMath: boolean;
+    clearFormat: boolean;
+  };
+}
+
+/**
+ * 默认选中工具栏设置
+ */
+export const DEFAULT_SELECTION_TOOLBAR_SETTINGS: SelectionToolbarSettings = {
+  enabled: true,
+  minSelectionLength: 1,
+  showDelay: 0,
+  actions: {
+    copy: true,
+    search: true,
+    createLink: true,
+    highlight: true,
+    bold: true,
+    italic: true,
+    strikethrough: true,
+    inlineCode: true,
+    inlineMath: true,
+    clearFormat: true,
+  },
+};
+
+/**
  * 功能显示设置接口
  */
 export interface FeatureVisibilitySettings {
@@ -209,7 +256,7 @@ export interface FeatureVisibilitySettings {
  * 插件设置接口
  */
 export interface SmartWorkflowSettings {
-  // AI 配置（新结构）
+  // AI 配置
   providers: Provider[];                                    // 供应商列表
   featureBindings: Partial<Record<AIFeature, FeatureBinding>>; // 功能绑定
 
@@ -222,6 +269,7 @@ export interface SmartWorkflowSettings {
   // 其他设置
   debugMode: boolean;            // 调试模式（在控制台显示详细日志）
   terminal: TerminalSettings;    // 终端设置
+  selectionToolbar: SelectionToolbarSettings; // 选中工具栏设置
   featureVisibility: FeatureVisibilitySettings; // 功能显示设置
 }
 
@@ -418,5 +466,6 @@ export const DEFAULT_SETTINGS: SmartWorkflowSettings = {
   debugMode: false, // 默认关闭调试模式
   timeout: 15000, // 默认超时时间 15 秒
   terminal: DEFAULT_TERMINAL_SETTINGS, // 终端默认设置
+  selectionToolbar: DEFAULT_SELECTION_TOOLBAR_SETTINGS, // 选中工具栏默认设置
   featureVisibility: DEFAULT_FEATURE_VISIBILITY // 功能显示默认设置
 };

@@ -892,3 +892,82 @@
 .model-filter-btn.is-active:hover {
     background-color: var(--interactive-accent-hover);
 }
+
+
+/* ==================== Selection Toolbar Styles ==================== */
+/* 选中文字浮动工具栏样式 */
+/* Requirements: 2.4, 2.5 */
+
+/* 工具栏容器 */
+.selection-toolbar {
+  position: fixed;
+  z-index: 1000;
+  display: flex;
+  gap: 2px;
+  padding: 4px 6px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  opacity: 0;
+  transition: opacity 150ms ease-in-out;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* 工具栏可见状态 */
+.selection-toolbar.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 工具栏隐藏动画（更快的淡出） */
+.selection-toolbar.hiding {
+  opacity: 0;
+  transition: opacity 100ms ease-in-out;
+}
+
+/* 工具栏按钮 - 样式通过 toolbarView.ts 内联设置 */
+
+/* 按钮图标容器 */
+.selection-toolbar-btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+}
+
+.selection-toolbar-btn-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* 按钮文字标签 */
+.selection-toolbar-btn-label {
+  font-size: 12px;
+  line-height: 1;
+}
+
+/* 按钮禁用状态 */
+.selection-toolbar-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.selection-toolbar-btn:disabled:hover {
+  background: transparent;
+}
+
+/* 分隔线 */
+.selection-toolbar-separator {
+  width: 1px;
+  height: 20px;
+  margin: 4px 2px;
+  background: var(--background-modifier-border);
+}
+
+/* Tooltip 样式（使用 Obsidian 原生 tooltip） */
+.selection-toolbar-btn[aria-label] {
+  position: relative;
+}
