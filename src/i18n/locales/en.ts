@@ -17,6 +17,7 @@ export const en: TranslationKeys = {
     error: 'Error',
     warning: 'Warning',
     info: 'Info',
+    auto: 'Auto',
   },
 
   plugin: {
@@ -133,13 +134,6 @@ export const en: TranslationKeys = {
 
   settingsDetails: {
     general: {
-      currentConfig: 'Current Configuration',
-      currentConfigDesc: 'Select the API configuration to use',
-      configManagement: 'Configuration Management',
-      configManagementDesc: 'Add, rename, or delete API configurations',
-      addConfig: 'Add Config',
-      renameConfig: 'Rename Config',
-      deleteConfig: 'Delete Config',
       apiEndpoint: 'API Endpoint',
       apiEndpointDesc: 'OpenAI API compatible endpoint URL (can be base URL, full path will be auto-completed at runtime)',
       testConnection: 'Test Connection',
@@ -147,12 +141,10 @@ export const en: TranslationKeys = {
       actualRequestUrl: 'Actual request URL: {{url}}',
       apiKey: 'API Key',
       apiKeyDesc: 'Your API key',
-      modelName: 'Model Name',
-      modelNameDesc: 'AI model to use',
       temperature: 'Temperature',
       temperatureDesc: 'Controls output randomness. Lower values produce more deterministic, consistent results; higher values produce more diverse, creative results',
       maxTokens: 'Max Tokens',
-      maxTokensDesc: 'Maximum tokens for the model. 0 means unlimited',
+      maxTokensDesc: 'Maximum tokens for the model.',
       topP: 'Top P',
       topPDesc: 'Controls vocabulary diversity. Lower values produce more common, concise words; higher values produce broader vocabulary. Recommended: keep default 1.0',
       timeout: 'Request Timeout (seconds)',
@@ -162,7 +154,7 @@ export const en: TranslationKeys = {
       featureBindingsDesc: 'Assign AI providers and models to different features',
       noBinding: '-- No Binding --',
       namingFeature: 'AI Filename Generation',
-      namingFeatureDesc: 'Select provider and model for AI filename generation. Recommend using fast models like Flash or Air for better response speed',
+      namingFeatureDesc: 'Select provider and model for AI filename generation\nRecommend using fast models like Flash or Air for better response speed',
       currentBindingStatus: 'Currently using: {{provider}} / {{model}}',
       // Provider management
       providerManagement: 'Provider Management',
@@ -195,7 +187,6 @@ export const en: TranslationKeys = {
       modelsAdded: 'Added {{count}} models',
     },
     naming: {
-      noBindingConfigured: 'Please add a provider and model in "General" settings first, then bind it to the naming feature',
       namingBehavior: 'Naming Behavior',
       useCurrentFilename: 'Use current filename as context',
       useCurrentFilenameDesc: 'When enabled, AI will reference the current filename for improvement; when disabled, generates title based on note content only',
@@ -210,16 +201,11 @@ export const en: TranslationKeys = {
         currentFileName: '{{currentFileName}} - Current filename',
         conditionalBlock: '{{#if currentFileName}}...{{/if}} - Conditional block',
       },
-      currentPromptTemplate: '✏️ Current Prompt Template',
-      currentPromptTemplateDesc: 'Edit the template used by current configuration below',
       basePromptTemplate: '📝 Base Template',
       basePromptTemplateDesc: 'Template used when filename context is disabled',
       advancedPromptTemplate: '🚀 Advanced Template',
       advancedPromptTemplateDesc: 'Template used when filename context is enabled (supports conditional blocks)',
       resetToDefault: 'Reset to Default',
-      quickReset: 'Quick Reset',
-      quickResetDesc: 'Automatically select appropriate template based on "Use current filename as context" setting',
-      resetToRecommended: 'Reset to Recommended Template',
     },
     terminal: {
       shellSettings: 'Shell Settings',
@@ -314,9 +300,6 @@ export const en: TranslationKeys = {
       oldName: 'Original Name',
       newName: 'New Name',
     },
-    renameConfig: {
-      title: 'Rename Configuration',
-    },
     deleteConfig: {
       title: '⚠️ Confirm Delete Configuration',
       warning: 'Are you sure you want to delete configuration "{{name}}"? This action cannot be undone.',
@@ -338,7 +321,7 @@ export const en: TranslationKeys = {
       titleAdd: 'Add Model',
       titleEdit: 'Edit Model',
       name: 'Model ID',
-      nameDesc: 'The model identifier used in API calls (e.g., gpt-3.5-turbo, claude-3-sonnet)',
+      nameDesc: 'The model identifier used in API calls (e.g., gpt-4o, claude-4.5-sonnet)',
       nameRequired: 'Model ID is required',
       displayName: 'Display Name (Optional)',
       displayNameDesc: 'A friendly name shown in the UI. If empty, Model ID will be used.',

@@ -58,7 +58,7 @@ For more details, see [Build Scripts Guide](./scripts/README.md).
 Enter **Settings > General**:
 *   **API Endpoint**: Enter your API address (the plugin will automatically complete the path, like `/v1/chat/completions`).
 *   **API Key**: Enter your key.
-*   **Model**: Enter the model name (e.g., `gpt-4o`, `deepseek-chat`).
+*   **Model**: Enter the model name (e.g., `gpt-4o`, `claude-4.5-sonnet`).
 *   Click **"Test Connection"** to ensure the configuration is correct.
 *   **Timeout Settings**: You can appropriately increase the timeout period when the network is slow.
 

@@ -1,3 +1,7 @@
+/**
+ * 推断模型的类型和能力 + UI 标签渲染
+ */
+
 import { ModelType, ModelAbility } from '../../settings/settings';
 import { setIcon } from 'obsidian';
 import { t } from '../../i18n';
@@ -26,18 +30,19 @@ const TYPE_KEYWORDS: TypeKeywords[] = [
   {
     type: 'image',
     keywords: [
-      'dall-e', 'dalle', 'midjourney', 'stable-diffusion', 'sd-', 'flux', 
-      'imagen', 'image-gen', 'cogview', 'wanxiang',
-      '!gemini'  // 排除 gemini，即使包含 image 也是 chat 模型
+      'dall-e', 'dalle', 'midjourney', 'stable-diffusion', 'sd-', 'sdxl', 'flux', 
+      'imagen', 'image-gen', 'cogview', 'wanxiang', 'seedream', 'seedance',
+      'playground', 'ideogram', 'recraft', 'kolors',
+      '!gemini', '!gpt', '!claude'  // 排除多模态聊天模型
     ]
   },
   {
     type: 'embedding',
-    keywords: ['embedding', 'embed', 'bge', 'm3e', 'e5-', 'text-embedding']
+    keywords: ['embedding', 'embed', 'bge', 'm3e', 'e5-', 'text-embedding', 'gte-']
   },
   {
     type: 'tts',
-    keywords: ['tts', 'voice-gen', 'audio-out', 'text-to-speech', 'elevenlabs', 'cosyvoice']
+    keywords: ['tts', 'voice-gen', 'audio-out', 'text-to-speech', 'elevenlabs', 'cosyvoice', 'fish-speech']
   },
   {
     type: 'asr',
@@ -48,9 +53,11 @@ const TYPE_KEYWORDS: TypeKeywords[] = [
 /**
  * 模型提供商检测配置
  * 用于检测模型属于哪个提供商，以便应用对应的能力规则
+ * 
+ * 匹配规则：按顺序检测，更具体的关键词应放在前面
  */
 const MODEL_PROVIDER_DETECTION: Record<string, readonly string[]> = {
-  openai: ['gpt-', 'o1', 'o3', 'o4', 'chatgpt'],
+  openai: ['gpt-', 'gpt5', 'gpt4', 'o1', 'o3', 'o4', 'chatgpt'],
   anthropic: ['claude'],
   google: ['gemini', 'gemma', 'learnlm'],
   xai: ['grok'],
@@ -61,17 +68,22 @@ const MODEL_PROVIDER_DETECTION: Record<string, readonly string[]> = {
   moonshot: ['moonshot', 'kimi'],
   baichuan: ['baichuan'],
   yi: ['yi-'],
-  doubao: ['doubao'],
+  doubao: ['doubao', 'seed-'],
   spark: ['spark'],
   ernie: ['ernie'],
   hunyuan: ['hunyuan'],
-  mistral: ['mistral', 'mixtral'],
+  mistral: ['mistral', 'mixtral', 'pixtral'],
   llama: ['llama', 'llava'],
   cohere: ['command'],
+  pangu: ['pangu'],
+  stepfun: ['step-', 'step1', 'step2', 'step3'],
+  internlm: ['internlm'],
+  kat: ['kat-'],
+  ling: ['ling-', 'ring-'],
 };
 
 /**
- * 按提供商分组的能力关键词配置
+ * 按提供商分组的能力关键词配置 (2025 年 12 月更新)
  * 
  * 关键词规则：
  * - 普通关键词：包含匹配
@@ -85,99 +97,179 @@ const PROVIDER_ABILITY_CONFIG: Record<string, {
   webSearch?: readonly string[];
 }> = {
   openai: {
-    // 视觉模型：4o 系列、gpt-4-turbo/vision、gpt-5 系列、computer-use
-    vision: ['4o', 'gpt-4-turbo', 'gpt-4-vision', 'gpt-5', 'computer-use', '!audio', '!realtime', '!codex'],
-    // 推理模型：o1/o3/o4 系列、deep-research
-    reasoning: ['o1', 'o3', 'o4', 'deep-research'],
-    // Function Call：gpt 系列、o3/o4（排除 o1、codex）
-    functionCall: ['gpt-4', 'gpt-3.5-turbo', 'gpt-5', 'o3', 'o4', '!o1', '!codex', '!deep-research'],
-    // 联网搜索：gpt-4o-search、deep-research 系列
+    // GPT-5 系列全部支持视觉，GPT-4o/4-turbo/4-vision 支持视觉
+    vision: ['gpt-5', 'gpt5', '4o', 'gpt-4-turbo', 'gpt-4-vision', 'computer-use', '!audio', '!realtime', '!codex', '!nano'],
+    // o1/o3/o4 系列、GPT-5 系列、deep-research 支持推理
+    reasoning: ['o1', 'o3', 'o4', 'gpt-5', 'gpt5', 'deep-research'],
+    // GPT 系列、o3/o4 支持 Function Call（排除 o1、codex）
+    functionCall: ['gpt-4', 'gpt-3.5-turbo', 'gpt-5', 'gpt5', 'o3', 'o4', '!o1', '!codex', '!deep-research'],
+    // search 后缀、deep-research 支持联网
     webSearch: ['search', 'deep-research'],
   },
   anthropic: {
-    // 支持 claude-4.5 和 claude-4-5 两种格式（如 claude-opus-4-5-xxx）
-    vision: ['claude-3', 'claude-3.5', 'claude-4', 'claude-4.5', 'claude-4-5'],
-    reasoning: ['claude-3.5-sonnet', 'claude-3-opus', 'claude-4', 'claude-4.5', 'claude-4-5'],
-    functionCall: ['claude-3', 'claude-2.1', 'claude-4', 'claude-4.5', 'claude-4-5'],
+    // Claude 3/3.5/4/4.5 全系列支持视觉
+    vision: ['claude-3', 'claude-4', 'claude3', 'claude4', '!instant'],
+    // Claude 3.5 Sonnet、3 Opus、4 全系列支持推理
+    reasoning: ['claude-3.5-sonnet', 'claude-3-opus', 'claude-4', 'claude4', 'opus-4', 'sonnet-4', 'haiku-4'],
+    // Claude 3/4 全系列支持 Function Call
+    functionCall: ['claude-3', 'claude-4', 'claude3', 'claude4', 'claude-2.1'],
+    // Claude 暂不支持联网搜索
+    webSearch: [],
   },
   google: {
-    // gemini、learnlm 支持视觉，gemma 是纯文本模型
+    // Gemini 全系列支持视觉（排除 embedding 和 gemma）
     vision: ['gemini', 'learnlm', '!embedding', '!text-embedding', '!gemma'],
-    // gemini-3、gemini-2.5 支持推理
-    reasoning: ['gemini-3', 'gemini-2.5', '!flash-lite', '!image'],
-    // gemini、learnlm 支持 function call，gemma 和 image 模型不支持
+    // Gemini 2.5/3 支持推理
+    reasoning: ['gemini-3', 'gemini-2.5', 'gemini3', 'gemini2.5', '!flash-lite', '!image'],
+    // Gemini 全系列支持 Function Call
     functionCall: ['gemini', 'learnlm', '!embedding', '!text-embedding', '!image', '!gemma'],
-    // gemini-2.5、gemini-3 支持联网搜索
-    webSearch: ['gemini-2.5', 'gemini-3', '!embedding', '!image'],
+    // Gemini 2.5/3 支持联网搜索
+    webSearch: ['gemini-2.5', 'gemini-3', 'gemini2.5', 'gemini3', '!embedding', '!image'],
   },
   deepseek: {
-    // 支持 deepseek-vl, janus, ocr 等视觉模型
+    // DeepSeek VL、Janus、OCR 支持视觉
     vision: ['deepseek-vl', 'janus', 'ocr'],
-    // deepseek-chat (V3.2非思考)、deepseek-reasoner (V3.2思考)、r1 系列都支持推理
-    reasoning: ['deepseek-chat', 'deepseek-reasoner', 'deepseek-r1', 'r1-', 'deepseek-v3'],
-    // deepseek-chat、deepseek-reasoner、deepseek-coder 都支持工具调用
-    functionCall: ['deepseek-chat', 'deepseek-reasoner', 'deepseek-v3', 'deepseek-v2', 'r1'],
+    // DeepSeek V3/V3.1/V3.2、R1、Reasoner 支持推理
+    reasoning: ['deepseek-chat', 'deepseek-reasoner', 'deepseek-r1', 'r1-', 'deepseek-v3', 'v3.1', 'v3.2'],
+    // DeepSeek Chat/Reasoner/Coder/V3 支持工具调用
+    functionCall: ['deepseek-chat', 'deepseek-reasoner', 'deepseek-v3', 'deepseek-v2', 'deepseek-coder', 'r1'],
+    // DeepSeek 暂不支持联网搜索
+    webSearch: [],
   },
   qwen: {
-    // -vl 后缀匹配所有 VL 模型（qwen-vl, qwen2-vl, qwen3-vl 等），qvq 是视觉推理模型
-    vision: ['-vl', 'qvq', '-omni'],
-    // thinking 后缀匹配思考模型，qwq 是独立的推理模型
-    reasoning: ['qwq', 'qvq', 'thinking'],
-    functionCall: ['qwen-max', 'qwen-plus', 'qwen-turbo', 'qwen2', 'qwen2.5', 'qwen3'],
+    // Qwen VL 系列、QVQ、Omni 支持视觉
+    vision: ['-vl', 'qvq', '-omni', 'vl-'],
+    // QwQ、QVQ、Thinking 后缀支持推理
+    reasoning: ['qwq', 'qvq', 'thinking', 'qwen3-next'],
+    // Qwen 主要系列支持 Function Call
+    functionCall: ['qwen-max', 'qwen-plus', 'qwen-turbo', 'qwen2', 'qwen3', 'qwen-long'],
+    // Qwen 暂不支持联网搜索
+    webSearch: [],
   },
   zhipu: {
-    // 支持 glm-4v, glm-4.5v, glm-4.6v 等各种版本格式
+    // GLM-4V 系列、CogVLM 支持视觉
     vision: ['glm-4v', 'glm-4.5v', 'glm-4.6v', 'glm-4.7v', '-4v', 'cogvlm'],
-    // glm-4.5, glm-4.6 等新版本支持深度思考
-    reasoning: ['glm-zero', 'glm-z1', 'glm-4.5', 'glm-4.6', 'glm-4-plus', 'glm-4.7'],
-    // glm-4 系列都支持 function call，包括 glm-4.5
-    functionCall: ['glm-4', 'glm-3-turbo', 'glm-4.5', 'glm-4.6', 'glm-4.7'],
-    // web-search 后缀的模型支持联网
+    // GLM-4.5/4.6/4.7、GLM-Zero 支持推理
+    reasoning: ['glm-zero', 'glm-z1', 'glm-4.5', 'glm-4.6', 'glm-4.7', 'glm-4-plus'],
+    // GLM-4 全系列支持 Function Call
+    functionCall: ['glm-4', 'glm-3-turbo'],
+    // web-search、alltools 后缀支持联网
     webSearch: ['web-search', 'alltools'],
   },
   minimax: {
+    // abab6.5s、abab7 支持视觉
     vision: ['abab6.5s', 'abab7'],
-    // MiniMax-M2、M2.1 支持深度推理
-    reasoning: ['minimax-2', 'minimax-m2', '-m2'],
-    // abab6、abab7、MiniMax-M2 系列支持 function call
-    functionCall: ['abab6', 'abab7', 'minimax-2', 'minimax-m2', '-m2'],
+    // MiniMax M2 系列支持推理
+    reasoning: ['minimax-m2', '-m2', 'm2.1'],
+    // abab6/7、M2 系列支持 Function Call
+    functionCall: ['abab6', 'abab7', 'minimax-m2', '-m2'],
+    // MiniMax 暂不支持联网搜索
+    webSearch: [],
   },
   moonshot: {
-    vision: ['moonshot-v1-vision', 'kimi-vision'],
-    reasoning: ['kimi-thinking', 'kimi-k1', 'kimi-k2'],
+    // Kimi Vision 支持视觉
+    vision: ['moonshot-v1-vision', 'kimi-vision', 'kimi-vl'],
+    // Kimi K2 Thinking 支持推理
+    reasoning: ['kimi-thinking', 'kimi-k1', 'kimi-k2', 'k2-thinking'],
+    // Moonshot/Kimi 全系列支持 Function Call
     functionCall: ['moonshot-v1', 'kimi'],
-    // kimi 支持联网搜索
+    // Kimi 支持联网搜索
     webSearch: ['kimi', 'moonshot'],
   },
   doubao: {
-    vision: ['doubao-vision', 'doubao-1.5-vision'],
-    reasoning: ['doubao-1.5-thinking'],
-    functionCall: ['doubao-pro', 'doubao-lite', 'doubao-1.5'],
+    // Doubao Vision 系列支持视觉
+    vision: ['doubao-vision', 'doubao-1.5-vision', 'doubao-1.8-vision'],
+    // Doubao 1.5/1.8 Thinking 支持推理
+    reasoning: ['doubao-1.5-thinking', 'doubao-1.8-thinking', 'seed-code'],
+    // Doubao Pro/Lite/1.5/1.8 支持 Function Call
+    functionCall: ['doubao-pro', 'doubao-lite', 'doubao-1.5', 'doubao-1.8', 'seed-code'],
+    // Doubao 暂不支持联网搜索
+    webSearch: [],
   },
   mistral: {
+    // Pixtral 支持视觉
     vision: ['pixtral'],
-    reasoning: [],
-    functionCall: ['mistral-large', 'mistral-medium', 'mixtral'],
+    // Mistral Large 3 支持推理
+    reasoning: ['mistral-large-3', 'large-3'],
+    // Mistral Large/Medium、Mixtral 支持 Function Call
+    functionCall: ['mistral-large', 'mistral-medium', 'mistral-small', 'mixtral'],
+    // Mistral 暂不支持联网搜索
+    webSearch: [],
   },
   llama: {
-    vision: ['llava', 'llama-3.2-vision'],
-    reasoning: [],
-    functionCall: ['llama-3.1', 'llama-3.2', 'llama-3.3'],
+    // LLaVA、Llama 3.2 Vision、Llama 4 全系列支持视觉（多模态原生支持）
+    vision: ['llava', 'llama-3.2-vision', 'llama-4', 'llama4', 'scout', 'maverick', 'behemoth'],
+    // Llama 4 全系列支持推理（MoE 架构增强）
+    reasoning: ['llama-4', 'llama4', 'scout', 'maverick', 'behemoth'],
+    // Llama 3.1/3.2/3.3/4 支持 Function Call
+    functionCall: ['llama-3.1', 'llama-3.2', 'llama-3.3', 'llama-4', 'llama4', 'scout', 'maverick', 'behemoth'],
+    // Llama 暂不支持联网搜索
+    webSearch: [],
   },
   xai: {
-    // grok-2-vision、grok-4 支持视觉
-    vision: ['grok-2-vision', 'grok-vision', 'grok-4'],
-    // grok-3、grok-4 支持推理
-    reasoning: ['grok-3', 'grok-4'],
-    // grok-2、grok-3、grok-4 支持工具调用
-    functionCall: ['grok-2', 'grok-3', 'grok-4'],
-    // grok-3、grok-4 支持联网搜索
-    webSearch: ['grok-3', 'grok-4'],
+    // Grok 2 Vision、Grok 4 支持视觉
+    vision: ['grok-2-vision', 'grok-vision', 'grok-4', 'grok4'],
+    // Grok 3/4 支持推理
+    reasoning: ['grok-3', 'grok-4', 'grok3', 'grok4'],
+    // Grok 2/3/4 支持工具调用
+    functionCall: ['grok-2', 'grok-3', 'grok-4', 'grok2', 'grok3', 'grok4'],
+    // Grok 3/4 支持联网搜索
+    webSearch: ['grok-3', 'grok-4', 'grok3', 'grok4'],
+  },
+  pangu: {
+    // Pangu 暂不支持视觉
+    vision: [],
+    // Pangu Pro MoE 支持推理
+    reasoning: ['pangu-pro-moe'],
+    // Pangu Pro 支持 Function Call
+    functionCall: ['pangu-pro'],
+    // Pangu 暂不支持联网搜索
+    webSearch: [],
+  },
+  stepfun: {
+    // Step-3 支持视觉
+    vision: ['step-3', 'step3'],
+    // Step-3 支持推理
+    reasoning: ['step-3', 'step3'],
+    // Step 系列支持 Function Call
+    functionCall: ['step-3', 'step-2', 'step3', 'step2'],
+    // Step 暂不支持联网搜索
+    webSearch: [],
+  },
+  internlm: {
+    // InternLM 暂不支持视觉
+    vision: [],
+    // InternLM 暂不支持推理
+    reasoning: [],
+    // InternLM 2.5 支持 Function Call
+    functionCall: ['internlm2.5', 'internlm2_5'],
+    // InternLM 暂不支持联网搜索
+    webSearch: [],
+  },
+  kat: {
+    // KAT-Dev 暂不支持视觉
+    vision: [],
+    // KAT-Dev 支持推理
+    reasoning: ['kat-dev'],
+    // KAT-Dev 支持 Function Call
+    functionCall: ['kat-dev'],
+    // KAT 暂不支持联网搜索
+    webSearch: [],
+  },
+  ling: {
+    // Ling 暂不支持视觉
+    vision: [],
+    // Ling 暂不支持推理
+    reasoning: [],
+    // Ling 支持 Function Call
+    functionCall: ['ling-flash', 'ring-flash'],
+    // Ling 暂不支持联网搜索
+    webSearch: [],
   },
   // 默认配置，用于未知提供商
   default: {
     vision: ['vision', '-vl', 'vl-', '-omni', 'ocr'],
-    reasoning: ['thinking', 'reasoner', 'reason', 'coder'],
+    reasoning: ['thinking', 'reasoner', 'reason'],
     functionCall: [],  // 未知提供商不默认推断 functionCall
     webSearch: ['search', 'web'],
   },

@@ -4,6 +4,7 @@ import { ConfigManager } from '../config/configManager';
 import { debugLog } from '../../utils/logger';
 import { t } from '../../i18n';
 import { inferModelType } from './modelTypeInferrer';
+import { inferContextLength } from './modelContextLengths';
 import {
   UnsupportedAPIFormatError,
   InvalidReasoningEffortError,
@@ -1141,7 +1142,7 @@ export class AIService {
         } : undefined;
 
         // 获取上下文长度（优先使用 API 返回的值）
-        const contextLength = model.context_length || model.max_context_length || this.inferContextLength(model.id);
+        const contextLength = model.context_length || model.max_context_length || inferContextLength(model.id);
 
         // 使用 inferModelType 推断模型类型
         const modelType = inferModelType(model.id);
@@ -1215,46 +1216,5 @@ export class AIService {
 
     // 添加 /v1/models 路径
     return normalized + '/v1/models';
-  }
-
-  /**
-   * 根据模型名称推断上下文长度
-   * @param modelId 模型 ID
-   * @returns 上下文长度（tokens）
-   */
-  private inferContextLength(modelId: string): number | undefined {
-    const id = modelId.toLowerCase();
-
-    // 常见模型的上下文长度
-    const contextLengths: Record<string, number> = {
-      'gpt-4-turbo': 128000,
-      'gpt-4o': 128000,
-      'gpt-4': 8192,
-      'gpt-3.5-turbo': 16385,
-      'claude-3': 200000,
-      'claude-2': 100000,
-      'gemini-pro': 32000,
-      'gemini-1.5': 1000000,
-      'deepseek': 64000,
-      'qwen-turbo': 8000,
-      'qwen-plus': 32000,
-      'qwen-max': 32000,
-      'moonshot': 128000,
-    };
-
-    // 检查模型名称中的上下文长度标记
-    const contextMatch = id.match(/(\d+)k/);
-    if (contextMatch) {
-      return parseInt(contextMatch[1]) * 1000;
-    }
-
-    // 根据已知模型返回上下文长度
-    for (const [pattern, length] of Object.entries(contextLengths)) {
-      if (id.includes(pattern)) {
-        return length;
-      }
-    }
-
-    return undefined;
   }
 }

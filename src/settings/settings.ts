@@ -50,7 +50,7 @@ export type ReasoningEffort = 'low' | 'medium' | 'high';
  */
 export interface ModelConfig {
   id: string;              // 唯一标识符
-  name: string;            // 模型名称（API 调用用，如 'gpt-3.5-turbo'）
+  name: string;            // 模型名称（API 调用用，如 'gpt-4o'）
   displayName: string;     // 显示名称（UI 展示用）
   temperature: number;     // 温度参数 (0-2)
   maxTokens: number;       // 最大 token 数

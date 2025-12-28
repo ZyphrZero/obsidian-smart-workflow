@@ -26,6 +26,7 @@ export interface TranslationKeys {
     error: string;
     warning: string;
     info: string;
+    auto: string;
   };
 
   // 插件信息
@@ -152,13 +153,6 @@ export interface TranslationKeys {
   // 设置详情
   settingsDetails: {
     general: {
-      currentConfig: string;
-      currentConfigDesc: string;
-      configManagement: string;
-      configManagementDesc: string;
-      addConfig: string;
-      renameConfig: string;
-      deleteConfig: string;
       apiEndpoint: string;
       apiEndpointDesc: string;
       testConnection: string;
@@ -166,8 +160,6 @@ export interface TranslationKeys {
       actualRequestUrl: string;
       apiKey: string;
       apiKeyDesc: string;
-      modelName: string;
-      modelNameDesc: string;
       temperature: string;
       temperatureDesc: string;
       maxTokens: string;
@@ -176,14 +168,14 @@ export interface TranslationKeys {
       topPDesc: string;
       timeout: string;
       timeoutDesc: string;
-      // 新增：功能绑定
+      // 功能绑定
       featureBindings: string;
       featureBindingsDesc: string;
       noBinding: string;
       namingFeature: string;
       namingFeatureDesc: string;
       currentBindingStatus: string;
-      // 新增：供应商管理
+      // 供应商管理
       providerManagement: string;
       providerManagementDesc: string;
       addProvider: string;
@@ -191,7 +183,7 @@ export interface TranslationKeys {
       deleteProvider: string;
       noProviders: string;
       noModelsToTest: string;
-      // 新增：模型管理
+      // 模型管理
       models: string;
       addModel: string;
       editModel: string;
@@ -214,7 +206,6 @@ export interface TranslationKeys {
       modelsAdded: string;
     };
     naming: {
-      noBindingConfigured: string;
       namingBehavior: string;
       useCurrentFilename: string;
       useCurrentFilenameDesc: string;
@@ -229,16 +220,11 @@ export interface TranslationKeys {
         currentFileName: string;
         conditionalBlock: string;
       };
-      currentPromptTemplate: string;
-      currentPromptTemplateDesc: string;
       basePromptTemplate: string;
       basePromptTemplateDesc: string;
       advancedPromptTemplate: string;
       advancedPromptTemplateDesc: string;
       resetToDefault: string;
-      quickReset: string;
-      quickResetDesc: string;
-      resetToRecommended: string;
     };
     terminal: {
       shellSettings: string;
@@ -334,14 +320,11 @@ export interface TranslationKeys {
       oldName: string;
       newName: string;
     };
-    renameConfig: {
-      title: string;
-    };
     deleteConfig: {
       title: string;
       warning: string;
     };
-    // 新增：供应商编辑弹窗
+    // 供应商编辑弹窗
     providerEdit: {
       titleAdd: string;
       titleEdit: string;
@@ -355,7 +338,7 @@ export interface TranslationKeys {
       apiKey: string;
       apiKeyDesc: string;
     };
-    // 新增：模型编辑弹窗
+    // 模型编辑弹窗
     modelEdit: {
       titleAdd: string;
       titleEdit: string;
@@ -377,7 +360,7 @@ export interface TranslationKeys {
       showReasoningSummary: string;
       showReasoningSummaryDesc: string;
     };
-    // 新增：模型选择弹窗
+    // 模型选择弹窗
     modelSelect: {
       title: string;
       desc: string;
@@ -390,7 +373,7 @@ export interface TranslationKeys {
       noResults: string;
       ungrouped: string;
     };
-    // 新增：测试连接选择模型弹窗
+    // 测试连接选择模型弹窗
     testConnection: {
       title: string;
       desc: string;
