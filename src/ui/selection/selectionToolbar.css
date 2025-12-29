@@ -2,6 +2,7 @@
  * Selection Toolbar Styles
  * 选中文字浮动工具栏样式
  * Requirements: 2.4, 2.5
+ * Requirements: 1.1, 1.2 - 写作子菜单样式
  */
 
 /* 工具栏容器 */
@@ -52,4 +53,86 @@
 /* Tooltip 样式（使用 Obsidian 原生 tooltip） */
 .selection-toolbar-btn[aria-label] {
   position: relative;
+}
+
+/* ============================================================================
+ * 子菜单样式
+ * Requirements: 1.1, 1.2 - 写作子菜单支持
+ * ============================================================================ */
+
+/* 子菜单包装器 */
+.selection-toolbar-submenu-wrapper {
+  position: relative;
+}
+
+/* 带子菜单的按钮下拉箭头 */
+.selection-toolbar-submenu-arrow {
+  display: flex;
+  align-items: center;
+  margin-left: 2px;
+}
+
+.selection-toolbar-submenu-arrow svg {
+  width: 12px;
+  height: 12px;
+  opacity: 0.6;
+}
+
+/* 子菜单容器 */
+.selection-toolbar-submenu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 4px;
+  min-width: 120px;
+  z-index: 1001;
+}
+
+/* 子菜单项 */
+.selection-toolbar-submenu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-normal);
+  transition: background 100ms ease-in-out;
+}
+
+.selection-toolbar-submenu-item:hover {
+  background: var(--background-modifier-hover);
+}
+
+.selection-toolbar-submenu-item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 子菜单项图标 */
+.selection-toolbar-submenu-item-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.selection-toolbar-submenu-item-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* 子菜单项标签 */
+.selection-toolbar-submenu-item-label {
+  flex: 1;
+  white-space: nowrap;
 }

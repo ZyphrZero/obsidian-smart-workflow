@@ -20,7 +20,6 @@ type FitAddon = import('@xterm/addon-fit').FitAddon;
 type SearchAddon = import('@xterm/addon-search').SearchAddon;
 type CanvasAddon = import('@xterm/addon-canvas').CanvasAddon;
 type WebglAddon = import('@xterm/addon-webgl').WebglAddon;
-type WebLinksAddon = import('@xterm/addon-web-links').WebLinksAddon;
 
 // xterm.js 模块缓存
 let xtermModules: {
@@ -169,9 +168,13 @@ export class TerminalInstance {
     this.xterm.loadAddon(this.fitAddon);
     this.xterm.loadAddon(this.searchAddon);
     
+    // Ctrl+点击打开链接
     const webLinksAddon = new WebLinksAddon((event, uri) => {
-      event.preventDefault();
-      shell.openExternal(uri);
+      // 只在 Ctrl+点击（Windows/Linux）或 Cmd+点击（macOS）时打开链接
+      if (event.ctrlKey || event.metaKey) {
+        event.preventDefault();
+        shell.openExternal(uri);
+      }
     });
     this.xterm.loadAddon(webLinksAddon);
   }

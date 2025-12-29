@@ -139,6 +139,7 @@ export interface TranslationKeys {
     tabs: {
       general: string;
       naming: string;
+      writing: string;
       terminal: string;
       advanced: string;
     };
@@ -481,6 +482,11 @@ export interface TranslationKeys {
     invalidReasoningEffort: string;
     responsesApiError: string;
     responsesApiErrorHint: string;
+    // AIClient 相关错误
+    noProviderConfigured: string;
+    invalidApiKey: string;
+    invalidEndpoint: string;
+    noModelConfigured: string;
   };
 
   // 终端实例
@@ -552,9 +558,6 @@ export interface TranslationKeys {
 
   // 选中文字工具栏
   selectionToolbar: {
-    // 功能显示区域
-    visibility: string;
-    visibilityDesc: string;
     actions: {
       copy: string;
       search: string;
@@ -585,28 +588,78 @@ export interface TranslationKeys {
       minSelectionLengthDesc: string;
       showDelay: string;
       showDelayDesc: string;
-      actionsTitle: string;
-      actionsDesc: string;
-      actionCopy: string;
-      actionCopyDesc: string;
-      actionSearch: string;
-      actionSearchDesc: string;
-      actionCreateLink: string;
-      actionCreateLinkDesc: string;
-      actionHighlight: string;
-      actionHighlightDesc: string;
-      actionBold: string;
-      actionBoldDesc: string;
-      actionItalic: string;
-      actionItalicDesc: string;
-      actionStrikethrough: string;
-      actionStrikethroughDesc: string;
-      actionInlineCode: string;
-      actionInlineCodeDesc: string;
-      actionInlineMath: string;
-      actionInlineMathDesc: string;
-      actionClearFormat: string;
-      actionClearFormatDesc: string;
+      buttonConfig: string;
+      buttonConfigDesc: string;
+      showLabel: string;
+    };
+  };
+
+  // 写作功能
+  writing: {
+    // 菜单项
+    menu: {
+      writing: string;
+      writingTooltip: string;
+      polish: string;
+      polishTooltip: string;
+      condense: string;
+      expand: string;
+      continue: string;
+    };
+    // 操作栏按钮
+    actions: {
+      accept: string;
+      acceptTooltip: string;
+      reject: string;
+      rejectTooltip: string;
+      merge: string;
+      mergeTooltip: string;
+      retry: string;
+      retryTooltip: string;
+      cancel: string;
+    };
+    // 状态消息
+    status: {
+      loading: string;
+      streaming: string;
+      complete: string;
+      error: string;
+      editing: string;
+    };
+    // 错误消息
+    errors: {
+      noProviderConfigured: string;
+      noProviderConfiguredHint: string;
+      requestFailed: string;
+      requestTimeout: string;
+      networkError: string;
+      streamInterrupted: string;
+      streamInterruptedWithReason: string;
+      invalidResponse: string;
+    };
+    // 设置
+    settings: {
+      title: string;
+      titleDesc: string;
+      enabled: string;
+      enabledDesc: string;
+      polishEnabled: string;
+      polishEnabledDesc: string;
+      providerBinding: string;
+      providerBindingDesc: string;
+      promptTemplate: string;
+      promptTemplateDesc: string;
+      resetPrompt: string;
+    };
+    // 快捷键提示
+    shortcuts: {
+      acceptHint: string;
+      rejectHint: string;
+      mergeHint: string;
+    };
+    // 思考内容
+    thinking: {
+      title: string;
     };
   };
 }

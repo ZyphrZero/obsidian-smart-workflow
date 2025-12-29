@@ -15,7 +15,7 @@ import {
   GeneralSettingsRenderer, 
   NamingSettingsRenderer, 
   TerminalSettingsRenderer, 
-  AdvancedSettingsRenderer 
+  AdvancedSettingsRenderer
 } from './renderers';
 
 /**

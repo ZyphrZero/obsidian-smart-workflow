@@ -1,7 +1,7 @@
 /**
  * ActionExecutor - 工具栏动作执行器
  * 负责执行选中文字工具栏的各种操作
- * Requirements: 3.1, 3.2, 3.3, 3.4
+
  */
 
 import { App, MarkdownView } from 'obsidian';
@@ -88,7 +88,7 @@ export class ActionExecutor {
 
   /**
    * 复制选中文本到剪贴板
-   * Requirements: 3.1
+
    * @param text 要复制的文本
    */
   async copyToClipboard(text: string): Promise<void> {
@@ -103,7 +103,7 @@ export class ActionExecutor {
 
   /**
    * 在 Vault 中搜索选中文本
-   * Requirements: 3.2
+
    * @param text 要搜索的文本
    */
   searchInVault(text: string): void {
@@ -138,7 +138,7 @@ export class ActionExecutor {
 
   /**
    * 将选中文本转为内部链接 [[text]]
-   * Requirements: 3.3
+
    * @param context 选择上下文
    * @returns 新的选中文本
    */
@@ -158,7 +158,7 @@ export class ActionExecutor {
 
   /**
    * 添加高亮标记 ==text==
-   * Requirements: 3.4
+
    * @param context 选择上下文
    * @returns 新的选中文本
    */

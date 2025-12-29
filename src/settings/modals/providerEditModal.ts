@@ -2,7 +2,7 @@ import { App, Modal, Setting, Notice } from 'obsidian';
 import type { ConfigManager } from '../../services/config/configManager';
 import type { Provider } from '../settings';
 import { t } from '../../i18n';
-import { normalizeEndpoint } from '../utils/settingsUtils';
+import { EndpointNormalizer } from '../../services/ai';
 
 /**
  * 供应商编辑弹窗
@@ -92,7 +92,7 @@ export class ProviderEditModal extends Modal {
     });
 
     const updateActualUrl = (endpoint: string) => {
-      const normalized = normalizeEndpoint(endpoint).url;
+      const normalized = EndpointNormalizer.normalizeChatCompletions(endpoint);
       actualUrlEl.setText(t('settingsDetails.general.actualRequestUrl', { url: normalized }));
     };
 

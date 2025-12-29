@@ -6,8 +6,9 @@
  * AI 功能类型
  * - naming: 文件命名功能
  * - translation: 翻译功能（预留）
+ * - writing: 写作功能（润色、缩写、扩写等）
  */
-export type AIFeature = 'naming' | 'translation';
+export type AIFeature = 'naming' | 'translation' | 'writing';
 
 /**
  * 模型基本类型
@@ -187,8 +188,24 @@ export interface TerminalSettings {
 }
 
 /**
+ * 工具栏按钮配置接口
+ */
+export interface ToolbarButtonConfig {
+  /** 按钮 ID */
+  id: string;
+  /** 是否启用 */
+  enabled: boolean;
+  /** 是否显示文字标签 */
+  showLabel: boolean;
+  /** 自定义图标名称（Obsidian icon name，留空使用默认） */
+  customIcon?: string;
+  /** 显示顺序（数字越小越靠前） */
+  order: number;
+}
+
+/**
  * 选中工具栏设置接口
- * Requirements: 4.1-4.4
+
  */
 export interface SelectionToolbarSettings {
   /** 是否启用选中工具栏 */
@@ -197,7 +214,7 @@ export interface SelectionToolbarSettings {
   minSelectionLength: number;
   /** 显示延迟 (ms) */
   showDelay: number;
-  /** 各按钮的显示状态 */
+  /** 各按钮的显示状态（旧格式，保留兼容） */
   actions: {
     copy: boolean;
     search: boolean;
@@ -210,7 +227,26 @@ export interface SelectionToolbarSettings {
     inlineMath: boolean;
     clearFormat: boolean;
   };
+  /** 按钮详细配置（新格式） */
+  buttonConfigs: ToolbarButtonConfig[];
 }
+
+/**
+ * 默认工具栏按钮配置
+ */
+export const DEFAULT_TOOLBAR_BUTTON_CONFIGS: ToolbarButtonConfig[] = [
+  { id: 'copy', enabled: true, showLabel: true, order: 0 },
+  { id: 'search', enabled: true, showLabel: true, order: 1 },
+  { id: 'createLink', enabled: true, showLabel: true, order: 2 },
+  { id: 'highlight', enabled: true, showLabel: true, order: 3 },
+  { id: 'bold', enabled: true, showLabel: true, order: 4 },
+  { id: 'italic', enabled: true, showLabel: true, order: 5 },
+  { id: 'strikethrough', enabled: true, showLabel: true, order: 6 },
+  { id: 'inlineCode', enabled: true, showLabel: true, order: 7 },
+  { id: 'inlineMath', enabled: true, showLabel: true, order: 8 },
+  { id: 'clearFormat', enabled: true, showLabel: true, order: 9 },
+  { id: 'writing', enabled: true, showLabel: true, order: 10 },
+];
 
 /**
  * 默认选中工具栏设置
@@ -231,6 +267,57 @@ export const DEFAULT_SELECTION_TOOLBAR_SETTINGS: SelectionToolbarSettings = {
     inlineMath: true,
     clearFormat: true,
   },
+  buttonConfigs: [...DEFAULT_TOOLBAR_BUTTON_CONFIGS],
+};
+
+/**
+ * 写作功能设置接口
+
+ */
+export interface WritingSettings {
+  /** 是否启用写作功能 */
+  enabled: boolean;
+  /** 各写作动作的启用状态 */
+  actions: {
+    polish: boolean;      // 润色
+    condense: boolean;    // 缩写（预留）
+    expand: boolean;      // 扩写（预留）
+    continue: boolean;    // 续写（预留）
+  };
+  /** 润色功能的 Prompt 模板 */
+  polishPromptTemplate: string;
+}
+
+/**
+ * 默认润色 Prompt 模板
+
+ */
+export const DEFAULT_POLISH_PROMPT_TEMPLATE = `请对以下文本进行润色，提升语言表达的流畅性和准确性。
+
+要求：
+1. 保持原文的核心含义不变
+2. 改善语法、用词和句式
+3. 保持原文的语言（中文/英文）
+4. 只返回润色后的文本，不要添加任何解释或说明
+
+原文：
+{{content}}
+
+润色后的文本：`;
+
+/**
+ * 默认写作功能设置
+
+ */
+export const DEFAULT_WRITING_SETTINGS: WritingSettings = {
+  enabled: true,
+  actions: {
+    polish: true,
+    condense: false,
+    expand: false,
+    continue: false,
+  },
+  polishPromptTemplate: DEFAULT_POLISH_PROMPT_TEMPLATE,
 };
 
 /**
@@ -274,6 +361,7 @@ export interface SmartWorkflowSettings {
   terminal: TerminalSettings;    // 终端设置
   selectionToolbar: SelectionToolbarSettings; // 选中工具栏设置
   featureVisibility: FeatureVisibilitySettings; // 功能显示设置
+  writing: WritingSettings;      // 写作功能设置
 }
 
 /**
@@ -454,6 +542,11 @@ export const DEFAULT_FEATURE_BINDINGS: Partial<Record<AIFeature, FeatureBinding>
     providerId: '',
     modelId: '',
     promptTemplate: ADVANCED_PROMPT_TEMPLATE
+  },
+  writing: {
+    providerId: '',
+    modelId: '',
+    promptTemplate: DEFAULT_POLISH_PROMPT_TEMPLATE
   }
 };
 
@@ -473,5 +566,6 @@ export const DEFAULT_SETTINGS: SmartWorkflowSettings = {
   timeout: 15000, // 默认超时时间 15 秒
   terminal: DEFAULT_TERMINAL_SETTINGS, // 终端默认设置
   selectionToolbar: DEFAULT_SELECTION_TOOLBAR_SETTINGS, // 选中工具栏默认设置
-  featureVisibility: DEFAULT_FEATURE_VISIBILITY // 功能显示默认设置
+  featureVisibility: DEFAULT_FEATURE_VISIBILITY, // 功能显示默认设置
+  writing: DEFAULT_WRITING_SETTINGS // 写作功能默认设置
 };

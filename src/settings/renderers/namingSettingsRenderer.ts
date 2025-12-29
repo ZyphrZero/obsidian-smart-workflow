@@ -1,19 +1,28 @@
 /**
  * 命名设置渲染器
- * 负责渲染 AI 命名功能和选中工具栏功能设置
+ * 负责渲染 AI 命名功能、选中工具栏功能和写作功能设置
  */
 
 import { Setting, setIcon } from 'obsidian';
 import type { RendererContext } from '../types';
 import { BASE_PROMPT_TEMPLATE, ADVANCED_PROMPT_TEMPLATE } from '../settings';
 import { BaseSettingsRenderer } from './baseRenderer';
+import { WritingSettingsRenderer } from './writingSettingsRenderer';
 import { t } from '../../i18n';
 
 /**
  * 命名设置渲染器
- * 处理 AI 命名行为、Prompt 模板和选中工具栏功能设置的渲染
+ * 处理 AI 命名行为、Prompt 模板、选中工具栏功能和写作功能设置的渲染
  */
 export class NamingSettingsRenderer extends BaseSettingsRenderer {
+  // 写作设置渲染器实例
+  private writingRenderer: WritingSettingsRenderer;
+
+  constructor() {
+    super();
+    this.writingRenderer = new WritingSettingsRenderer();
+  }
+
   /**
    * 渲染命名设置
    * @param context 渲染器上下文
@@ -69,10 +78,12 @@ export class NamingSettingsRenderer extends BaseSettingsRenderer {
       this.refreshDisplay();
     });
 
-    // 如果未展开，不渲染内容，但继续渲染选中工具栏设置
+    // 如果未展开，不渲染内容，但继续渲染选中工具栏设置和写作设置
     if (!isNamingExpanded) {
       // 选中工具栏功能设置（独立卡片）
       this.renderSelectionToolbarFunctionSettings(context.containerEl);
+      // 写作功能设置
+      this.writingRenderer.render(context);
       return;
     }
 
@@ -250,13 +261,16 @@ export class NamingSettingsRenderer extends BaseSettingsRenderer {
 
     // 选中工具栏功能设置
     this.renderSelectionToolbarFunctionSettings(context.containerEl);
+
+    // 写作功能设置
+    this.writingRenderer.render(context);
   }
 
 
   /**
-   * 渲染选中工具栏功能设置（最小选中字符数、显示延迟）
+   * 渲染选中工具栏功能设置（最小选中字符数、显示延迟、按钮配置）
    * 可折叠卡片，与文件命名设置风格一致
-   * Requirements: 4.3, 4.4
+
    */
   private renderSelectionToolbarFunctionSettings(containerEl: HTMLElement): void {
     // 选中工具栏功能区块（可折叠，默认收起）
@@ -315,7 +329,19 @@ export class NamingSettingsRenderer extends BaseSettingsRenderer {
     // 内容容器
     const contentEl = toolbarCard.createDiv({ cls: 'feature-content' });
 
-    // 最小选中字符数 - Requirements: 4.3
+    // 启用开关
+    new Setting(contentEl)
+      .setName(t('selectionToolbar.settings.enabled'))
+      .setDesc(t('selectionToolbar.settings.enabledDesc'))
+      .addToggle(toggle => toggle
+        .setValue(this.context.plugin.settings.selectionToolbar.enabled)
+        .onChange(async (value) => {
+          this.context.plugin.settings.selectionToolbar.enabled = value;
+          await this.saveSettings();
+          this.context.plugin.updateSelectionToolbarSettings();
+        }));
+
+    // 最小选中字符数
     const minLengthSetting = new Setting(contentEl)
       .setName(t('selectionToolbar.settings.minSelectionLength'))
       .setDesc(t('selectionToolbar.settings.minSelectionLengthDesc'));
@@ -370,7 +396,7 @@ export class NamingSettingsRenderer extends BaseSettingsRenderer {
         });
     });
 
-    // 显示延迟 - Requirements: 4.4
+    // 显示延迟
     const showDelaySetting = new Setting(contentEl)
       .setName(t('selectionToolbar.settings.showDelay'))
       .setDesc(t('selectionToolbar.settings.showDelayDesc'));
@@ -423,6 +449,206 @@ export class NamingSettingsRenderer extends BaseSettingsRenderer {
             showDelayTextComponent.setValue('0');
           }
         });
+    });
+
+    // 按钮配置区域
+    this.renderButtonConfigs(contentEl);
+  }
+
+  /**
+   * 渲染按钮配置列表（支持拖拽排序）
+   */
+  private renderButtonConfigs(containerEl: HTMLElement): void {
+    // 按钮配置标题
+    new Setting(containerEl)
+      .setName(t('selectionToolbar.settings.buttonConfig'))
+      .setDesc(t('selectionToolbar.settings.buttonConfigDesc'))
+      .setHeading();
+
+    // 按钮列表容器
+    const buttonListEl = containerEl.createDiv({ cls: 'toolbar-button-list' });
+    buttonListEl.setCssProps({
+      'margin-top': '8px'
+    });
+
+    // 获取按钮配置，按 order 排序
+    const buttonConfigs = [...(this.context.plugin.settings.selectionToolbar.buttonConfigs || [])];
+    buttonConfigs.sort((a, b) => a.order - b.order);
+
+    // 按钮名称映射
+    const buttonNames: Record<string, string> = {
+      copy: t('selectionToolbar.actions.copy'),
+      search: t('selectionToolbar.actions.search'),
+      createLink: t('selectionToolbar.actions.createLink'),
+      highlight: t('selectionToolbar.actions.highlight'),
+      bold: t('selectionToolbar.actions.bold'),
+      italic: t('selectionToolbar.actions.italic'),
+      strikethrough: t('selectionToolbar.actions.strikethrough'),
+      inlineCode: t('selectionToolbar.actions.inlineCode'),
+      inlineMath: t('selectionToolbar.actions.inlineMath'),
+      clearFormat: t('selectionToolbar.actions.clearFormat'),
+      writing: t('writing.menu.writing')
+    };
+
+    // 默认图标映射
+    const defaultIcons: Record<string, string> = {
+      copy: 'copy',
+      search: 'search',
+      createLink: 'link',
+      highlight: 'highlighter',
+      bold: 'bold',
+      italic: 'italic',
+      strikethrough: 'strikethrough',
+      inlineCode: 'code',
+      inlineMath: 'sigma',
+      clearFormat: 'eraser',
+      writing: 'pen-tool'
+    };
+
+    // 拖拽状态
+    let draggedIndex: number | null = null;
+
+    // 渲染每个按钮配置项
+    buttonConfigs.forEach((config, index) => {
+      const itemEl = buttonListEl.createDiv({ cls: 'toolbar-button-item' });
+      itemEl.setAttribute('draggable', 'true');
+      itemEl.setAttribute('data-index', String(index));
+      itemEl.setCssProps({
+        display: 'flex',
+        'align-items': 'center',
+        gap: '8px',
+        padding: '8px 10px',
+        'margin-bottom': '4px',
+        'background-color': 'var(--background-primary)',
+        'border-radius': '6px',
+        cursor: 'grab',
+        transition: 'all 0.2s ease',
+        'border-left': '3px solid transparent'
+      });
+
+      // 拖拽事件
+      itemEl.addEventListener('dragstart', (e) => {
+        draggedIndex = index;
+        itemEl.style.opacity = '0.4';
+        if (e.dataTransfer) {
+          e.dataTransfer.effectAllowed = 'move';
+        }
+      });
+
+      itemEl.addEventListener('dragend', () => {
+        draggedIndex = null;
+        itemEl.style.opacity = '1';
+        itemEl.style.borderLeftColor = 'transparent';
+      });
+
+      itemEl.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (draggedIndex !== null && draggedIndex !== index) {
+          itemEl.style.backgroundColor = 'var(--background-modifier-hover)';
+          itemEl.style.borderLeftColor = 'var(--interactive-accent)';
+        }
+      });
+
+      itemEl.addEventListener('dragleave', () => {
+        itemEl.style.backgroundColor = 'var(--background-primary)';
+        itemEl.style.borderLeftColor = 'transparent';
+      });
+
+      itemEl.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        itemEl.style.backgroundColor = 'var(--background-primary)';
+        itemEl.style.borderLeftColor = 'transparent';
+        
+        if (draggedIndex !== null && draggedIndex !== index) {
+          // 重新排序
+          const configs = this.context.plugin.settings.selectionToolbar.buttonConfigs;
+          const [removed] = configs.splice(draggedIndex, 1);
+          configs.splice(index, 0, removed);
+          
+          // 更新 order 值
+          configs.forEach((c, i) => { c.order = i; });
+          
+          await this.saveSettings();
+          this.context.plugin.updateSelectionToolbarSettings();
+          this.refreshDisplay();
+        }
+      });
+
+      // 拖拽手柄
+      const dragHandle = itemEl.createSpan({ cls: 'drag-handle' });
+      setIcon(dragHandle, 'grip-vertical');
+      dragHandle.setCssProps({
+        color: 'var(--text-faint)',
+        cursor: 'grab',
+        display: 'inline-flex',
+        'align-items': 'center',
+        'flex-shrink': '0'
+      });
+
+      // 启用开关
+      const toggleEl = itemEl.createEl('input', { type: 'checkbox' });
+      toggleEl.checked = config.enabled;
+      toggleEl.setCssProps({
+        'flex-shrink': '0'
+      });
+      toggleEl.addEventListener('change', async () => {
+        config.enabled = toggleEl.checked;
+        await this.saveSettings();
+        this.context.plugin.updateSelectionToolbarSettings();
+      });
+
+      // 图标预览
+      const iconPreview = itemEl.createSpan({ cls: 'button-icon-preview' });
+      setIcon(iconPreview, config.customIcon || defaultIcons[config.id] || 'circle');
+      iconPreview.setCssProps({
+        display: 'inline-flex',
+        'align-items': 'center',
+        'justify-content': 'center',
+        width: '20px',
+        height: '20px',
+        color: 'var(--text-muted)',
+        'flex-shrink': '0'
+      });
+
+      // 按钮名称
+      const nameEl = itemEl.createSpan({ cls: 'button-name' });
+      nameEl.setText(buttonNames[config.id] || config.id);
+      nameEl.setCssProps({
+        flex: '1',
+        'font-size': '0.9em'
+      });
+
+      // 显示文字开关
+      const showLabelContainer = itemEl.createDiv({ cls: 'show-label-toggle' });
+      showLabelContainer.setCssProps({
+        display: 'flex',
+        'align-items': 'center',
+        gap: '4px',
+        'flex-shrink': '0'
+      });
+      
+      const showLabelLabel = showLabelContainer.createSpan();
+      showLabelLabel.setText(t('selectionToolbar.settings.showLabel'));
+      showLabelLabel.setCssProps({
+        'font-size': '0.8em',
+        color: 'var(--text-muted)'
+      });
+      
+      const showLabelToggle = showLabelContainer.createEl('input', { type: 'checkbox' });
+      showLabelToggle.checked = config.showLabel;
+      showLabelToggle.addEventListener('change', async () => {
+        config.showLabel = showLabelToggle.checked;
+        await this.saveSettings();
+        this.context.plugin.updateSelectionToolbarSettings();
+      });
+
+      // 悬停效果
+      itemEl.addEventListener('mouseenter', () => {
+        dragHandle.style.color = 'var(--text-muted)';
+      });
+      itemEl.addEventListener('mouseleave', () => {
+        dragHandle.style.color = 'var(--text-faint)';
+      });
     });
   }
 }

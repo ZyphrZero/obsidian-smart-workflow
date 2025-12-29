@@ -4,12 +4,12 @@
  */
 
 // 从 settings.ts 导入设置类型
-export type { SelectionToolbarSettings } from '../../settings/settings';
-export { DEFAULT_SELECTION_TOOLBAR_SETTINGS } from '../../settings/settings';
+export type { SelectionToolbarSettings, ToolbarButtonConfig } from '../../settings/settings';
+export { DEFAULT_SELECTION_TOOLBAR_SETTINGS, DEFAULT_TOOLBAR_BUTTON_CONFIGS } from '../../settings/settings';
 
 /**
  * 选中文字的上下文信息
- * Requirements: 1.1, 1.2
+
  */
 export interface SelectionContext {
   /** 选中的文本内容 */
@@ -26,7 +26,7 @@ export interface SelectionContext {
 
 /**
  * 工具栏位置信息
- * Requirements: 2.1
+
  */
 export interface ToolbarPosition {
   /** 顶部位置 (px) */
@@ -39,7 +39,7 @@ export interface ToolbarPosition {
 
 /**
  * 工具栏动作按钮
- * Requirements: 3.1-3.4
+
  */
 export interface ToolbarAction {
   /** 动作唯一标识 */
@@ -54,6 +54,33 @@ export interface ToolbarAction {
   isDisabled?: (context: SelectionContext) => boolean;
   /** 执行后是否隐藏工具栏（默认 false） */
   hideAfterExecute?: boolean;
+  /** 是否显示文字标签（默认 true） */
+  showLabel?: boolean;
+}
+
+/**
+ * 带子菜单的工具栏动作
+
+ */
+export interface SubmenuAction extends Omit<ToolbarAction, 'execute'> {
+  /** 子菜单项列表 */
+  submenu: ToolbarAction[];
+  /** 子菜单动作不需要 execute，由子项处理 */
+  execute?: never;
+  /** 是否显示文字标签（默认 true） */
+  showLabel?: boolean;
+}
+
+/**
+ * 工具栏动作类型（普通动作或子菜单动作）
+ */
+export type ToolbarActionItem = ToolbarAction | SubmenuAction;
+
+/**
+ * 类型守卫：检查是否为子菜单动作
+ */
+export function isSubmenuAction(action: ToolbarActionItem): action is SubmenuAction {
+  return 'submenu' in action && Array.isArray((action as SubmenuAction).submenu);
 }
 
 /**

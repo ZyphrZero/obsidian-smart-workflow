@@ -1,7 +1,8 @@
 /**
  * SelectionToolbarManager - 选中文字浮动工具栏主管理类
  * 负责组件生命周期和协调各子模块
- * Requirements: 5.1, 5.2, 5.3, 5.4, 5.5
+
+
  */
 
 import { App, MarkdownView } from 'obsidian';
@@ -9,6 +10,8 @@ import {
   SelectionContext, 
   SelectionToolbarSettings, 
   ToolbarAction,
+  ToolbarActionItem,
+  SubmenuAction,
   DEFAULT_SELECTION_TOOLBAR_SETTINGS
 } from './types';
 import { SelectionService } from './selectionService';
@@ -16,6 +19,8 @@ import { ToolbarView } from './toolbarView';
 import { PositionManager } from './positionManager';
 import { ActionExecutor } from './actionExecutor';
 import { debugLog } from '../../utils/logger';
+import { SmartWorkflowSettings } from '../../settings/settings';
+import { WritingActionExecutor, WritingActionContext } from '../writing/writingActionExecutor';
 
 /**
  * 选中文字浮动工具栏管理器
@@ -24,6 +29,7 @@ import { debugLog } from '../../utils/logger';
 export class SelectionToolbarManager {
   private app: App;
   private settings: SelectionToolbarSettings;
+  private pluginSettings: SmartWorkflowSettings | null = null;
   private isInitialized: boolean = false;
   
   // 子模块
@@ -31,6 +37,10 @@ export class SelectionToolbarManager {
   private toolbarView: ToolbarView;
   private positionManager: PositionManager;
   private actionExecutor: ActionExecutor;
+  
+  // 写作功能执行器
+  private writingActionExecutor: WritingActionExecutor | null = null;
+  private onSettingsChange?: () => Promise<void>;
   
   // 事件处理器引用
   private boundHandleKeyDown: (e: KeyboardEvent) => void;
@@ -41,15 +51,31 @@ export class SelectionToolbarManager {
   // 显示延迟定时器
   private showDelayTimeoutId: number | null = null;
 
-  constructor(app: App, settings?: SelectionToolbarSettings) {
+  constructor(
+    app: App, 
+    settings?: SelectionToolbarSettings,
+    pluginSettings?: SmartWorkflowSettings,
+    onSettingsChange?: () => Promise<void>
+  ) {
     this.app = app;
     this.settings = settings || { ...DEFAULT_SELECTION_TOOLBAR_SETTINGS };
+    this.pluginSettings = pluginSettings || null;
+    this.onSettingsChange = onSettingsChange;
     
     // 初始化子模块
     this.selectionService = new SelectionService(app, this.settings);
     this.toolbarView = new ToolbarView();
     this.positionManager = new PositionManager();
     this.actionExecutor = new ActionExecutor(app);
+    
+    // 初始化写作功能执行器（如果有插件设置）
+    if (this.pluginSettings) {
+      this.writingActionExecutor = new WritingActionExecutor(
+        app,
+        this.pluginSettings,
+        onSettingsChange
+      );
+    }
     
     // 绑定事件处理器
     this.boundHandleKeyDown = this.handleKeyDown.bind(this);
@@ -60,7 +86,7 @@ export class SelectionToolbarManager {
 
   /**
    * 初始化工具栏管理器
-   * Requirements: 5.1, 5.2, 5.3 - 支持各种编辑模式
+
    */
   initialize(): void {
     if (this.isInitialized) {
@@ -131,11 +157,27 @@ export class SelectionToolbarManager {
 
   /**
    * 更新设置
-   * Requirements: 4.5 - 设置变更立即生效
+
    */
-  updateSettings(settings: SelectionToolbarSettings): void {
+  updateSettings(settings: SelectionToolbarSettings, pluginSettings?: SmartWorkflowSettings): void {
     const wasEnabled = this.settings.enabled;
     this.settings = settings;
+    
+    // 更新插件设置
+    if (pluginSettings) {
+      this.pluginSettings = pluginSettings;
+      
+      // 更新写作功能执行器
+      if (this.writingActionExecutor) {
+        this.writingActionExecutor.updateSettings(pluginSettings);
+      } else {
+        this.writingActionExecutor = new WritingActionExecutor(
+          this.app,
+          pluginSettings,
+          this.onSettingsChange
+        );
+      }
+    }
     
     // 更新子模块设置
     this.selectionService.updateSettings(settings);
@@ -183,13 +225,55 @@ export class SelectionToolbarManager {
 
   /**
    * 设置工具栏动作按钮
+   * 根据 buttonConfigs 配置动态生成按钮，支持自定义图标、标签显示和顺序
    */
   private setupActions(): void {
-    const actions: ToolbarAction[] = [];
+    // 获取按钮配置，按 order 排序
+    const buttonConfigs = this.settings.buttonConfigs || [];
+    const sortedConfigs = [...buttonConfigs].sort((a, b) => a.order - b.order);
     
-    // 复制按钮
-    if (this.settings.actions.copy) {
-      actions.push({
+    const actions: ToolbarActionItem[] = [];
+    
+    // 按钮定义映射
+    const buttonDefinitions = this.getButtonDefinitions();
+    
+    // 根据配置生成按钮
+    for (const config of sortedConfigs) {
+      if (!config.enabled) continue;
+      
+      // 特殊处理写作子菜单
+      if (config.id === 'writing') {
+        const writingSubmenu = this.buildWritingSubmenu(config.showLabel);
+        if (writingSubmenu) {
+          actions.push(writingSubmenu);
+        }
+        continue;
+      }
+      
+      // 获取按钮定义
+      const definition = buttonDefinitions[config.id];
+      if (!definition) continue;
+      
+      // 创建动作，应用配置
+      const action: ToolbarAction = {
+        ...definition,
+        icon: config.customIcon || definition.icon,
+        showLabel: config.showLabel,
+      };
+      
+      actions.push(action);
+    }
+    
+    this.toolbarView.updateActions(actions);
+  }
+
+  /**
+   * 获取所有按钮的定义
+   * @returns 按钮 ID 到定义的映射
+   */
+  private getButtonDefinitions(): Record<string, ToolbarAction> {
+    return {
+      copy: {
         id: 'copy',
         icon: 'copy',
         tooltipKey: 'selectionToolbar.actions.copy',
@@ -197,12 +281,8 @@ export class SelectionToolbarManager {
         execute: async (context) => {
           await this.actionExecutor.copyToClipboard(context.text);
         }
-      });
-    }
-    
-    // 搜索按钮
-    if (this.settings.actions.search) {
-      actions.push({
+      },
+      search: {
         id: 'search',
         icon: 'search',
         tooltipKey: 'selectionToolbar.actions.search',
@@ -210,12 +290,8 @@ export class SelectionToolbarManager {
         execute: async (context) => {
           this.actionExecutor.searchInVault(context.text);
         }
-      });
-    }
-    
-    // 创建链接按钮
-    if (this.settings.actions.createLink) {
-      actions.push({
+      },
+      createLink: {
         id: 'createLink',
         icon: 'link',
         tooltipKey: 'selectionToolbar.actions.createLink',
@@ -223,12 +299,8 @@ export class SelectionToolbarManager {
           return this.actionExecutor.createInternalLink(context);
         },
         isDisabled: (context) => this.actionExecutor.isInternalLink(context.text)
-      });
-    }
-    
-    // 高亮按钮
-    if (this.settings.actions.highlight) {
-      actions.push({
+      },
+      highlight: {
         id: 'highlight',
         icon: 'highlighter',
         tooltipKey: 'selectionToolbar.actions.highlight',
@@ -236,12 +308,8 @@ export class SelectionToolbarManager {
           return this.actionExecutor.addHighlight(context);
         },
         isDisabled: (context) => this.actionExecutor.isHighlighted(context.text)
-      });
-    }
-    
-    // 加粗按钮
-    if (this.settings.actions.bold) {
-      actions.push({
+      },
+      bold: {
         id: 'bold',
         icon: 'bold',
         tooltipKey: 'selectionToolbar.actions.bold',
@@ -249,12 +317,8 @@ export class SelectionToolbarManager {
           return this.actionExecutor.addBold(context);
         },
         isDisabled: (context) => this.actionExecutor.isBold(context.text)
-      });
-    }
-    
-    // 斜体按钮
-    if (this.settings.actions.italic) {
-      actions.push({
+      },
+      italic: {
         id: 'italic',
         icon: 'italic',
         tooltipKey: 'selectionToolbar.actions.italic',
@@ -262,12 +326,8 @@ export class SelectionToolbarManager {
           return this.actionExecutor.addItalic(context);
         },
         isDisabled: (context) => this.actionExecutor.isItalic(context.text)
-      });
-    }
-    
-    // 删除线按钮
-    if (this.settings.actions.strikethrough) {
-      actions.push({
+      },
+      strikethrough: {
         id: 'strikethrough',
         icon: 'strikethrough',
         tooltipKey: 'selectionToolbar.actions.strikethrough',
@@ -275,12 +335,8 @@ export class SelectionToolbarManager {
           return this.actionExecutor.addStrikethrough(context);
         },
         isDisabled: (context) => this.actionExecutor.isStrikethrough(context.text)
-      });
-    }
-    
-    // 行内代码按钮
-    if (this.settings.actions.inlineCode) {
-      actions.push({
+      },
+      inlineCode: {
         id: 'inlineCode',
         icon: 'code',
         tooltipKey: 'selectionToolbar.actions.inlineCode',
@@ -288,12 +344,8 @@ export class SelectionToolbarManager {
           return this.actionExecutor.addInlineCode(context);
         },
         isDisabled: (context) => this.actionExecutor.isInlineCode(context.text)
-      });
-    }
-    
-    // 行内公式按钮
-    if (this.settings.actions.inlineMath) {
-      actions.push({
+      },
+      inlineMath: {
         id: 'inlineMath',
         icon: 'sigma',
         tooltipKey: 'selectionToolbar.actions.inlineMath',
@@ -301,28 +353,149 @@ export class SelectionToolbarManager {
           return this.actionExecutor.addInlineMath(context);
         },
         isDisabled: (context) => this.actionExecutor.isInlineMath(context.text)
-      });
-    }
-    
-    // 清除格式按钮
-    if (this.settings.actions.clearFormat) {
-      actions.push({
+      },
+      clearFormat: {
         id: 'clearFormat',
         icon: 'eraser',
         tooltipKey: 'selectionToolbar.actions.clearFormat',
         execute: async (context) => {
           return this.actionExecutor.clearFormatting(context);
         }
+      }
+    };
+  }
+
+  /**
+   * 构建写作子菜单
+
+   * @param showLabel 是否显示文字标签
+   * @returns 写作子菜单动作，如果写作功能禁用则返回 null
+   */
+  private buildWritingSubmenu(showLabel: boolean = true): SubmenuAction | null {
+    // 检查写作功能是否启用
+    if (!this.pluginSettings?.writing?.enabled) {
+      return null;
+    }
+    
+    const writingSettings = this.pluginSettings.writing;
+    const submenuItems: ToolbarAction[] = [];
+    
+    // 润色动作
+
+    if (writingSettings.actions.polish) {
+      submenuItems.push({
+        id: 'writing-polish',
+        icon: 'sparkles',
+        tooltipKey: 'writing.menu.polish',
+        hideAfterExecute: true,
+        execute: async (context) => {
+          await this.executeWritingPolish(context);
+        }
       });
     }
     
-    this.toolbarView.updateActions(actions);
+    // 缩写动作（预留）
+    if (writingSettings.actions.condense) {
+      submenuItems.push({
+        id: 'writing-condense',
+        icon: 'minimize-2',
+        tooltipKey: 'writing.menu.condense',
+        hideAfterExecute: true,
+        execute: async () => {
+          // TODO: 实现缩写功能
+          debugLog('[SelectionToolbarManager] 缩写功能尚未实现');
+        }
+      });
+    }
+    
+    // 扩写动作（预留）
+    if (writingSettings.actions.expand) {
+      submenuItems.push({
+        id: 'writing-expand',
+        icon: 'maximize-2',
+        tooltipKey: 'writing.menu.expand',
+        hideAfterExecute: true,
+        execute: async () => {
+          // TODO: 实现扩写功能
+          debugLog('[SelectionToolbarManager] 扩写功能尚未实现');
+        }
+      });
+    }
+    
+    // 续写动作（预留）
+    if (writingSettings.actions.continue) {
+      submenuItems.push({
+        id: 'writing-continue',
+        icon: 'arrow-right',
+        tooltipKey: 'writing.menu.continue',
+        hideAfterExecute: true,
+        execute: async () => {
+          // TODO: 实现续写功能
+          debugLog('[SelectionToolbarManager] 续写功能尚未实现');
+        }
+      });
+    }
+    
+    // 如果没有启用任何写作动作，不显示子菜单
+    if (submenuItems.length === 0) {
+      return null;
+    }
+    
+    return {
+      id: 'writing',
+      icon: 'pen-tool',
+      tooltipKey: 'writing.menu.writing',
+      submenu: submenuItems,
+      showLabel: showLabel
+    };
+  }
+
+  /**
+   * 执行写作润色动作
+
+   * @param context 选择上下文
+   */
+  private async executeWritingPolish(context: SelectionContext): Promise<void> {
+    if (!this.writingActionExecutor) {
+      debugLog('[SelectionToolbarManager] WritingActionExecutor 未初始化');
+      return;
+    }
+    
+    // 获取当前活动的 MarkdownView
+    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!activeView) {
+      debugLog('[SelectionToolbarManager] 无法获取 MarkdownView');
+      return;
+    }
+    
+    // 获取编辑器
+    const editor = activeView.editor;
+    if (!editor) {
+      debugLog('[SelectionToolbarManager] 无法获取 Editor');
+      return;
+    }
+    
+    // 获取选区位置
+    const from = editor.getCursor('from');
+    const to = editor.getCursor('to');
+    
+    // 构建写作动作上下文
+    const writingContext: WritingActionContext = {
+      text: context.text,
+      range: context.range,
+      editor: editor,
+      view: activeView,
+      from: from,
+      to: to
+    };
+    
+    // 执行润色
+    await this.writingActionExecutor.executePolish(writingContext);
   }
 
   /**
    * 处理选择变化
-   * Requirements: 5.4 - 仅在 MarkdownView 中显示
-   * Requirements: 5.5 - 仅在选择发生的窗格中显示
+   * 仅在 MarkdownView 中显示
    */
   private handleSelectionChange(context: SelectionContext | null): void {
     debugLog('[SelectionToolbarManager] handleSelectionChange called, context:', context);
@@ -335,7 +508,7 @@ export class SelectionToolbarManager {
     }
     
     // 检查是否在 MarkdownView 中
-    // Requirements: 5.4 - 非 MarkdownView 不显示
+    // 非 MarkdownView 不显示
     if (!this.isInMarkdownView()) {
       debugLog('[SelectionToolbarManager] Not in MarkdownView, skipping');
       return;
@@ -376,7 +549,7 @@ export class SelectionToolbarManager {
 
   /**
    * 处理动作执行
-   * Requirements: 3.6 - 显示成功通知
+
    * @returns 执行结果，包含新文本和是否隐藏工具栏
    */
   private async handleActionExecute(
@@ -406,7 +579,7 @@ export class SelectionToolbarManager {
 
   /**
    * 处理键盘按下事件
-   * Requirements: 6.1 - Escape 键立即隐藏工具栏
+   * Escape 键立即隐藏工具栏
    */
   private handleKeyDown(e: KeyboardEvent): void {
     if (!this.toolbarView.getIsVisible()) {
@@ -422,7 +595,7 @@ export class SelectionToolbarManager {
 
   /**
    * 处理点击事件
-   * Requirements: 6.3 - 点击工具栏外部隐藏
+   * 点击工具栏外部隐藏
    */
   private handleClick(e: MouseEvent): void {
     const target = e.target as HTMLElement;
@@ -438,7 +611,7 @@ export class SelectionToolbarManager {
 
   /**
    * 处理输入事件
-   * Requirements: 6.2 - 开始输入时隐藏工具栏，允许正常文本输入
+   * 开始输入时隐藏工具栏，允许正常文本输入
    */
   private handleInput(_e: Event): void {
     if (this.toolbarView.getIsVisible()) {
@@ -461,7 +634,7 @@ export class SelectionToolbarManager {
 
   /**
    * 检查当前活动视图是否为 MarkdownView
-   * Requirements: 5.4 - 仅在 MarkdownView 中显示
+   * 仅在 MarkdownView 中显示
    */
   private isInMarkdownView(): boolean {
     const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);

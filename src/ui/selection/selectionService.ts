@@ -1,7 +1,7 @@
 /**
  * SelectionService - 选择监听服务
  * 负责监听和检测文字选择事件
- * Requirements: 1.1, 1.2, 1.3, 1.4, 1.5
+
  */
 
 import { App, MarkdownView } from 'obsidian';
@@ -56,7 +56,7 @@ export class SelectionService {
 
   /**
    * 开始监听选择事件
-   * Requirements: 1.1, 1.2
+
    */
   startListening(): void {
     if (this.isListening) return;
@@ -110,7 +110,7 @@ export class SelectionService {
 
   /**
    * 处理鼠标按下事件
-   * Requirements: 1.5 - 拖动选择时不显示工具栏
+   * 拖动选择时不显示工具栏
    */
   private handleMouseDown(e: MouseEvent): void {
     this.isDragging = true;
@@ -122,7 +122,7 @@ export class SelectionService {
 
   /**
    * 处理鼠标释放事件
-   * Requirements: 1.1 - 鼠标拖动选择后检测
+   * 鼠标拖动选择后检测
    */
   private handleMouseUp(e: MouseEvent): void {
     this.isDragging = false;
@@ -144,7 +144,7 @@ export class SelectionService {
 
   /**
    * 处理键盘释放事件
-   * Requirements: 1.2 - 键盘快捷键选择后检测
+   * 键盘快捷键选择后检测
    */
   private handleKeyUp(e: KeyboardEvent): void {
     // 右键菜单打开期间不处理
@@ -191,7 +191,7 @@ export class SelectionService {
 
   /**
    * 处理选区变化事件
-   * Requirements: 1.4 - 选区清除时隐藏工具栏
+   * 选区清除时隐藏工具栏
    */
   private handleSelectionChange(): void {
     // 如果正在拖动或右键菜单打开，不处理
@@ -272,7 +272,6 @@ export class SelectionService {
     
     if (context) {
       // 检查最小字符数
-      // Requirements: 1.3 - 最小字符数过滤
       if (context.text.length < this.settings.minSelectionLength) {
         debugLog('[SelectionService] Selection too short:', context.text.length, '<', this.settings.minSelectionLength);
         // 选择太短，视为无选择
@@ -334,7 +333,7 @@ export class SelectionService {
 
   /**
    * 检查目标元素是否在 MarkdownView 中
-   * Requirements: 5.4 - 仅在 MarkdownView 中显示
+   * 仅在 MarkdownView 中显示
    */
   private isInMarkdownView(target: HTMLElement | null): boolean {
     // 获取当前活动视图
@@ -367,7 +366,7 @@ export class SelectionService {
 
   /**
    * 获取当前视图类型
-   * Requirements: 5.1, 5.2, 5.3 - 支持不同编辑模式
+   * 支持不同编辑模式
    */
   private getViewType(): 'editing' | 'source' | 'reading' {
     const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);

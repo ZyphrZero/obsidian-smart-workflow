@@ -121,6 +121,7 @@ export const en: TranslationKeys = {
     tabs: {
       general: 'General',
       naming: 'Features',
+      writing: 'Writing',
       terminal: 'Terminal',
       advanced: 'Advanced',
     },
@@ -449,6 +450,11 @@ export const en: TranslationKeys = {
     invalidReasoningEffort: 'Invalid reasoning effort value "{{value}}". Valid options: {{validOptions}}',
     responsesApiError: 'Responses API error ({{status}}): {{message}}',
     responsesApiErrorHint: 'Please check if the model supports Responses API or try switching to Chat Completions format.',
+    // AIClient related errors
+    noProviderConfigured: 'No AI provider configured',
+    invalidApiKey: 'Invalid API Key',
+    invalidEndpoint: 'Invalid API endpoint',
+    noModelConfigured: 'No AI model configured',
   },
 
   terminalInstance: {
@@ -514,9 +520,6 @@ export const en: TranslationKeys = {
   },
 
   selectionToolbar: {
-    // Visibility section
-    visibility: 'Selection Toolbar',
-    visibilityDesc: 'Configure selection toolbar enable state and button visibility',
     actions: {
       copy: 'Copy',
       search: 'Search',
@@ -547,28 +550,77 @@ export const en: TranslationKeys = {
       minSelectionLengthDesc: 'Minimum number of characters required to show the toolbar (1-100)',
       showDelay: 'Show Delay (ms)',
       showDelayDesc: 'Delay before showing the toolbar after selection (0-1000ms)',
-      actionsTitle: 'Toolbar Actions',
-      actionsDesc: 'Choose which actions to display in the toolbar',
-      actionCopy: 'Copy',
-      actionCopyDesc: 'Copy selected text to clipboard',
-      actionSearch: 'Search',
-      actionSearchDesc: 'Search selected text in vault',
-      actionCreateLink: 'Create Link',
-      actionCreateLinkDesc: 'Wrap selected text with internal link syntax [[text]]',
-      actionHighlight: 'Highlight',
-      actionHighlightDesc: 'Wrap selected text with highlight syntax ==text==',
-      actionBold: 'Bold',
-      actionBoldDesc: 'Wrap selected text with bold syntax **text**',
-      actionItalic: 'Italic',
-      actionItalicDesc: 'Wrap selected text with italic syntax *text*',
-      actionStrikethrough: 'Strikethrough',
-      actionStrikethroughDesc: 'Wrap selected text with strikethrough syntax ~~text~~',
-      actionInlineCode: 'Inline Code',
-      actionInlineCodeDesc: 'Wrap selected text with inline code syntax `text`',
-      actionInlineMath: 'Inline Math',
-      actionInlineMathDesc: 'Wrap selected text with inline math syntax $text$',
-      actionClearFormat: 'Clear Format',
-      actionClearFormatDesc: 'Remove formatting marks from selected text',
+      buttonConfig: 'Button Configuration',
+      buttonConfigDesc: 'Drag to reorder buttons, toggle enable/disable, and set whether to show text labels',
+      showLabel: 'Label',
+    },
+  },
+
+  writing: {
+    // Menu items
+    menu: {
+      writing: 'Writing',
+      writingTooltip: 'AI-powered writing assistance',
+      polish: 'Polish',
+      polishTooltip: 'Improve text clarity and flow',
+      condense: 'Condense',
+      expand: 'Expand',
+      continue: 'Continue',
+    },
+    // Action bar buttons
+    actions: {
+      accept: 'Accept',
+      acceptTooltip: 'Replace original text with polished version',
+      reject: 'Keep Original',
+      rejectTooltip: 'Dismiss and keep original text',
+      merge: 'Merge',
+      mergeTooltip: 'Append polished text below original',
+      retry: 'Retry',
+      retryTooltip: 'Try again',
+      cancel: 'Cancel',
+    },
+    // Status messages
+    status: {
+      loading: 'Generating...',
+      streaming: 'Writing...',
+      complete: 'Complete',
+      error: 'Error',
+      editing: 'Editing',
+    },
+    // Error messages
+    errors: {
+      noProviderConfigured: 'No AI provider configured for writing',
+      noProviderConfiguredHint: 'Please configure an AI provider and model for the writing feature in settings',
+      requestFailed: 'AI request failed: {{message}}',
+      requestTimeout: 'Request timed out (exceeded {{seconds}} seconds)',
+      networkError: 'Network error: {{message}}',
+      streamInterrupted: 'Stream interrupted: {{reason}}',
+      streamInterruptedWithReason: 'Stream interrupted: {{reason}}',
+      invalidResponse: 'Invalid AI response',
+    },
+    // Settings
+    settings: {
+      title: 'Writing',
+      titleDesc: 'Configure AI-powered writing assistance features',
+      enabled: 'Enable Writing Features',
+      enabledDesc: 'Show writing menu in selection toolbar',
+      polishEnabled: 'Polish',
+      polishEnabledDesc: 'Enable text polishing feature',
+      providerBinding: 'AI Provider',
+      providerBindingDesc: 'Select provider and model for writing features',
+      promptTemplate: 'Polish Prompt Template',
+      promptTemplateDesc: 'Customize the prompt sent to AI for polishing. Use {{content}} for selected text.',
+      resetPrompt: 'Reset to Default',
+    },
+    // Keyboard shortcut hints
+    shortcuts: {
+      acceptHint: 'Enter to accept',
+      rejectHint: 'Esc to keep original',
+      mergeHint: 'Ctrl+M to merge',
+    },
+    // Thinking content
+    thinking: {
+      title: 'AI Thinking Process',
     },
   },
 };

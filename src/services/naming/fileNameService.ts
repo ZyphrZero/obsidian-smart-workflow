@@ -43,7 +43,7 @@ export class FileNameService {
     private aiService: AIService,
     private settings: SmartWorkflowSettings
   ) {
-    this.fileAnalyzer = new FileAnalyzer(app);
+    this.fileAnalyzer = new FileAnalyzer();
   }
 
   /**
@@ -126,97 +126,29 @@ export class FileNameService {
   }
 
   /**
-   * 生成文件名并重命名文件（兼容旧接口）
+   * 生成文件名并重命名文件
    * @param file 目标文件
    * @returns 重命名结果
    */
   async generateAndRename(file: TFile): Promise<RenameResult> {
-    // 读取文件内容
-    const content = await this.app.vault.read(file);
+    // 复用 generateFileName 方法
+    const generateResult = await this.generateFileName(file);
 
-    // 获取当前文件名（不含扩展名）
-    const currentFileName = file.basename;
-
-    // 根据配置决定是否分析目录命名风格
-    let directoryNamingStyle: string | undefined = undefined;
-    if (this.settings.analyzeDirectoryNamingStyle) {
-      if (this.settings.debugMode) {
-        debugLog('[FileNameService] 开始分析目录命名风格...');
-      }
-      try {
-        directoryNamingStyle = this.fileAnalyzer.analyzeDirectoryNamingStyle(file, this.settings.debugMode);
-        if (this.settings.debugMode) {
-          debugLog('[FileNameService] 目录命名风格分析完成:', directoryNamingStyle || '(空)');
-        }
-      } catch (error) {
-        debugWarn('[FileNameService] 分析目录命名风格失败:', error);
-        // 继续执行，不阻塞主流程
-      }
-    } else {
-      if (this.settings.debugMode) {
-        debugLog('[FileNameService] 目录命名风格分析已禁用');
-      }
-    }
-
-    // 调用 AI 服务生成新文件名
-    if (this.settings.debugMode) {
-      debugLog('[FileNameService] 调用 AI 服务生成文件名...');
-      debugLog('[FileNameService] 参数:', {
-        contentLength: content.length,
-        currentFileName,
-        hasDirectoryStyle: !!directoryNamingStyle
-      });
-    }
-
-    const newFileName = await this.aiService.generateFileName(
-      content,
-      currentFileName,
-      directoryNamingStyle
-    );
-
-    if (this.settings.debugMode) {
-      debugLog('[FileNameService] AI 生成的文件名:', newFileName);
-    }
-
-    // 验证和清理文件名
-    const sanitizedFileName = this.sanitizeFileName(newFileName);
-
-    // 标准化当前文件名以便比较（使用相同的清理逻辑）
-    const sanitizedCurrentFileName = this.sanitizeFileName(currentFileName);
-
-    // 检查文件名是否实际改变（不区分大小写比较，适配 Windows）
-    if (sanitizedFileName.toLowerCase() === sanitizedCurrentFileName.toLowerCase()) {
+    // 检查文件名是否实际改变
+    if (generateResult.isSame) {
       if (this.settings.debugMode) {
         debugLog('[FileNameService] 生成的文件名与当前文件名相同，跳过重命名');
       }
-      // 返回"未改变"的结果，而不抛出错误
       return {
         renamed: false,
-        oldName: currentFileName,
-        newName: sanitizedFileName,
+        oldName: generateResult.oldName,
+        newName: generateResult.newName,
         message: t('fileNameService.noChangeNeeded')
       };
     }
 
-    // 构建新路径
-    const newPath = this.buildNewPath(file, sanitizedFileName);
-
-    // 检查文件名冲突
-    const finalPath = await this.resolveConflict(newPath);
-
     // 执行重命名
-    await this.app.fileManager.renameFile(file, finalPath);
-
-    // 提取最终文件名（不含扩展名和路径）
-    const finalFileName = finalPath.split('/').pop()?.replace(/\.[^.]+$/, '') || sanitizedFileName;
-
-    // 返回成功结果
-    return {
-      renamed: true,
-      oldName: currentFileName,
-      newName: finalFileName,
-      message: t('fileNameService.fileRenamed', { fileName: finalFileName })
-    };
+    return this.renameFile(file, generateResult.newName);
   }
 
   /**

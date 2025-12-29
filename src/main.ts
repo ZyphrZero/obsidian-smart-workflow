@@ -141,7 +141,9 @@ export default class SmartWorkflowPlugin extends Plugin {
       debugLog('[SmartWorkflowPlugin] Initializing Selection Toolbar...');
       this._selectionToolbarManager = new SelectionToolbarManager(
         this.app,
-        this.settings.selectionToolbar
+        this.settings.selectionToolbar,
+        this.settings,
+        () => this.saveSettings()
       );
       this._selectionToolbarManager.initialize();
       debugLog('[SmartWorkflowPlugin] Selection Toolbar initialized');
@@ -619,9 +621,59 @@ export default class SmartWorkflowPlugin extends Plugin {
         actions: {
           ...DEFAULT_SETTINGS.selectionToolbar.actions,
           ...loaded.selectionToolbar?.actions
+        },
+        // 合并 buttonConfigs，保留用户自定义配置
+        buttonConfigs: this.mergeButtonConfigs(
+          DEFAULT_SETTINGS.selectionToolbar.buttonConfigs,
+          loaded.selectionToolbar?.buttonConfigs
+        )
+      },
+      // 写作功能设置深度合并
+      writing: {
+        ...DEFAULT_SETTINGS.writing,
+        ...loaded.writing,
+        actions: {
+          ...DEFAULT_SETTINGS.writing.actions,
+          ...loaded.writing?.actions
         }
       }
     };
+  }
+
+  /**
+   * 合并工具栏按钮配置
+   * 保留用户自定义配置，同时确保新按钮被添加
+   */
+  private mergeButtonConfigs(
+    defaults: import('./settings/settings').ToolbarButtonConfig[],
+    loaded?: import('./settings/settings').ToolbarButtonConfig[]
+  ): import('./settings/settings').ToolbarButtonConfig[] {
+    if (!loaded || loaded.length === 0) {
+      return [...defaults];
+    }
+    
+    // 创建已加载配置的映射
+    const loadedMap = new Map(loaded.map(c => [c.id, c]));
+    
+    // 合并配置：优先使用已加载的，补充缺失的默认配置
+    const result: import('./settings/settings').ToolbarButtonConfig[] = [];
+    
+    // 先添加已加载的配置（保持用户顺序）
+    for (const config of loaded) {
+      result.push(config);
+    }
+    
+    // 添加缺失的默认配置（新按钮）
+    for (const defaultConfig of defaults) {
+      if (!loadedMap.has(defaultConfig.id)) {
+        result.push({
+          ...defaultConfig,
+          order: result.length // 放到最后
+        });
+      }
+    }
+    
+    return result;
   }
 
   /**
@@ -670,18 +722,18 @@ export default class SmartWorkflowPlugin extends Plugin {
     
     // 更新选中工具栏的设置（仅当已初始化时）
     if (this._selectionToolbarManager) {
-      this._selectionToolbarManager.updateSettings(this.settings.selectionToolbar);
+      this._selectionToolbarManager.updateSettings(this.settings.selectionToolbar, this.settings);
     }
   }
 
   /**
    * 更新选中工具栏设置
    * 供设置面板调用，实现设置实时生效
-   * Requirements: 4.5
+
    */
   updateSelectionToolbarSettings(): void {
     if (this._selectionToolbarManager) {
-      this._selectionToolbarManager.updateSettings(this.settings.selectionToolbar);
+      this._selectionToolbarManager.updateSettings(this.settings.selectionToolbar, this.settings);
     }
   }
 

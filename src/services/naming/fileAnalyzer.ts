@@ -1,13 +1,23 @@
-import { App, TFile, TFolder } from 'obsidian';
+import { TFile, TFolder } from 'obsidian';
 import { debugLog } from '../../utils/logger';
+
+/**
+ * 命名分析结果接口
+ */
+interface NamingAnalysis {
+  avgLength: number;           // 平均长度
+  hasDatePattern: boolean;     // 是否有日期模式
+  hasNumberPrefix: boolean;    // 是否有数字前缀
+  language: 'chinese' | 'english' | 'mixed';  // 主要语言
+  separator: string | null;    // 分隔符
+  caseStyle: string | null;    // 大小写风格
+}
 
 /**
  * 文件分析器类
  * 分析目录下其他文件的命名风格
  */
 export class FileAnalyzer {
-  constructor(private app: App) {}
-
   /**
    * 分析目录下文件的命名风格
    * @param currentFile 当前文件
@@ -182,12 +192,12 @@ export class FileAnalyzer {
     }
 
     if (analysis.separator) {
-      const sepName = {
+      const sepName: Record<string, string> = {
         '-': '连字符',
         '_': '下划线',
         ' ': '空格'
-      }[analysis.separator] || analysis.separator;
-      features.push(`使用${sepName}分隔`);
+      };
+      features.push(`使用${sepName[analysis.separator] || analysis.separator}分隔`);
     }
 
     if (analysis.caseStyle) {
@@ -202,16 +212,4 @@ export class FileAnalyzer {
 
     return parts.join('\n');
   }
-}
-
-/**
- * 命名分析结果接口
- */
-interface NamingAnalysis {
-  avgLength: number;           // 平均长度
-  hasDatePattern: boolean;     // 是否有日期模式
-  hasNumberPrefix: boolean;    // 是否有数字前缀
-  language: 'chinese' | 'english' | 'mixed';  // 主要语言
-  separator: string | null;    // 分隔符
-  caseStyle: string | null;    // 大小写风格
 }

@@ -121,6 +121,7 @@ export const zhCN: TranslationKeys = {
     tabs: {
       general: '常规设置',
       naming: '功能设置',
+      writing: '写作',
       terminal: '本地终端',
       advanced: '高级选项',
     },
@@ -449,6 +450,11 @@ export const zhCN: TranslationKeys = {
     invalidReasoningEffort: '无效的推理深度值 "{{value}}"，有效选项：{{validOptions}}',
     responsesApiError: 'Responses API 错误 ({{status}})：{{message}}',
     responsesApiErrorHint: '请检查模型是否支持 Responses API，或尝试切换到 Chat Completions 格式。',
+    // AIClient 相关错误
+    noProviderConfigured: '未配置 AI 供应商',
+    invalidApiKey: '无效的 API Key',
+    invalidEndpoint: '无效的 API 端点',
+    noModelConfigured: '未配置 AI 模型',
   },
 
   terminalInstance: {
@@ -514,9 +520,6 @@ export const zhCN: TranslationKeys = {
   },
 
   selectionToolbar: {
-    // 功能显示区域
-    visibility: '选中工具栏',
-    visibilityDesc: '配置选中工具栏的启用状态和按钮显示',
     actions: {
       copy: '复制',
       search: '搜索',
@@ -547,28 +550,77 @@ export const zhCN: TranslationKeys = {
       minSelectionLengthDesc: '显示工具栏所需的最小字符数（1-100）',
       showDelay: '显示延迟（毫秒）',
       showDelayDesc: '选中文字后显示工具栏的延迟时间（0-1000毫秒）',
-      actionsTitle: '工具栏按钮',
-      actionsDesc: '选择要在工具栏中显示的操作按钮',
-      actionCopy: '复制',
-      actionCopyDesc: '复制选中文字到剪贴板',
-      actionSearch: '搜索',
-      actionSearchDesc: '在仓库中搜索选中文字',
-      actionCreateLink: '创建链接',
-      actionCreateLinkDesc: '将选中文字包装为内部链接语法 [[text]]',
-      actionHighlight: '高亮',
-      actionHighlightDesc: '将选中文字包装为高亮语法 ==text==',
-      actionBold: '加粗',
-      actionBoldDesc: '将选中文字包装为加粗语法 **text**',
-      actionItalic: '斜体',
-      actionItalicDesc: '将选中文字包装为斜体语法 *text*',
-      actionStrikethrough: '删除线',
-      actionStrikethroughDesc: '将选中文字包装为删除线语法 ~~text~~',
-      actionInlineCode: '行内代码',
-      actionInlineCodeDesc: '将选中文字包装为行内代码语法 `text`',
-      actionInlineMath: '行内公式',
-      actionInlineMathDesc: '将选中文字包装为行内公式语法 $text$',
-      actionClearFormat: '清除格式',
-      actionClearFormatDesc: '移除选中文字的格式标记',
+      buttonConfig: '按钮配置',
+      buttonConfigDesc: '拖拽调整按钮顺序，勾选启用/禁用按钮，设置是否显示文字标签',
+      showLabel: '文字',
+    },
+  },
+
+  writing: {
+    // 菜单项
+    menu: {
+      writing: '写作',
+      writingTooltip: 'AI 写作辅助',
+      polish: '润色',
+      polishTooltip: '提升文本流畅性和准确性',
+      condense: '缩写',
+      expand: '扩写',
+      continue: '续写',
+    },
+    // 操作栏按钮
+    actions: {
+      accept: '接受',
+      acceptTooltip: '用润色后的文本替换原文',
+      reject: '保留原文',
+      rejectTooltip: '关闭并保留原文',
+      merge: '合并',
+      mergeTooltip: '将润色后的文本追加到原文下方',
+      retry: '重试',
+      retryTooltip: '重新尝试',
+      cancel: '取消',
+    },
+    // 状态消息
+    status: {
+      loading: '正在生成...',
+      streaming: '正在写作...',
+      complete: '完成',
+      error: '错误',
+      editing: '编辑中',
+    },
+    // 错误消息
+    errors: {
+      noProviderConfigured: '未配置写作功能的 AI 供应商',
+      noProviderConfiguredHint: '请在设置中为写作功能配置 AI 供应商和模型',
+      requestFailed: 'AI 请求失败：{{message}}',
+      requestTimeout: '请求超时（超过 {{seconds}} 秒）',
+      networkError: '网络错误：{{message}}',
+      streamInterrupted: '流式传输中断：{{reason}}',
+      streamInterruptedWithReason: '流式传输中断：{{reason}}',
+      invalidResponse: '无效的 AI 响应',
+    },
+    // 设置
+    settings: {
+      title: '写作',
+      titleDesc: '配置 AI 写作辅助功能',
+      enabled: '启用写作功能',
+      enabledDesc: '在选中工具栏中显示写作菜单',
+      polishEnabled: '润色',
+      polishEnabledDesc: '启用文本润色功能',
+      providerBinding: 'AI 供应商',
+      providerBindingDesc: '选择用于写作功能的供应商和模型',
+      promptTemplate: '润色 Prompt 模板',
+      promptTemplateDesc: '自定义发送给 AI 的润色提示。使用 {{content}} 表示选中的文本。',
+      resetPrompt: '重置为默认',
+    },
+    // 快捷键提示
+    shortcuts: {
+      acceptHint: 'Enter 接受',
+      rejectHint: 'Esc 保留原文',
+      mergeHint: 'Ctrl+M 合并',
+    },
+    // 思考内容
+    thinking: {
+      title: 'AI 思考过程',
     },
   },
 };

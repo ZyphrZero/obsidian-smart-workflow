@@ -1,0 +1,372 @@
+/**
+ * Writing Feature Styles
+ * 写作功能样式 - 内联 Diff 视图
+ * 
+ * Requirements: 3.3, 4.2, 4.3
+ */
+
+/* ============================================================================
+ * 内联 Diff 视图容器
+ * ============================================================================ */
+
+.writing-inline-diff {
+  position: relative;
+  margin: 8px 0;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-primary);
+  overflow: hidden;
+}
+
+/* ============================================================================
+ * 顶部工具栏
+ * ============================================================================ */
+
+.writing-diff-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--background-secondary);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.writing-diff-status {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.writing-diff-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.writing-diff-actions button {
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  border: none;
+  transition: all 100ms ease-in-out;
+}
+
+.writing-diff-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 接受按钮 - 主要操作 */
+.writing-btn-accept {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.writing-btn-accept:hover:not(:disabled) {
+  background: var(--interactive-accent-hover);
+}
+
+/* 保留原文按钮 */
+.writing-btn-reject {
+  background: transparent;
+  border: 1px solid var(--background-modifier-border) !important;
+  color: var(--text-muted);
+}
+
+.writing-btn-reject:hover:not(:disabled) {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+/* 合并按钮 */
+.writing-btn-merge {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.writing-btn-merge:hover:not(:disabled) {
+  background: var(--background-modifier-active-hover);
+}
+
+/* ============================================================================
+ * Diff 内容容器
+ * ============================================================================ */
+
+.writing-diff-container {
+  padding: 0;
+}
+
+/* ============================================================================
+ * 加载状态
+ * ============================================================================ */
+
+.writing-diff-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  color: var(--text-muted);
+}
+
+.writing-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--background-modifier-border);
+  border-top-color: var(--interactive-accent);
+  border-radius: 50%;
+  animation: writing-spinner 1s linear infinite;
+}
+
+@keyframes writing-spinner {
+  to { transform: rotate(360deg); }
+}
+
+/* ============================================================================
+ * 思考内容区域（可折叠）
+ * ============================================================================ */
+
+.writing-diff-thinking {
+  border-bottom: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+}
+
+.writing-diff-thinking-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  user-select: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  transition: background 100ms ease-in-out;
+}
+
+.writing-diff-thinking-header:hover {
+  background: var(--background-modifier-hover);
+}
+
+.writing-diff-thinking-chevron {
+  font-size: 10px;
+  color: var(--text-faint);
+  transition: transform 100ms ease-in-out;
+}
+
+.writing-diff-thinking-title {
+  font-weight: 500;
+}
+
+.writing-diff-thinking-content {
+  padding: 12px 16px;
+  max-height: 200px;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--background-primary-alt);
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+/* 深色主题适配 */
+.theme-dark .writing-diff-thinking-content {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* ============================================================================
+ * 原文区域（红色删除样式）
+ * ============================================================================ */
+
+.writing-diff-original {
+  padding: 12px 16px;
+  background: rgba(255, 100, 100, 0.1);
+  border-left: 3px solid #e74c3c;
+  color: var(--text-normal);
+  text-decoration: line-through;
+  text-decoration-color: rgba(231, 76, 60, 0.6);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.6;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+/* 深色主题适配 */
+.theme-dark .writing-diff-original {
+  background: rgba(231, 76, 60, 0.15);
+}
+
+/* ============================================================================
+ * 结果区域（绿色新增样式）
+ * ============================================================================ */
+
+.writing-diff-result {
+  padding: 12px 16px;
+  background: rgba(100, 200, 100, 0.1);
+  border-left: 3px solid #27ae60;
+  color: var(--text-normal);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.6;
+  font-family: inherit;
+  font-size: inherit;
+  outline: none;
+  min-height: 40px;
+}
+
+/* 深色主题适配 */
+.theme-dark .writing-diff-result {
+  background: rgba(39, 174, 96, 0.15);
+}
+
+/* 可编辑状态 */
+.writing-diff-result[contenteditable="true"]:focus {
+  background: rgba(100, 200, 100, 0.15);
+}
+
+.theme-dark .writing-diff-result[contenteditable="true"]:focus {
+  background: rgba(39, 174, 96, 0.2);
+}
+
+/* 流式光标动画 */
+.writing-diff-result.streaming::after {
+  content: '▋';
+  color: var(--text-accent);
+  animation: writing-cursor-blink 1s infinite;
+}
+
+@keyframes writing-cursor-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* ============================================================================
+ * 错误状态
+ * ============================================================================ */
+
+.writing-diff-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(231, 76, 60, 0.1);
+  color: var(--text-error);
+  font-size: 13px;
+}
+
+.writing-diff-error .writing-btn-retry {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  border: none;
+  flex-shrink: 0;
+}
+
+.writing-diff-error .writing-btn-retry:hover {
+  background: var(--interactive-accent-hover);
+}
+
+/* ============================================================================
+ * 子菜单样式
+ * ============================================================================ */
+
+.selection-toolbar-submenu-wrapper {
+  position: relative;
+}
+
+.selection-toolbar-submenu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 4px;
+  min-width: 120px;
+  z-index: 1000;
+}
+
+.theme-dark .selection-toolbar-submenu {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.selection-toolbar-submenu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-normal);
+  transition: background 100ms ease-in-out;
+}
+
+.selection-toolbar-submenu button:hover {
+  background: var(--background-modifier-hover);
+}
+
+.selection-toolbar-submenu button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============================================================================
+ * 写作动作容器
+ * ============================================================================ */
+
+.writing-action-container {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+}
+
+/* ============================================================================
+ * 响应式适配
+ * ============================================================================ */
+
+@media (max-width: 600px) {
+  .writing-diff-toolbar {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+
+  .writing-diff-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+/* ============================================================================
+ * 滚动条样式
+ * ============================================================================ */
+
+.writing-diff-result::-webkit-scrollbar,
+.writing-diff-original::-webkit-scrollbar {
+  width: 6px;
+}
+
+.writing-diff-result::-webkit-scrollbar-track,
+.writing-diff-original::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.writing-diff-result::-webkit-scrollbar-thumb,
+.writing-diff-original::-webkit-scrollbar-thumb {
+  background: var(--background-modifier-border);
+  border-radius: 3px;
+}
+
+.writing-diff-result::-webkit-scrollbar-thumb:hover,
+.writing-diff-original::-webkit-scrollbar-thumb:hover {
+  background: var(--background-modifier-border-hover);
+}

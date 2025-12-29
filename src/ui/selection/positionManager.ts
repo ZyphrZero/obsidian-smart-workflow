@@ -1,7 +1,7 @@
 /**
  * PositionManager - 工具栏位置计算模块
  * 负责计算工具栏的显示位置，处理边界情况
- * Requirements: 2.1, 2.2, 2.3, 2.6
+
  */
 
 import { ToolbarPosition, ToolbarSize, ViewportSize, POSITION_CONSTANTS } from './types';
