@@ -1,6 +1,6 @@
 {
   "name": "obsidian-smart-workflow",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "A smart workflow plugin for Obsidian that streamlines your knowledge management with intelligent note naming and integrated terminal.",
   "main": "main.js",
   "packageManager": "pnpm@10.0.0",

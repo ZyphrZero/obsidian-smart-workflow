@@ -1,7 +1,7 @@
 {
   "id": "obsidian-smart-workflow",
   "name": "Smart Workflow",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "minAppVersion": "0.15.0",
   "description": "A smart workflow plugin for Obsidian that streamlines your knowledge management with intelligent note naming and integrated terminal.",
   "author": "ZyphrZero",
