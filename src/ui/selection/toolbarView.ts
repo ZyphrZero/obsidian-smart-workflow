@@ -42,11 +42,23 @@ export class ToolbarView {
   // 全局点击监听器（用于关闭子菜单）
   private documentClickHandler: ((e: MouseEvent) => void) | null = null;
   
+  // 拖拽相关状态
+  private isDragging: boolean = false;
+  private dragStartX: number = 0;
+  private dragStartY: number = 0;
+  private toolbarStartX: number = 0;
+  private toolbarStartY: number = 0;
+  private boundHandleMouseMove: (e: MouseEvent) => void;
+  private boundHandleMouseUp: (e: MouseEvent) => void;
+  
   /** 动作执行回调 */
   onActionExecute: ActionCallback = async () => ({ shouldHide: false });
 
   constructor() {
     // 初始化时不创建 DOM，等待 render() 调用
+    // 绑定拖拽事件处理器
+    this.boundHandleMouseMove = this.handleDragMove.bind(this);
+    this.boundHandleMouseUp = this.handleDragEnd.bind(this);
   }
 
   /**
@@ -213,6 +225,11 @@ export class ToolbarView {
     this.closeActiveSubmenu();
     this.removeDocumentClickHandler();
     
+    // 移除拖拽事件监听
+    document.removeEventListener('mousemove', this.boundHandleMouseMove);
+    document.removeEventListener('mouseup', this.boundHandleMouseUp);
+    this.isDragging = false;
+    
     if (this.toolbarEl) {
       this.toolbarEl.remove();
       this.toolbarEl = null;
@@ -235,6 +252,10 @@ export class ToolbarView {
     // 关闭任何打开的子菜单
     this.closeActiveSubmenu();
     
+    // 首先渲染拖拽手柄
+    const dragHandle = this.createDragHandle();
+    this.toolbarEl.appendChild(dragHandle);
+    
     // 渲染每个动作按钮
     this.actions.forEach((action) => {
       if (isSubmenuAction(action)) {
@@ -247,6 +268,123 @@ export class ToolbarView {
         this.toolbarEl!.appendChild(button);
       }
     });
+  }
+
+  /**
+   * 创建拖拽手柄
+   */
+  private createDragHandle(): HTMLElement {
+    const handle = document.createElement('div');
+    handle.className = 'selection-toolbar-drag-handle';
+    handle.setAttribute('aria-label', 'Drag to move toolbar');
+    
+    // 内联样式
+    handle.style.cssText = `
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 14px;
+      align-self: stretch;
+      cursor: grab;
+      color: var(--text-faint);
+      border-radius: 3px;
+      flex-shrink: 0;
+      margin: -4px 0;
+      padding: 4px 0;
+    `;
+    
+    // 创建拖拽图标（使用 grip-vertical 图标）
+    setIcon(handle, 'grip-vertical');
+    
+    // 拖拽开始
+    handle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.handleDragStart(e);
+    });
+    
+    return handle;
+  }
+
+  /**
+   * 处理拖拽开始
+   */
+  private handleDragStart(e: MouseEvent): void {
+    if (!this.toolbarEl) return;
+    
+    this.isDragging = true;
+    this.dragStartX = e.clientX;
+    this.dragStartY = e.clientY;
+    
+    // 获取当前工具栏位置
+    const rect = this.toolbarEl.getBoundingClientRect();
+    this.toolbarStartX = rect.left;
+    this.toolbarStartY = rect.top;
+    
+    // 更新手柄样式
+    const handle = this.toolbarEl.querySelector('.selection-toolbar-drag-handle') as HTMLElement;
+    if (handle) {
+      handle.style.cursor = 'grabbing';
+    }
+    
+    // 添加拖拽中的类
+    this.toolbarEl.classList.add('dragging');
+    
+    // 添加全局事件监听
+    document.addEventListener('mousemove', this.boundHandleMouseMove);
+    document.addEventListener('mouseup', this.boundHandleMouseUp);
+  }
+
+  /**
+   * 处理拖拽移动
+   */
+  private handleDragMove(e: MouseEvent): void {
+    if (!this.isDragging || !this.toolbarEl) return;
+    
+    e.preventDefault();
+    
+    const deltaX = e.clientX - this.dragStartX;
+    const deltaY = e.clientY - this.dragStartY;
+    
+    let newLeft = this.toolbarStartX + deltaX;
+    let newTop = this.toolbarStartY + deltaY;
+    
+    // 边界限制
+    const toolbarRect = this.toolbarEl.getBoundingClientRect();
+    const minMargin = 8;
+    
+    if (newLeft < minMargin) newLeft = minMargin;
+    if (newLeft + toolbarRect.width > window.innerWidth - minMargin) {
+      newLeft = window.innerWidth - toolbarRect.width - minMargin;
+    }
+    if (newTop < minMargin) newTop = minMargin;
+    if (newTop + toolbarRect.height > window.innerHeight - minMargin) {
+      newTop = window.innerHeight - toolbarRect.height - minMargin;
+    }
+    
+    this.toolbarEl.style.left = `${newLeft}px`;
+    this.toolbarEl.style.top = `${newTop}px`;
+  }
+
+  /**
+   * 处理拖拽结束
+   */
+  private handleDragEnd(): void {
+    if (!this.isDragging) return;
+    
+    this.isDragging = false;
+    
+    document.removeEventListener('mousemove', this.boundHandleMouseMove);
+    document.removeEventListener('mouseup', this.boundHandleMouseUp);
+    
+    if (this.toolbarEl) {
+      this.toolbarEl.classList.remove('dragging');
+      
+      const handle = this.toolbarEl.querySelector('.selection-toolbar-drag-handle') as HTMLElement;
+      if (handle) {
+        handle.style.cursor = 'grab';
+      }
+    }
   }
 
   /**

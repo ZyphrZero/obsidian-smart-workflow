@@ -10,6 +10,7 @@
   position: fixed;
   z-index: 1000;
   display: flex;
+  align-items: center;
   gap: 4px;
   padding: 4px 8px;
   background: var(--background-secondary);
@@ -28,10 +29,29 @@
   pointer-events: auto;
 }
 
+/* 工具栏拖拽中状态 */
+.selection-toolbar.dragging {
+  transition: none;
+  cursor: grabbing;
+}
+
 /* 工具栏隐藏动画（更快的淡出） */
 .selection-toolbar.hiding {
   opacity: 0;
   transition: opacity 100ms ease-in-out;
+}
+
+/* 拖拽手柄 */
+.selection-toolbar-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.selection-toolbar-drag-handle svg {
+  width: 14px;
+  height: 14px;
 }
 
 /* 工具栏按钮 - 样式通过 toolbarView.ts 内联设置 */

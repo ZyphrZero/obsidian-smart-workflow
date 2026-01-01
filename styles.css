@@ -1140,6 +1140,39 @@
   z-index: 1;
 }
 
+/* 快捷键提示样式 */
+.writing-apply-btn .btn-shortcut,
+.writing-apply-block-btn .btn-shortcut {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 6px;
+  padding: 1px 4px;
+  font-size: 10px;
+  font-family: var(--font-monospace);
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+  opacity: 0.8;
+  min-width: 16px;
+}
+
+.writing-apply-btn .btn-shortcut {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.writing-apply-btn.accept-all .btn-shortcut,
+.writing-apply-btn.reject-all .btn-shortcut {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.writing-apply-btn.reset .btn-shortcut {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.writing-apply-block-btn.both .btn-shortcut {
+  background: rgba(0, 0, 0, 0.1);
+}
+
 .writing-apply-btn.hold-to-confirm .hold-progress {
   position: absolute;
   left: 0;

@@ -204,6 +204,12 @@ export class WritingApplyView extends ItemView {
   
   /**
    * 注册键盘快捷键
+   * - Y: 接受新内容 (当前聚焦块)
+   * - N: 保留原内容 (当前聚焦块)
+   * - B: 合并两者 (当前聚焦块)
+   * - Shift+Y: 接受全部
+   * - Shift+N: 拒绝全部
+   * - Shift+R: 重置
    * - 长按 Enter: 应用并关闭
    * - 长按 Escape: 关闭不应用
    */
@@ -223,8 +229,67 @@ export class WritingApplyView extends ItemView {
       // 避免重复触发（长按时会连续触发 keydown）
       if (evt.repeat) return;
       
+      // 只在 ready 阶段响应快捷键
+      if (this.viewPhase !== 'ready') return;
+      
+      // Shift+Y: 接受全部
+      if (evt.key === 'Y' && evt.shiftKey) {
+        evt.preventDefault();
+        evt.stopPropagation();
+        this.handleAcceptAllIncoming();
+        return;
+      }
+      
+      // Shift+N: 拒绝全部
+      if (evt.key === 'N' && evt.shiftKey) {
+        evt.preventDefault();
+        evt.stopPropagation();
+        this.handleRejectAll();
+        return;
+      }
+      
+      // Shift+R: 重置
+      if (evt.key === 'R' && evt.shiftKey) {
+        evt.preventDefault();
+        evt.stopPropagation();
+        this.handleReset();
+        return;
+      }
+      
+      // Y: 接受新内容 (当前聚焦块)
+      if (evt.key === 'y' && !evt.shiftKey && !evt.ctrlKey && !evt.metaKey) {
+        evt.preventDefault();
+        evt.stopPropagation();
+        this.handleBlockShortcut('incoming');
+        return;
+      }
+      
+      // N: 保留原内容 (当前聚焦块)
+      if (evt.key === 'n' && !evt.shiftKey && !evt.ctrlKey && !evt.metaKey) {
+        evt.preventDefault();
+        evt.stopPropagation();
+        this.handleBlockShortcut('current');
+        return;
+      }
+      
+      // B: 合并两者 (当前聚焦块)
+      if (evt.key === 'b' && !evt.shiftKey && !evt.ctrlKey && !evt.metaKey) {
+        evt.preventDefault();
+        evt.stopPropagation();
+        this.handleBlockShortcut('both');
+        return;
+      }
+      
+      // F4: 长按应用
+      if (evt.key === 'F4') {
+        evt.preventDefault();
+        evt.stopPropagation();
+        this.startKeyHold(() => this.handleApply(), 'apply');
+        return;
+      }
+      
       // Enter: 长按应用
-      if (evt.key === 'Enter' && !evt.shiftKey && this.viewPhase === 'ready') {
+      if (evt.key === 'Enter' && !evt.shiftKey) {
         evt.preventDefault();
         evt.stopPropagation();
         this.startKeyHold(() => this.handleApply(), 'apply');
@@ -242,10 +307,34 @@ export class WritingApplyView extends ItemView {
     
     // keyup 取消长按
     this.registerDomEvent(document, 'keyup', (evt: KeyboardEvent) => {
-      if (evt.key === 'Enter' || evt.key === 'Escape') {
+      if (evt.key === 'Enter' || evt.key === 'Escape' || evt.key === 'F4') {
         this.cancelKeyHold();
       }
     });
+  }
+  
+  /**
+   * 处理块级快捷键
+   * 找到第一个未决策的修改块并应用决策
+   */
+  private handleBlockShortcut(decision: 'incoming' | 'current' | 'both'): void {
+    // 遍历所有选区组，找到第一个未决策的修改块
+    for (const group of this.selectionGroups) {
+      for (const block of group.diffResult.blocks) {
+        if (block.type === 'modified') {
+          const currentDecision = group.decisionManager.getDecision(block.index);
+          if (currentDecision === 'pending') {
+            // 检查决策是否有效
+            if (decision === 'incoming' && block.modifiedValue === undefined) continue;
+            if (decision === 'current' && block.originalValue === undefined) continue;
+            if (decision === 'both' && (block.originalValue === undefined || block.modifiedValue === undefined)) continue;
+            
+            group.decisionManager.setDecision(block.index, decision);
+            return;
+          }
+        }
+      }
+    }
   }
   
   /**
@@ -423,14 +512,23 @@ export class WritingApplyView extends ItemView {
   /**
    * 清理内容中的多余空行
    * 移除 think 标签后可能留下的前导空行和连续空行
+   * 注意：保护 MULTI_SELECTION_SEPARATOR 不被破坏
    */
   private cleanContent(content: string): string {
+    // 先保护分隔符，用占位符替换
+    const PLACEHOLDER = '\x00SELECTION_BOUNDARY_PLACEHOLDER\x00';
+    let cleaned = content.replace(/\n---SELECTION_BOUNDARY---\n/g, PLACEHOLDER);
+    
     // 移除开头的空行
-    let cleaned = content.replace(/^\s*\n+/, '');
+    cleaned = cleaned.replace(/^\s*\n+/, '');
     // 移除结尾的空行
     cleaned = cleaned.replace(/\n+\s*$/, '');
     // 将连续的多个空行替换为单个空行
     cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+    
+    // 恢复分隔符
+    cleaned = cleaned.replace(new RegExp(PLACEHOLDER, 'g'), MULTI_SELECTION_SEPARATOR);
+    
     return cleaned;
   }
 
@@ -821,42 +919,70 @@ export class WritingApplyView extends ItemView {
   }
   
   /**
+   * 创建带快捷键提示的按钮
+   */
+  private createButtonWithShortcut(
+    className: string,
+    text: string,
+    shortcut: string,
+    onClick: () => void
+  ): HTMLElement {
+    const btn = document.createElement('button');
+    btn.className = className;
+    
+    // 按钮文本
+    const textSpan = document.createElement('span');
+    textSpan.className = 'btn-text';
+    textSpan.textContent = text;
+    btn.appendChild(textSpan);
+    
+    // 快捷键提示
+    const shortcutSpan = document.createElement('span');
+    shortcutSpan.className = 'btn-shortcut';
+    shortcutSpan.textContent = shortcut;
+    btn.appendChild(shortcutSpan);
+    
+    btn.addEventListener('click', onClick);
+    return btn;
+  }
+  
+  /**
    * 创建块级操作按钮
    */
   private createBlockActions(block: DiffBlock, group: SelectionDiffGroup): HTMLElement {
     const actionsEl = document.createElement('div');
     actionsEl.className = 'writing-apply-block-actions';
     
-    // Accept Incoming 按钮
+    // Accept Incoming 按钮 (Y)
     if (block.modifiedValue !== undefined) {
-      const incomingBtn = document.createElement('button');
-      incomingBtn.className = 'writing-apply-block-btn incoming';
-      incomingBtn.textContent = t('writing.actions.acceptIncoming');
-      incomingBtn.addEventListener('click', () => {
-        group.decisionManager.setDecision(block.index, 'incoming');
-      });
+      const incomingBtn = this.createButtonWithShortcut(
+        'writing-apply-block-btn incoming',
+        t('writing.actions.acceptIncoming'),
+        'Y',
+        () => group.decisionManager.setDecision(block.index, 'incoming')
+      );
       actionsEl.appendChild(incomingBtn);
     }
     
-    // Accept Current 按钮
+    // Accept Current 按钮 (N)
     if (block.originalValue !== undefined) {
-      const currentBtn = document.createElement('button');
-      currentBtn.className = 'writing-apply-block-btn current';
-      currentBtn.textContent = t('writing.actions.acceptCurrent');
-      currentBtn.addEventListener('click', () => {
-        group.decisionManager.setDecision(block.index, 'current');
-      });
+      const currentBtn = this.createButtonWithShortcut(
+        'writing-apply-block-btn current',
+        t('writing.actions.acceptCurrent'),
+        'N',
+        () => group.decisionManager.setDecision(block.index, 'current')
+      );
       actionsEl.appendChild(currentBtn);
     }
     
-    // Accept Both 按钮
+    // Accept Both 按钮 (B)
     if (block.originalValue !== undefined && block.modifiedValue !== undefined) {
-      const bothBtn = document.createElement('button');
-      bothBtn.className = 'writing-apply-block-btn both';
-      bothBtn.textContent = t('writing.actions.acceptBoth');
-      bothBtn.addEventListener('click', () => {
-        group.decisionManager.setDecision(block.index, 'both');
-      });
+      const bothBtn = this.createButtonWithShortcut(
+        'writing-apply-block-btn both',
+        t('writing.actions.acceptBoth'),
+        'B',
+        () => group.decisionManager.setDecision(block.index, 'both')
+      );
       actionsEl.appendChild(bothBtn);
     }
     
@@ -903,36 +1029,43 @@ export class WritingApplyView extends ItemView {
     this.toolbarActionsEl = document.createElement('div');
     this.toolbarActionsEl.className = 'writing-apply-actions';
     
-    // 接受全部按钮 - 普通点击，标记所有块为 incoming
-    const acceptAllBtn = document.createElement('button');
-    acceptAllBtn.className = 'writing-apply-btn accept-all';
-    acceptAllBtn.textContent = t('writing.actions.acceptAll');
+    // 接受全部按钮 - 普通点击，标记所有块为 incoming (Shift+Y)
+    const acceptAllBtn = this.createButtonWithShortcut(
+      'writing-apply-btn accept-all',
+      t('writing.actions.acceptAll'),
+      'Shift+Y',
+      () => this.handleAcceptAllIncoming()
+    );
     setTooltip(acceptAllBtn, t('writing.actions.acceptAllTooltip'));
-    acceptAllBtn.addEventListener('click', () => this.handleAcceptAllIncoming());
     this.toolbarActionsEl.appendChild(acceptAllBtn);
     
-    // 拒绝全部按钮 - 普通点击，标记所有块为 current
-    const rejectAllBtn = document.createElement('button');
-    rejectAllBtn.className = 'writing-apply-btn reject-all';
-    rejectAllBtn.textContent = t('writing.actions.rejectAll');
+    // 拒绝全部按钮 - 普通点击，标记所有块为 current (Shift+N)
+    const rejectAllBtn = this.createButtonWithShortcut(
+      'writing-apply-btn reject-all',
+      t('writing.actions.rejectAll'),
+      'Shift+N',
+      () => this.handleRejectAll()
+    );
     setTooltip(rejectAllBtn, t('writing.actions.rejectAllTooltip'));
-    rejectAllBtn.addEventListener('click', () => this.handleRejectAll());
     this.toolbarActionsEl.appendChild(rejectAllBtn);
     
-    // 重置按钮（有决策时显示）
-    const resetBtn = document.createElement('button');
-    resetBtn.className = 'writing-apply-btn reset';
-    resetBtn.textContent = t('writing.actions.reset');
+    // 重置按钮（有决策时显示）(Shift+R)
+    const resetBtn = this.createButtonWithShortcut(
+      'writing-apply-btn reset',
+      t('writing.actions.reset'),
+      'Shift+R',
+      () => this.handleReset()
+    );
     resetBtn.style.display = 'none';
-    resetBtn.addEventListener('click', () => this.handleReset());
     this.toolbarActionsEl.appendChild(resetBtn);
     
-    // 应用按钮 - 长按确认
+    // 应用按钮 - 长按确认 (F4)
     const applyBtn = this.createHoldToConfirmButton(
       'apply',
       t('writing.actions.apply'),
       () => this.handleApply(),
-      'writing.actions.applyTooltip'
+      'writing.actions.applyTooltip',
+      'F4'
     );
     this.toolbarActionsEl.appendChild(applyBtn);
     
@@ -942,13 +1075,14 @@ export class WritingApplyView extends ItemView {
   
   /**
    * 创建长按确认按钮
-   * 按住 1 秒后执行操作，显示进度动画
+   * 按住后执行操作，显示进度动画
    */
   private createHoldToConfirmButton(
     className: string,
     text: string,
     onConfirm: () => void,
-    tooltipKey?: string
+    tooltipKey?: string,
+    shortcut?: string
   ): HTMLElement {
     const HOLD_DURATION = 500; // 0.5 秒
     
@@ -961,6 +1095,14 @@ export class WritingApplyView extends ItemView {
     textSpan.className = 'btn-text';
     textSpan.textContent = text;
     btn.appendChild(textSpan);
+    
+    // 快捷键提示
+    if (shortcut) {
+      const shortcutSpan = document.createElement('span');
+      shortcutSpan.className = 'btn-shortcut';
+      shortcutSpan.textContent = shortcut;
+      btn.appendChild(shortcutSpan);
+    }
     
     // 进度条
     const progressBar = document.createElement('div');
