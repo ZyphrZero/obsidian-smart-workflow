@@ -3127,6 +3127,10 @@
   font-weight: 600;
   color: var(--text-normal);
   flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* 状态徽章 - iOS 风格药丸形状 */
@@ -3255,16 +3259,19 @@
 
 /* 状态项标签 */
 .voice-status-item-label {
-  flex-shrink: 0;
+  flex: 0 1 auto;
+  min-width: 0;
   font-size: 12px;
   color: var(--text-muted);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* 状态项值 */
 .voice-status-item-value {
-  flex: 1;
-  min-width: 0;
+  flex: 0 0 auto;
+  max-width: 50%;
   font-size: 12px;
   font-weight: 600;
   text-align: right;
