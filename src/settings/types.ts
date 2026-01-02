@@ -53,22 +53,6 @@ export const SUPPORTED_LANGUAGES: Record<LanguageCode, LanguageInfo> = {
 } as const;
 
 /**
- * franc ISO 639-3 到 ISO 639-1 映射
- * franc 库使用 ISO 639-3 代码，需要映射到我们使用的 ISO 639-1 代码
- */
-export const FRANC_LANGUAGE_MAP: Record<string, LanguageCode> = {
-  'cmn': 'zh-CN',  // Mandarin Chinese
-  'zho': 'zh-CN',  // Chinese (generic)
-  'eng': 'en',     // English
-  'jpn': 'ja',     // Japanese
-  'kor': 'ko',     // Korean
-  'fra': 'fr',     // French
-  'deu': 'de',     // German
-  'spa': 'es',     // Spanish
-  'rus': 'ru',     // Russian
-};
-
-/**
  * 语言检测结果接口
  */
 export interface DetectionResult {
@@ -77,7 +61,7 @@ export interface DetectionResult {
   /** 置信度 (0-1) */
   confidence: number;
   /** 检测方法 */
-  method: 'franc' | 'llm';
+  method: 'rust' | 'llm';
 }
 
 /**

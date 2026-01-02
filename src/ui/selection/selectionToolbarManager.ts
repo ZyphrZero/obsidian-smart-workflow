@@ -23,6 +23,7 @@ import { SmartWorkflowSettings } from '../../settings/settings';
 import { WritingActionExecutor, WritingActionContext } from '../writing/writingActionExecutor';
 import { TranslationService } from '../../services/translation';
 import { TranslationModal } from '../translation/translationModal';
+import { ServerManager } from '../../services/server/serverManager';
 
 /**
  * 选中文字浮动工具栏管理器
@@ -46,6 +47,9 @@ export class SelectionToolbarManager {
   
   // 翻译服务
   private translationService: TranslationService | null = null;
+  
+  // ServerManager 实例
+  private serverManager: ServerManager | null = null;
   
   // 事件处理器引用
   private boundHandleKeyDown: (e: KeyboardEvent) => void;
@@ -216,6 +220,26 @@ export class SelectionToolbarManager {
     }
     
     debugLog('[SelectionToolbarManager] Settings updated');
+  }
+
+  /**
+   * 设置 ServerManager
+   * 用于启用 Rust 模式的流式处理
+   */
+  setServerManager(serverManager: ServerManager): void {
+    this.serverManager = serverManager;
+    
+    // 更新写作功能执行器
+    if (this.writingActionExecutor) {
+      this.writingActionExecutor.setServerManager(serverManager);
+    }
+    
+    // 更新翻译服务
+    if (this.translationService) {
+      this.translationService.setServerManager(serverManager);
+    }
+    
+    debugLog('[SelectionToolbarManager] ServerManager set');
   }
 
   /**

@@ -1,10 +1,10 @@
-name: Build Rust PTY Server
+name: Build Rust Server
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
   workflow_dispatch:
 
 jobs:
@@ -16,35 +16,26 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Windows x64
           - os: windows-latest
             platform: win32
             arch: x64
             target: x86_64-pc-windows-msvc
             ext: .exe
-            
-          # macOS ARM64 (Apple Silicon)
           - os: macos-latest
             platform: darwin
             arch: arm64
             target: aarch64-apple-darwin
             ext: ''
-            
-          # macOS x64 (Intel)
           - os: macos-latest
             platform: darwin
             arch: x64
             target: x86_64-apple-darwin
             ext: ''
-            
-          # Linux x64
           - os: ubuntu-latest
             platform: linux
             arch: x64
             target: x86_64-unknown-linux-gnu
             ext: ''
-            
-          # Linux ARM64
           - os: ubuntu-latest
             platform: linux
             arch: arm64
@@ -52,21 +43,26 @@ jobs:
             ext: ''
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Rust toolchain
+      - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install cross-compilation tools (Linux ARM64)
+      - name: Install dependencies (Linux ARM64)
         if: matrix.platform == 'linux' && matrix.arch == 'arm64'
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libasound2-dev
 
-      - name: Cache Rust dependencies
+      - name: Install dependencies (Linux x64)
+        if: matrix.platform == 'linux' && matrix.arch == 'x64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev
+
+      - name: Cache Rust
         uses: actions/cache@v3
         with:
           path: |
@@ -74,16 +70,12 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            pty-server/target/
-          key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('pty-server/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-${{ matrix.target }}-
-            ${{ runner.os }}-cargo-
+            rust-servers/target/
+          key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('rust-servers/Cargo.lock') }}
 
-      - name: Build PTY server
-        working-directory: pty-server
+      - name: Build
+        working-directory: rust-servers
         env:
-          # 为 Linux ARM64 设置交叉编译环境变量
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: ${{ matrix.platform == 'linux' && matrix.arch == 'arm64' && 'aarch64-linux-gnu-gcc' || '' }}
         run: cargo build --release --target ${{ matrix.target }}
 
@@ -91,32 +83,22 @@ jobs:
         shell: bash
         run: |
           mkdir -p binaries
-          BINARY_NAME="pty-server-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}"
-          cp "pty-server/target/${{ matrix.target }}/release/pty-server${{ matrix.ext }}" "binaries/${BINARY_NAME}"
-          
-          # Verify binary exists and has reasonable size
-          if [ ! -f "binaries/${BINARY_NAME}" ]; then
-            echo "Error: Binary not found at binaries/${BINARY_NAME}"
-            exit 1
-          fi
+          BINARY_NAME="smart-workflow-server-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}"
+          cp "rust-servers/target/${{ matrix.target }}/release/smart-workflow-server${{ matrix.ext }}" "binaries/${BINARY_NAME}"
           
           SIZE=$(stat -f%z "binaries/${BINARY_NAME}" 2>/dev/null || stat -c%s "binaries/${BINARY_NAME}")
           echo "Binary size: ${SIZE} bytes"
-          
-          if [ ${SIZE} -lt 100000 ]; then
-            echo "Error: Binary size too small (${SIZE} bytes), build may have failed"
-            exit 1
-          fi
+          [ ${SIZE} -lt 100000 ] && exit 1 || true
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pty-server-${{ matrix.platform }}-${{ matrix.arch }}
-          path: binaries/pty-server-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}
+          name: smart-workflow-server-${{ matrix.platform }}-${{ matrix.arch }}
+          path: binaries/smart-workflow-server-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}
           retention-days: 7
 
-  test-binaries:
-    name: Test binaries
+  test:
+    name: Test ${{ matrix.platform }}-${{ matrix.arch }}
     needs: build
     runs-on: ${{ matrix.os }}
     
@@ -141,32 +123,18 @@ jobs:
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
-          name: pty-server-${{ matrix.platform }}-${{ matrix.arch }}
+          name: smart-workflow-server-${{ matrix.platform }}-${{ matrix.arch }}
           path: binaries
 
-      - name: Test binary execution
+      - name: Test binary
         shell: bash
         run: |
-          BINARY_NAME="pty-server-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}"
-          chmod +x "binaries/${BINARY_NAME}" 2>/dev/null || true
+          BINARY="binaries/smart-workflow-server-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}"
+          chmod +x "${BINARY}" 2>/dev/null || true
           
-          # 使用后台进程 + sleep 实现跨平台超时
-          "binaries/${BINARY_NAME}" --port 0 > output.txt 2>&1 &
+          "${BINARY}" --port 0 > output.txt 2>&1 &
           PID=$!
-          
-          # 等待 5 秒
           sleep 5
-          
-          # 终止进程
           kill $PID 2>/dev/null || true
-          wait $PID 2>/dev/null || true
           
-          # 检查输出
-          if grep -q '"port"' output.txt; then
-            echo "✓ Binary successfully outputs port information"
-            cat output.txt
-          else
-            echo "✗ Binary did not output expected port information"
-            cat output.txt
-            exit 1
-          fi
+          grep -q '"port"' output.txt && echo "✓ Server started successfully" || exit 1

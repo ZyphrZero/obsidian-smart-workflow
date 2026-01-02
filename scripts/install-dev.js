@@ -29,6 +29,12 @@ const RESET_CONFIG = args.includes('--reset');
 const SKIP_BUILD = args.includes('--no-build');
 const RUN_CHECK = args.includes('--check');
 
+// Unified server configuration
+const SERVER_CONFIG = {
+  name: 'smart-workflow-server',
+  displayName: 'Smart Workflow Server'
+};
+
 // Color output
 const colors = {
   reset: '\x1b[0m',
@@ -112,22 +118,45 @@ function killObsidian() {
   }
 }
 
-// Kill PTY server process
-function killPtyServer() {
+// Kill unified server process
+function killUnifiedServer() {
   const platform = getPlatform();
+  const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
+  
   try {
     if (platform === 'windows') {
-      // 终止所有 pty-server 进程
-      execSync('taskkill /F /IM pty-server-win32-x64.exe 2>nul', { stdio: 'ignore' });
+      execSync(`taskkill /F /IM smart-workflow-server-win32-${arch}.exe 2>nul`, { stdio: 'ignore' });
     } else if (platform === 'macos') {
-      execSync('pkill -f pty-server-darwin 2>/dev/null || true', { stdio: 'ignore' });
+      execSync('pkill -f smart-workflow-server-darwin 2>/dev/null || true', { stdio: 'ignore' });
     } else {
-      execSync('pkill -f pty-server-linux 2>/dev/null || true', { stdio: 'ignore' });
+      execSync('pkill -f smart-workflow-server-linux 2>/dev/null || true', { stdio: 'ignore' });
     }
-    log('  ✓ PTY server process terminated', 'green');
+    log('  ✓ Unified server process terminated', 'green');
     return true;
   } catch (e) {
-    // 进程可能不存在，忽略错误
+    // Process may not exist, ignore error
+    return false;
+  }
+}
+
+// Kill legacy server processes (for cleanup)
+function killLegacyServers() {
+  const platform = getPlatform();
+  const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
+  
+  try {
+    if (platform === 'windows') {
+      execSync(`taskkill /F /IM pty-server-win32-${arch}.exe 2>nul`, { stdio: 'ignore' });
+      execSync(`taskkill /F /IM voice-server-win32-${arch}.exe 2>nul`, { stdio: 'ignore' });
+    } else if (platform === 'macos') {
+      execSync('pkill -f pty-server-darwin 2>/dev/null || true', { stdio: 'ignore' });
+      execSync('pkill -f voice-server-darwin 2>/dev/null || true', { stdio: 'ignore' });
+    } else {
+      execSync('pkill -f pty-server-linux 2>/dev/null || true', { stdio: 'ignore' });
+      execSync('pkill -f voice-server-linux 2>/dev/null || true', { stdio: 'ignore' });
+    }
+    return true;
+  } catch (e) {
     return false;
   }
 }
@@ -220,6 +249,20 @@ function question(query) {
   return new Promise(resolve => getReadline().question(query, resolve));
 }
 
+// Get binary name for current platform
+function getBinaryName() {
+  const platform = getPlatform();
+  const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
+  
+  if (platform === 'windows') {
+    return `${SERVER_CONFIG.name}-win32-${arch}.exe`;
+  } else if (platform === 'macos') {
+    return `${SERVER_CONFIG.name}-darwin-${arch}`;
+  } else {
+    return `${SERVER_CONFIG.name}-linux-${arch}`;
+  }
+}
+
 async function main() {
   log('\n📦 Obsidian Plugin Development Install Tool\n', 'cyan');
   log('   ⚠️  WARNING: Will OVERWRITE existing files by default!', 'yellow');
@@ -286,17 +329,7 @@ async function main() {
   // 1. Check required files
   log('🔍 Checking required files...', 'cyan');
   
-  const platform = getPlatform();
-  const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
-  let binaryName;
-  if (platform === 'windows') {
-    binaryName = `pty-server-win32-${arch}.exe`;
-  } else if (platform === 'macos') {
-    binaryName = `pty-server-darwin-${arch}`;
-  } else {
-    binaryName = `pty-server-linux-${arch}`;
-  }
-
+  const binaryName = getBinaryName();
   const requiredFiles = [
     'main.js',
     'manifest.json',
@@ -305,6 +338,7 @@ async function main() {
   ];
 
   const missingFiles = [];
+  
   for (const file of requiredFiles) {
     const filePath = path.join(ROOT_DIR, file);
     if (!fs.existsSync(filePath)) {
@@ -391,13 +425,14 @@ async function main() {
 
   // 4. If needed, close Obsidian
   if (KILL_OBSIDIAN && isObsidianRunning()) {
-    log('\n🔄 Closing Obsidian process...', 'cyan');
+    log('\n�a Closing Obsidian process...', 'cyan');
     killObsidian();
   }
 
-  // 4.5. Kill PTY server process to release file locks
-  log('\n🔄 Terminating PTY server process...', 'cyan');
-  killPtyServer();
+  // 4.5. Kill server processes to release file locks
+  log('\n🔄 Terminating server processes...', 'cyan');
+  killUnifiedServer();
+  killLegacyServers(); // Also kill legacy servers for cleanup
 
   // 5. Copy files
   log('\n📋 Copying files...', 'cyan');
@@ -421,8 +456,9 @@ async function main() {
     fs.mkdirSync(binariesDir, { recursive: true });
   }
 
+  // Copy unified server binary
   const binaryFiles = fs.readdirSync(path.join(ROOT_DIR, 'binaries'))
-    .filter(f => f.startsWith('pty-server-') && !f.endsWith('.md'));
+    .filter(f => f.startsWith('smart-workflow-server-') && !f.endsWith('.md') && !f.endsWith('.sha256'));
 
   let hasLockedFile = false;
   for (const file of binaryFiles) {
@@ -431,12 +467,38 @@ async function main() {
     try {
       await copyFileWithRetry(srcPath, destPath);
       log(`  ✓ binaries/${file}`, 'green');
+      
+      // Also copy SHA256 file if exists
+      const sha256Src = `${srcPath}.sha256`;
+      if (fs.existsSync(sha256Src)) {
+        fs.copyFileSync(sha256Src, `${destPath}.sha256`);
+      }
     } catch (error) {
       if (error.code === 'EBUSY' || error.code === 'EPERM') {
         hasLockedFile = true;
         log(`  ❌ binaries/${file}: File locked`, 'red');
       } else {
         log(`  ❌ binaries/${file}: ${error.message}`, 'red');
+      }
+    }
+  }
+
+  // Clean up legacy binaries in target directory
+  const legacyPatterns = [/^pty-server-/, /^voice-server-/];
+  const targetBinariesDir = path.join(targetDir, 'binaries');
+  if (fs.existsSync(targetBinariesDir)) {
+    const existingFiles = fs.readdirSync(targetBinariesDir);
+    for (const file of existingFiles) {
+      for (const pattern of legacyPatterns) {
+        if (pattern.test(file)) {
+          try {
+            fs.unlinkSync(path.join(targetBinariesDir, file));
+            log(`  🗑️  Removed legacy: binaries/${file}`, 'yellow');
+          } catch (e) {
+            // Ignore errors
+          }
+          break;
+        }
       }
     }
   }

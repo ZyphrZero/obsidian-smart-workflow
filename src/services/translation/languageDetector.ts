@@ -1,31 +1,32 @@
 /**
  * LanguageDetector - 语言检测服务
- * 支持本地 franc 检测和可选的 LLM 检测
+ * 使用 Rust 端 Utils 模块进行语言检测，支持可选的 LLM 检测
  * 
  * 检测策略：
- * 1. 优先使用 franc 库进行本地快速检测
- * 2. 当 franc 置信度低于阈值时，可选使用 LLM 进行验证
- * 3. 检测失败时返回 'und' (undetermined)
+ * 1. 优先使用 Rust 端 whatlang 库进行本地快速检测
+ * 2. 当置信度低于阈值时，可选使用 LLM 进行验证
+ * 3. 检测失败时返回 'en' (默认英语)
+ * 
  */
 
-import { franc } from 'franc-min';
 import {
   DetectionResult,
   LanguageDetectorOptions,
   LanguageCode,
-  FRANC_LANGUAGE_MAP,
   SUPPORTED_LANGUAGES,
 } from '../../settings/types';
 import { AIClient } from '../ai';
 import { Provider, ModelConfig } from '../../settings/settings';
 import { debugLog } from '../../utils/logger';
+import { ServerManager } from '../server/serverManager';
+import { LanguageDetectionResult } from '../server/types';
 
 /**
  * 语言检测错误类
  */
 export class LanguageDetectionError extends Error {
   constructor(
-    public method: 'franc' | 'llm',
+    public method: 'rust' | 'llm',
     public originalError?: Error
   ) {
     super(`Language detection failed using ${method}`);
@@ -50,6 +51,7 @@ export class LanguageDetector {
   private options: LanguageDetectorOptions;
   private llmConfig: LLMDetectionConfig | null = null;
   private aiClient: AIClient | null = null;
+  private serverManager: ServerManager | null = null;
 
   /**
    * 构造函数
@@ -57,6 +59,14 @@ export class LanguageDetector {
    */
   constructor(options: LanguageDetectorOptions) {
     this.options = options;
+  }
+
+  /**
+   * 设置 ServerManager
+   * @param serverManager ServerManager 实例
+   */
+  setServerManager(serverManager: ServerManager): void {
+    this.serverManager = serverManager;
   }
 
   /**
@@ -69,7 +79,7 @@ export class LanguageDetector {
 
   /**
    * 检测语言（主方法）
-   * 整合 franc 检测和可选的 LLM 检测
+   * 整合 Rust 端检测和可选的 LLM 检测
    * @param text 待检测文本
    * @returns 检测结果
    */
@@ -77,23 +87,23 @@ export class LanguageDetector {
     // 文本预处理：去除首尾空白
     const trimmedText = text.trim();
     
-    // 空文本直接返回未知
+    // 空文本直接返回默认值
     if (!trimmedText) {
       return {
         language: 'en' as LanguageCode, // 默认英语
         confidence: 0,
-        method: 'franc',
+        method: 'rust',
       };
     }
 
-    // 1. 首先使用 franc 进行本地检测
-    const francResult = this.detectWithFranc(trimmedText);
+    // 1. 首先使用 Rust 端进行本地检测
+    const rustResult = await this.detectWithRust(trimmedText);
     
-    debugLog(`[LanguageDetector] Franc 检测结果: ${francResult.language}, 置信度: ${francResult.confidence}`);
+    debugLog(`[LanguageDetector] Rust 检测结果: ${rustResult.language}, 置信度: ${rustResult.confidence}`);
 
-    // 2. 如果 franc 置信度足够高，直接返回
-    if (francResult.confidence >= this.options.llmConfidenceThreshold) {
-      return francResult;
+    // 2. 如果 Rust 置信度足够高，直接返回
+    if (rustResult.confidence >= this.options.llmConfidenceThreshold) {
+      return rustResult;
     }
 
     // 3. 如果启用了 LLM 检测且置信度不足，使用 LLM 验证
@@ -103,54 +113,56 @@ export class LanguageDetector {
         debugLog(`[LanguageDetector] LLM 检测结果: ${llmResult.language}, 置信度: ${llmResult.confidence}`);
         return llmResult;
       } catch (error) {
-        // LLM 检测失败，回退到 franc 结果
-        debugLog(`[LanguageDetector] LLM 检测失败，回退到 franc 结果: ${error}`);
-        return francResult;
+        // LLM 检测失败，回退到 Rust 结果
+        debugLog(`[LanguageDetector] LLM 检测失败，回退到 Rust 结果: ${error}`);
+        return rustResult;
       }
     }
 
-    // 4. 未启用 LLM 检测，返回 franc 结果
-    return francResult;
+    // 4. 未启用 LLM 检测，返回 Rust 结果
+    return rustResult;
   }
 
   /**
-   * 使用 franc 进行本地语言检测
+   * 使用 Rust 端进行语言检测
+   * 通过 ServerManager.utils() 调用 Rust 端的 whatlang 库
    * @param text 待检测文本
    * @returns 检测结果
    */
-  detectWithFranc(text: string): DetectionResult {
+  async detectWithRust(text: string): Promise<DetectionResult> {
     try {
-      // franc 返回 ISO 639-3 代码
-      const francCode = franc(text);
-      
-      // 处理 franc 返回 'und' (undetermined) 的情况
-      if (francCode === 'und') {
+      // 检查 ServerManager 是否可用
+      if (!this.serverManager) {
+        debugLog('[LanguageDetector] ServerManager 未设置，返回默认值');
         return {
-          language: 'en' as LanguageCode, // 默认英语
+          language: 'en' as LanguageCode,
           confidence: 0,
-          method: 'franc',
+          method: 'rust',
         };
       }
 
-      // 映射到 ISO 639-1 代码
-      const languageCode = this.mapFrancCode(francCode);
-      
-      // 计算置信度
-      // franc-min 不直接返回置信度，我们基于文本长度和检测结果估算
-      const confidence = this.estimateFrancConfidence(text, francCode);
+      // 确保服务器运行
+      await this.serverManager.ensureServer();
+
+      // 调用 Rust 端语言检测
+      const utilsClient = this.serverManager.utils();
+      const result: LanguageDetectionResult = await utilsClient.detectLanguage(text);
+
+      // 映射 Rust 端结果到我们的格式
+      const languageCode = this.mapRustLanguageCode(result.language, result.is_simplified);
 
       return {
         language: languageCode,
-        confidence,
-        method: 'franc',
+        confidence: result.confidence,
+        method: 'rust',
       };
     } catch (error) {
-      debugLog(`[LanguageDetector] Franc 检测异常: ${error}`);
+      debugLog(`[LanguageDetector] Rust 检测异常: ${error}`);
       // 检测失败，返回默认值
       return {
         language: 'en' as LanguageCode,
         confidence: 0,
-        method: 'franc',
+        method: 'rust',
       };
     }
   }
@@ -209,57 +221,56 @@ export class LanguageDetector {
   // ============================================================================
 
   /**
-   * 将 franc ISO 639-3 代码映射到 ISO 639-1 代码
-   * @param francCode franc 返回的 ISO 639-3 代码
+   * 将 Rust 端语言代码映射到我们的 LanguageCode
+   * @param rustCode Rust 端返回的语言代码
+   * @param isSimplified 是否为简体中文（仅对中文有效）
    * @returns ISO 639-1 语言代码
    */
-  private mapFrancCode(francCode: string): LanguageCode {
+  private mapRustLanguageCode(rustCode: string, isSimplified?: boolean): LanguageCode {
+    // Rust 端 whatlang 返回的语言代码映射
+    const rustLanguageMap: Record<string, LanguageCode> = {
+      'cmn': 'zh-CN',  // Mandarin Chinese
+      'zho': 'zh-CN',  // Chinese (generic)
+      'zh': 'zh-CN',   // Chinese
+      'eng': 'en',     // English
+      'en': 'en',      // English
+      'jpn': 'ja',     // Japanese
+      'ja': 'ja',      // Japanese
+      'kor': 'ko',     // Korean
+      'ko': 'ko',      // Korean
+      'fra': 'fr',     // French
+      'fr': 'fr',      // French
+      'deu': 'de',     // German
+      'de': 'de',      // German
+      'spa': 'es',     // Spanish
+      'es': 'es',      // Spanish
+      'rus': 'ru',     // Russian
+      'ru': 'ru',      // Russian
+    };
+
     // 查找映射
-    const mapped = FRANC_LANGUAGE_MAP[francCode];
-    
+    const lowerCode = rustCode.toLowerCase();
+    let mapped = rustLanguageMap[lowerCode];
+
+    // 如果是中文，根据 is_simplified 区分简繁体
+    if (mapped === 'zh-CN' || lowerCode === 'zh' || lowerCode === 'cmn' || lowerCode === 'zho') {
+      if (isSimplified === false) {
+        return 'zh-TW';
+      }
+      return 'zh-CN';
+    }
+
     if (mapped) {
       return mapped;
     }
 
-    // 未找到映射，检查是否是已支持的语言代码
-    if (francCode in SUPPORTED_LANGUAGES) {
-      return francCode as LanguageCode;
+    // 检查是否是已支持的语言代码
+    if (lowerCode in SUPPORTED_LANGUAGES) {
+      return lowerCode as LanguageCode;
     }
 
     // 默认返回英语
     return 'en' as LanguageCode;
-  }
-
-  /**
-   * 估算 franc 检测的置信度
-   * franc-min 不直接返回置信度，我们基于以下因素估算：
-   * 1. 文本长度（越长越准确）
-   * 2. 是否为支持的语言
-   * @param text 原始文本
-   * @param francCode franc 返回的代码
-   * @returns 估算的置信度 (0-1)
-   */
-  private estimateFrancConfidence(text: string, francCode: string): number {
-    // 基础置信度
-    let confidence = 0.5;
-
-    // 文本长度因素
-    const textLength = text.length;
-    if (textLength >= 100) {
-      confidence += 0.3;
-    } else if (textLength >= 50) {
-      confidence += 0.2;
-    } else if (textLength >= 20) {
-      confidence += 0.1;
-    }
-
-    // 是否为支持的语言
-    if (francCode in FRANC_LANGUAGE_MAP) {
-      confidence += 0.1;
-    }
-
-    // 确保置信度在 0-1 范围内
-    return Math.min(1, Math.max(0, confidence));
   }
 
   /**

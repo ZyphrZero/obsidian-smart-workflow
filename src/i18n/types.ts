@@ -27,6 +27,8 @@ export interface TranslationKeys {
     warning: string;
     info: string;
     auto: string;
+    enabled: string;
+    disabled: string;
   };
 
   // 插件信息
@@ -50,6 +52,10 @@ export interface TranslationKeys {
     terminalSplitHorizontal: string;
     terminalSplitVertical: string;
     terminalClearBuffer: string;
+    // 语音输入命令
+    voiceDictation: string;
+    voiceAssistant: string;
+    voiceCancel: string;
   };
 
   // 菜单
@@ -140,6 +146,7 @@ export interface TranslationKeys {
       general: string;
       naming: string;
       writing: string;
+      voice: string;
       terminal: string;
       advanced: string;
     };
@@ -342,6 +349,8 @@ export interface TranslationKeys {
     providerEdit: {
       titleAdd: string;
       titleEdit: string;
+      preset: string;
+      presetDesc: string;
       name: string;
       nameDesc: string;
       namePlaceholder: string;
@@ -351,6 +360,28 @@ export interface TranslationKeys {
       endpointRequired: string;
       apiKey: string;
       apiKeyDesc: string;
+      apiKeyPlaceholder: string;
+      manageKeys: string;
+      multiKeyCount: string;
+    };
+    apiKeyManager: {
+      title: string;
+      desc: string;
+      keyCount: string;
+      addKey: string;
+      keyEmpty: string;
+      keyDuplicate: string;
+      importHint: string;
+      moveUp: string;
+      moveDown: string;
+      checkHealth: string;
+      checkAll: string;
+      checkingAll: string;
+      checkAllResult: string;
+      statusUnknown: string;
+      statusChecking: string;
+      statusHealthy: string;
+      statusUnhealthy: string;
     };
     // 模型编辑弹窗
     modelEdit: {
@@ -513,26 +544,6 @@ export interface TranslationKeys {
     processNotStarted: string;
     portInfoTimeout: string;
     startFailedWithCode: string;
-  };
-
-  // 二进制管理器
-  binaryManager: {
-    unsupportedOS: string;
-    unsupportedArch: string;
-    builtinBinaryMissing: string;
-    cannotGetBinary: string;
-    cannotCreateCacheDir: string;
-    downloadingBinary: string;
-    downloadProgress: string;
-    downloadComplete: string;
-    checksumFailed: string;
-    downloadFailed: string;
-    downloadRetrying: string;
-    redirectUrlEmpty: string;
-    downloadTimeout: string;
-    checksumDownloadFailed: string;
-    checksumDownloadTimeout: string;
-    cannotSetPermission: string;
   };
 
   // 模型类型
@@ -754,6 +765,221 @@ export interface TranslationKeys {
       defaultTargetLanguageDesc: string;
       showOriginalByDefault: string;
       showOriginalByDefaultDesc: string;
+    };
+  };
+
+  // 语音输入功能
+  voiceInput: {
+    // 错误消息
+    noActiveEditor: string;
+    alreadyRecording: string;
+    notRecording: string;
+    serviceDestroyed: string;
+    serverNotRunning: string;
+    connectionTimeout: string;
+    connectionError: string;
+    connectionLost: string;
+    transcriptionTimeout: string;
+    // 成功消息
+    textInserted: string;
+    textReplaced: string;
+    // 空语音命令
+    emptyVoiceCommand: string;
+    // 悬浮窗状态
+    recording: string;
+    processing: string;
+    success: string;
+    cancel: string;
+    finish: string;
+  };
+
+  // 语音错误处理
+  voiceError: {
+    // 通用错误
+    unknown: string;
+    // 录音错误
+    microphoneUnavailable: string;
+    permissionDenied: string;
+    deviceError: string;
+    alreadyRecording: string;
+    // ASR 错误
+    asrNetworkError: string;
+    asrAuthFailed: string;
+    asrQuotaExceeded: string;
+    asrInvalidAudio: string;
+    asrTimeout: string;
+    asrAllFailed: string;
+    // 服务器错误
+    serverNotRunning: string;
+    connectionLost: string;
+    invalidMessage: string;
+    // LLM 处理失败对话框
+    llmFailed: {
+      title: string;
+      rawTextLabel: string;
+      hint: string;
+      useRawText: string;
+      retry: string;
+    };
+  };
+
+  // 语音设置
+  voice: {
+    settings: {
+      // 基本设置
+      title: string;
+      titleDesc: string;
+      enabled: string;
+      enabledDesc: string;
+      
+      // ASR 配置
+      asrConfig: string;
+      asrConfigDesc: string;
+      defaultRecordingMode: string;
+      defaultRecordingModeDesc: string;
+      primaryASR: string;
+      primaryASRDesc: string;
+      backupASR: string;
+      backupASRDesc: string;
+      noBackup: string;
+      asrMode: string;
+      asrModeDesc: string;
+      asrModeHttpOnly: string;
+      asrModeRealtime: string;
+      asrModeRealtimeDesc: string;
+      asrModeHttp: string;
+      asrModeHttpDesc: string;
+      enableFallback: string;
+      enableFallbackDesc: string;
+      
+      // 文本处理
+      removeTrailingPunctuation: string;
+      removeTrailingPunctuationDesc: string;
+      
+      // API Key 输入
+      apiKeyGuide: string;
+      currentModel: string;
+      dashscopeApiKey: string;
+      dashscopeApiKeyDesc: string;
+      doubaoAppId: string;
+      doubaoAppIdDesc: string;
+      doubaoAccessToken: string;
+      doubaoAccessTokenDesc: string;
+      siliconflowApiKey: string;
+      siliconflowApiKeyDesc: string;
+      siliconflowExistingHint: string;
+      siliconflowNoProviderHint: string;
+      useSiliconflowFromProvider: string;
+      useSiliconflowFromProviderDesc: string;
+      apiKeyPlaceholder: string;
+      appIdPlaceholder: string;
+      accessTokenPlaceholder: string;
+      
+      // LLM 后处理
+      llmPostProcessing: string;
+      llmPostProcessingDesc: string;
+      enableLLMPostProcessing: string;
+      enableLLMPostProcessingDesc: string;
+      useExistingProvider: string;
+      useExistingProviderDesc: string;
+      selectProviderModel: string;
+      selectProviderModelDesc: string;
+      llmEndpoint: string;
+      llmEndpointDesc: string;
+      llmModel: string;
+      llmModelDesc: string;
+      llmApiKey: string;
+      llmApiKeyDesc: string;
+      
+      // 预设管理
+      presetManagement: string;
+      presetManagementDesc: string;
+      activePreset: string;
+      activePresetDesc: string;
+      addPreset: string;
+      newPresetName: string;
+      resetPresets: string;
+      presetsReset: string;
+      presetName: string;
+      presetSystemPrompt: string;
+      presetSystemPromptDesc: string;
+      
+      // AI 助手配置
+      assistantConfig: string;
+      assistantConfigDesc: string;
+      enableAssistant: string;
+      enableAssistantDesc: string;
+      useExistingProviderForAssistant: string;
+      useExistingProviderForAssistantDesc: string;
+      qaSystemPrompt: string;
+      qaSystemPromptDesc: string;
+      resetQaPrompt: string;
+      textProcessingSystemPrompt: string;
+      textProcessingSystemPromptDesc: string;
+      resetTextProcessingPrompt: string;
+      
+      // 其他设置
+      otherSettings: string;
+      otherSettingsDesc: string;
+      enableAudioFeedback: string;
+      enableAudioFeedbackDesc: string;
+      overlayPosition: string;
+      overlayPositionDesc: string;
+      
+      // 历史记录
+      historyTitle: string;
+      historyDesc: string;
+      historySearch: string;
+      historySearchPlaceholder: string;
+      clearHistory: string;
+      historyCleared: string;
+      historyEmpty: string;
+      historyNoResults: string;
+      historyMore: string;
+      copyToClipboard: string;
+      copiedToClipboard: string;
+      viewOriginal: string;
+      originalTextLabel: string;
+      processedTextLabel: string;
+      modeDictation: string;
+      modeAssistant: string;
+      yesterday: string;
+      daysAgo: string;
+      
+      // 快捷键配置
+      hotkeyConfig: string;
+      hotkeyConfigDesc: string;
+      hotkeyInfo: string;
+      dictationCommand: string;
+      dictationCommandDesc: string;
+      assistantCommand: string;
+      assistantCommandDesc: string;
+      cancelCommand: string;
+      cancelCommandDesc: string;
+      openHotkeySettings: string;
+      noHotkeySet: string;
+      notEnabled: string;
+      pressKey: string;
+      resetHotkey: string;
+    };
+    // 状态表盘
+    dashboard: {
+      asrTitle: string;
+      primaryModel: string;
+      backupModel: string;
+      asrMode: string;
+      removePunctuation: string;
+      notConfigured: string;
+      llmTitle: string;
+      activePreset: string;
+      llmModel: string;
+      llmDisabledHint: string;
+      assistantTitle: string;
+      assistantModel: string;
+      qaMode: string;
+      textProcessMode: string;
+      supported: string;
+      assistantDisabledHint: string;
     };
   };
 }

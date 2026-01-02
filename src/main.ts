@@ -10,6 +10,18 @@ import { SelectionToolbarManager } from './ui/selection';
 import { setDebugMode, debugLog, errorLog } from './utils/logger';
 import { i18n, t } from './i18n';
 import * as path from 'path';
+import { ServerManager } from './services/server/serverManager';
+
+// 语音输入服务
+import { VoiceInputService } from './services/voice/voiceInputService';
+import { VoiceOverlay } from './ui/voice/voiceOverlay';
+import { TextInserter } from './services/voice/textInserter';
+import { LLMPostProcessor } from './services/voice/llmPostProcessor';
+import { AssistantProcessor } from './services/voice/assistantProcessor';
+import { ConfigManager } from './services/config/configManager';
+import { HistoryManager } from './services/voice/historyManager';
+import { LLMProcessingError } from './services/voice/types';
+import { VoiceErrorHandler, isLLMProcessingError } from './services/voice/voiceErrorHandler';
 
 // 导入选择工具栏样式
 import './ui/selection/selectionToolbar.css';
@@ -112,12 +124,41 @@ export default class SmartWorkflowPlugin extends Plugin {
   generatingFiles: Set<string> = new Set();
   
   // 延迟初始化的服务
+  private _serverManager: ServerManager | null = null;
   private _terminalService: TerminalService | null = null;
   private _selectionToolbarManager: SelectionToolbarManager | null = null;
+  
+  // 语音输入服务（延迟初始化）
+  private _voiceInputService: VoiceInputService | null = null;
+  private _voiceOverlay: VoiceOverlay | null = null;
+  private _textInserter: TextInserter | null = null;
+  private _llmPostProcessor: LLMPostProcessor | null = null;
+  private _assistantProcessor: AssistantProcessor | null = null;
+  private _configManager: ConfigManager | null = null;
+  private _historyManager: HistoryManager | null = null;
+  private _voiceErrorHandler: VoiceErrorHandler | null = null;
   
   // Ribbon 图标引用
   private aiNamingRibbonIcon: HTMLElement | null = null;
   private terminalRibbonIcon: HTMLElement | null = null;
+  private voiceInputRibbonIcon: HTMLElement | null = null;
+
+  // 按住模式相关
+  private pressModekeyupHandler: ((e: KeyboardEvent) => void) | null = null;
+  private currentVoiceCommandId: string | null = null;
+
+  /**
+   * 获取统一服务器管理器（延迟初始化）
+   */
+  get serverManager(): ServerManager {
+    if (!this._serverManager) {
+      debugLog('[SmartWorkflowPlugin] Initializing ServerManager...');
+      const pluginDir = this.getPluginDir();
+      this._serverManager = new ServerManager(pluginDir);
+      debugLog('[SmartWorkflowPlugin] ServerManager initialized');
+    }
+    return this._serverManager;
+  }
 
   /**
    * 获取终端服务（延迟初始化）
@@ -125,8 +166,7 @@ export default class SmartWorkflowPlugin extends Plugin {
   get terminalService(): TerminalService {
     if (!this._terminalService) {
       debugLog('[SmartWorkflowPlugin] Initializing Terminal Service...');
-      const pluginDir = this.getPluginDir();
-      this._terminalService = new TerminalService(this.app, this.settings.terminal, pluginDir);
+      this._terminalService = new TerminalService(this.app, this.settings.terminal, this.serverManager);
       debugLog('[SmartWorkflowPlugin] Terminal Service initialized');
     }
     return this._terminalService;
@@ -144,10 +184,123 @@ export default class SmartWorkflowPlugin extends Plugin {
         this.settings,
         () => this.saveSettings()
       );
+      // 设置 ServerManager 以启用 Rust 模式流式处理
+      this._selectionToolbarManager.setServerManager(this.serverManager);
       this._selectionToolbarManager.initialize();
       debugLog('[SmartWorkflowPlugin] Selection Toolbar initialized');
     }
     return this._selectionToolbarManager;
+  }
+
+  /**
+   * 获取配置管理器（延迟初始化）
+   */
+  get configManager(): ConfigManager {
+    if (!this._configManager) {
+      debugLog('[SmartWorkflowPlugin] Initializing ConfigManager...');
+      this._configManager = new ConfigManager(this.settings, () => this.saveSettings());
+      debugLog('[SmartWorkflowPlugin] ConfigManager initialized');
+    }
+    return this._configManager;
+  }
+
+  /**
+   * 获取语音输入服务（延迟初始化）
+   * 
+   * 使用统一的 ServerManager
+
+   */
+  get voiceInputService(): VoiceInputService {
+    if (!this._voiceInputService) {
+      debugLog('[SmartWorkflowPlugin] Initializing VoiceInputService...');
+      // 使用统一的 ServerManager 而不是 VoiceServerManager
+      this._voiceInputService = new VoiceInputService(
+        this.app,
+        this.settings.voice,
+        this.serverManager
+      );
+      
+      // 注入依赖
+      this._voiceInputService.setLLMPostProcessor(this.llmPostProcessor);
+      this._voiceInputService.setTextInserter(this.textInserter);
+      
+      debugLog('[SmartWorkflowPlugin] VoiceInputService initialized');
+    }
+    return this._voiceInputService;
+  }
+
+  /**
+   * 获取语音悬浮窗（延迟初始化）
+   */
+  get voiceOverlay(): VoiceOverlay {
+    if (!this._voiceOverlay) {
+      debugLog('[SmartWorkflowPlugin] Initializing VoiceOverlay...');
+      this._voiceOverlay = new VoiceOverlay(this.app, {
+        position: this.settings.voice.overlayPosition,
+      });
+      debugLog('[SmartWorkflowPlugin] VoiceOverlay initialized');
+    }
+    return this._voiceOverlay;
+  }
+
+  /**
+   * 获取文本插入器（延迟初始化）
+   */
+  get textInserter(): TextInserter {
+    if (!this._textInserter) {
+      debugLog('[SmartWorkflowPlugin] Initializing TextInserter...');
+      this._textInserter = new TextInserter(this.app);
+      debugLog('[SmartWorkflowPlugin] TextInserter initialized');
+    }
+    return this._textInserter;
+  }
+
+  /**
+   * 获取 LLM 后处理器（延迟初始化）
+   */
+  get llmPostProcessor(): LLMPostProcessor {
+    if (!this._llmPostProcessor) {
+      debugLog('[SmartWorkflowPlugin] Initializing LLMPostProcessor...');
+      this._llmPostProcessor = new LLMPostProcessor(this.settings, this.configManager);
+      debugLog('[SmartWorkflowPlugin] LLMPostProcessor initialized');
+    }
+    return this._llmPostProcessor;
+  }
+
+  /**
+   * 获取 AI 助手处理器（延迟初始化）
+   */
+  get assistantProcessor(): AssistantProcessor {
+    if (!this._assistantProcessor) {
+      debugLog('[SmartWorkflowPlugin] Initializing AssistantProcessor...');
+      this._assistantProcessor = new AssistantProcessor(this.settings, this.configManager);
+      debugLog('[SmartWorkflowPlugin] AssistantProcessor initialized');
+    }
+    return this._assistantProcessor;
+  }
+
+  /**
+   * 获取历史记录管理器（延迟初始化）
+   */
+  get historyManager(): HistoryManager {
+    if (!this._historyManager) {
+      debugLog('[SmartWorkflowPlugin] Initializing HistoryManager...');
+      this._historyManager = new HistoryManager(this.app);
+      debugLog('[SmartWorkflowPlugin] HistoryManager initialized');
+    }
+    return this._historyManager;
+  }
+
+  /**
+   * 获取语音错误处理器（延迟初始化）
+   */
+  get voiceErrorHandler(): VoiceErrorHandler {
+    if (!this._voiceErrorHandler) {
+      debugLog('[SmartWorkflowPlugin] Initializing VoiceErrorHandler...');
+      this._voiceErrorHandler = new VoiceErrorHandler(this.app);
+      debugLog('[SmartWorkflowPlugin] VoiceErrorHandler initialized');
+    }
+    return this._voiceErrorHandler;
   }
 
 
@@ -270,7 +423,7 @@ export default class SmartWorkflowPlugin extends Plugin {
         if (terminal) {
           if (!checking) {
             navigator.clipboard.readText().then(text => {
-              if (text) terminal.sendMessage(text);
+              if (text) terminal.write(text);
             });
           }
           return true;
@@ -379,7 +532,62 @@ export default class SmartWorkflowPlugin extends Plugin {
       }
     });
 
-    // 添加编辑器右键菜单
+    // ========================================================================
+    // 语音输入命令注册
+    // 注意：命令始终注册，不依赖 enabled 设置，这样用户可以先设置快捷键
+    // ========================================================================
+
+    // 语音听写命令
+    this.addCommand({
+      id: 'voice-dictation',
+      name: t('commands.voiceDictation'),
+      callback: async () => {
+        if (!this.settings.voice.enabled) {
+          NoticeHelper.warning(t('voice.settings.notEnabled'));
+          return;
+        }
+        // 如果已在录音中，则停止录音（支持 toggle 行为）
+        if (this._voiceInputService?.isRecording()) {
+          await this.finishVoiceRecording();
+          return;
+        }
+        await this.handleVoiceDictation();
+      }
+    });
+
+    // 语音助手命令
+    this.addCommand({
+      id: 'voice-assistant',
+      name: t('commands.voiceAssistant'),
+      callback: async () => {
+        if (!this.settings.voice.enabled) {
+          NoticeHelper.warning(t('voice.settings.notEnabled'));
+          return;
+        }
+        // 如果已在录音中，则停止录音（支持 toggle 行为）
+        if (this._voiceInputService?.isRecording()) {
+          await this.finishVoiceRecording();
+          return;
+        }
+        await this.handleVoiceAssistant();
+      }
+    });
+
+    // 取消录音命令
+    this.addCommand({
+      id: 'voice-cancel',
+      name: t('commands.voiceCancel'),
+      checkCallback: (checking: boolean) => {
+        // 只有在录音中时才显示此命令
+        if (this._voiceInputService?.isRecording()) {
+          if (!checking) {
+            this.cancelVoiceRecording();
+          }
+          return true;
+        }
+        return false;
+      }
+    });    // 添加编辑器右键菜单
     if (this.settings.featureVisibility.aiNaming.showInEditorMenu) {
       this.registerEvent(
         this.app.workspace.on('editor-menu', (menu: Menu, _editor, _view) => {
@@ -622,10 +830,6 @@ export default class SmartWorkflowPlugin extends Plugin {
       selectionToolbar: {
         ...DEFAULT_SETTINGS.selectionToolbar,
         ...loaded.selectionToolbar,
-        actions: {
-          ...DEFAULT_SETTINGS.selectionToolbar.actions,
-          ...loaded.selectionToolbar?.actions
-        },
         // 合并 buttonConfigs，保留用户自定义配置
         buttonConfigs: this.mergeButtonConfigs(
           DEFAULT_SETTINGS.selectionToolbar.buttonConfigs,
@@ -639,6 +843,24 @@ export default class SmartWorkflowPlugin extends Plugin {
         actions: {
           ...DEFAULT_SETTINGS.writing.actions,
           ...loaded.writing?.actions
+        }
+      },
+      // 语音输入设置深度合并
+      voice: {
+        ...DEFAULT_SETTINGS.voice,
+        ...loaded.voice,
+        primaryASR: {
+          ...DEFAULT_SETTINGS.voice.primaryASR,
+          ...loaded.voice?.primaryASR
+        },
+        backupASR: loaded.voice?.backupASR ? {
+          ...DEFAULT_SETTINGS.voice.backupASR,
+          ...loaded.voice.backupASR
+        } : DEFAULT_SETTINGS.voice.backupASR,
+        llmPresets: loaded.voice?.llmPresets || DEFAULT_SETTINGS.voice.llmPresets,
+        assistantConfig: {
+          ...DEFAULT_SETTINGS.voice.assistantConfig,
+          ...loaded.voice?.assistantConfig
         }
       }
     };
@@ -728,6 +950,28 @@ export default class SmartWorkflowPlugin extends Plugin {
     if (this._selectionToolbarManager) {
       this._selectionToolbarManager.updateSettings(this.settings.selectionToolbar, this.settings);
     }
+
+    // 更新语音输入服务的设置（仅当已初始化时）
+    if (this._voiceInputService) {
+      this._voiceInputService.updateSettings(this.settings.voice);
+    }
+
+    // 更新 LLM 后处理器的设置（仅当已初始化时）
+    if (this._llmPostProcessor) {
+      this._llmPostProcessor.updateSettings(this.settings);
+    }
+
+    // 更新 AI 助手处理器的设置（仅当已初始化时）
+    if (this._assistantProcessor) {
+      this._assistantProcessor.updateSettings(this.settings);
+    }
+
+    // 更新语音悬浮窗的配置（仅当已初始化时）
+    if (this._voiceOverlay) {
+      this._voiceOverlay.updateConfig({
+        position: this.settings.voice.overlayPosition,
+      });
+    }
   }
 
   /**
@@ -790,15 +1034,453 @@ export default class SmartWorkflowPlugin extends Plugin {
       }
     }
 
+    // 清理语音输入相关资源（仅当已初始化时）
+    if (this._voiceOverlay) {
+      try {
+        this._voiceOverlay.destroy();
+      } catch (error) {
+        errorLog('销毁语音悬浮窗失败:', error);
+      }
+    }
+
+    if (this._voiceInputService) {
+      try {
+        await this._voiceInputService.destroy();
+      } catch (error) {
+        errorLog('销毁语音输入服务失败:', error);
+      }
+    }
+
+    // 注意：VoiceInputService 直接使用 ServerManager，
+    // _serverManager.shutdown() 会统一关闭服务器
+
     // 清理终端相关资源（仅当已初始化时）
     if (this._terminalService) {
       try {
-        await this._terminalService.destroyAllTerminals();
-        await this._terminalService.stopPtyServer();
+        await this._terminalService.shutdown();
       } catch (error) {
         errorLog('清理终端失败:', error);
       }
     }
+
+    // 关闭统一服务器（仅当已初始化时）
+    // 这会关闭所有模块（PTY、Voice、LLM、Utils）
+    if (this._serverManager) {
+      try {
+        await this._serverManager.shutdown();
+      } catch (error) {
+        errorLog('关闭服务器失败:', error);
+      }
+    }
+  }
+
+  // ========================================================================
+  // 语音输入 - 按住模式辅助方法
+  // ========================================================================
+
+  /**
+   * 获取命令的快捷键配置
+   */
+  private getCommandHotkey(commandId: string): { modifiers: string[]; key: string } | null {
+    const fullCommandId = `obsidian-smart-workflow:${commandId}`;
+    
+    try {
+      // @ts-expect-error - 访问 Obsidian 内部 API
+      const hotkeyManager = this.app.hotkeyManager;
+      
+      if (!hotkeyManager) {
+        return null;
+      }
+      
+      const hotkeys = hotkeyManager.getHotkeys(fullCommandId);
+      
+      if (hotkeys && hotkeys.length > 0) {
+        return hotkeys[0];
+      }
+    } catch (e) {
+      errorLog('[VoiceInput] 获取快捷键失败:', e);
+    }
+    
+    return null;
+  }
+
+  /**
+   * 设置按住模式的 keyup 监听器
+   * 当用户松开快捷键时自动停止录音
+   */
+  private setupPressModeListener(commandId: string): void {
+    // 移除之前的监听器
+    this.removePressModeListener();
+    
+    const hotkey = this.getCommandHotkey(commandId);
+    if (!hotkey) {
+      debugLog('[VoiceInput] 未找到快捷键配置，使用 toggle 模式行为');
+      return;
+    }
+    
+    this.currentVoiceCommandId = commandId;
+    
+    // 创建 keyup 处理器
+    this.pressModekeyupHandler = (e: KeyboardEvent) => {
+      // 检查是否是快捷键的主键松开
+      const releasedKey = e.key.toLowerCase();
+      const hotkeyKey = hotkey.key.toLowerCase();
+      
+      // 标准化按键名称
+      const normalizedReleasedKey = this.normalizeKeyName(releasedKey);
+      const normalizedHotkeyKey = this.normalizeKeyName(hotkeyKey);
+      
+      if (normalizedReleasedKey === normalizedHotkeyKey) {
+        debugLog('[VoiceInput] 检测到快捷键松开，停止录音');
+        this.removePressModeListener();
+        this.finishVoiceRecording();
+      }
+    };
+    
+    // 添加全局 keyup 监听
+    document.addEventListener('keyup', this.pressModekeyupHandler);
+    debugLog('[VoiceInput] 已设置按住模式监听器，等待松开:', hotkey.key);
+  }
+
+  /**
+   * 移除按住模式的 keyup 监听器
+   */
+  private removePressModeListener(): void {
+    if (this.pressModekeyupHandler) {
+      document.removeEventListener('keyup', this.pressModekeyupHandler);
+      this.pressModekeyupHandler = null;
+      this.currentVoiceCommandId = null;
+      debugLog('[VoiceInput] 已移除按住模式监听器');
+    }
+  }
+
+  /**
+   * 移除文本末尾的标点符号
+   * 支持中英文常见标点
+   */
+  private removeTrailingPunctuation(text: string): string {
+    if (!text) return text;
+    
+    // 中英文常见末尾标点符号
+    // 包括：句号、问号、感叹号、逗号、分号、冒号、省略号等
+    const trailingPunctuationRegex = /[。？！，、；：…．.?!,;:]+$/;
+    
+    return text.replace(trailingPunctuationRegex, '');
+  }
+
+  /**
+   * 标准化按键名称
+   */
+  private normalizeKeyName(key: string): string {
+    // 处理常见的按键名称差异
+    const keyMap: Record<string, string> = {
+      'control': 'ctrl',
+      'meta': 'mod',
+      'command': 'mod',
+      ' ': 'space',
+      'arrowup': 'up',
+      'arrowdown': 'down',
+      'arrowleft': 'left',
+      'arrowright': 'right',
+    };
+    
+    const normalized = key.toLowerCase();
+    return keyMap[normalized] || normalized;
+  }
+
+  // ========================================================================
+  // 语音输入处理方法
+  // ========================================================================
+
+  /**
+   * 处理语音听写命令
+   * 开始录音 → ASR 转录 → LLM 后处理（可选）→ 插入文本
+   */
+  private async handleVoiceDictation(): Promise<void> {
+    try {
+      // 检查是否有活动编辑器
+      if (!this.voiceInputService.hasActiveEditor()) {
+        NoticeHelper.error(t('voiceInput.noActiveEditor'));
+        return;
+      }
+
+      // 初始化服务（如果需要）
+      await this.voiceInputService.initialize();
+
+      // 设置悬浮窗事件
+      this.setupVoiceOverlayEvents();
+
+      // 显示录音状态
+      this.voiceOverlay.show({
+        type: 'recording',
+        mode: this.settings.voice.defaultRecordingMode,
+      });
+
+      // 开始听写
+      await this.voiceInputService.startDictation();
+
+      // 根据录音模式设置不同的行为
+      if (this.settings.voice.defaultRecordingMode === 'press') {
+        // press 模式：设置 keyup 监听器，松开快捷键时自动停止
+        this.setupPressModeListener('voice-dictation');
+      }
+      // toggle 模式：悬浮窗显示取消/完成按钮，由用户控制
+
+    } catch (error) {
+      this.removePressModeListener();
+      this.voiceOverlay.hide();
+      const message = error instanceof Error ? error.message : String(error);
+      NoticeHelper.error(message);
+      errorLog('[VoiceDictation] 错误:', error);
+    }
+  }
+
+  /**
+   * 处理语音助手命令
+   * 开始录音 → ASR 转录 → LLM 处理（Q&A 或文本处理）→ 插入/替换文本
+   */
+  private async handleVoiceAssistant(): Promise<void> {
+    try {
+      // 检查是否有活动编辑器
+      if (!this.voiceInputService.hasActiveEditor()) {
+        NoticeHelper.error(t('voiceInput.noActiveEditor'));
+        return;
+      }
+
+      // 初始化服务（如果需要）
+      await this.voiceInputService.initialize();
+
+      // 设置悬浮窗事件
+      this.setupVoiceOverlayEvents();
+
+      // 获取选中的文本（如果有）
+      const selectedText = this.voiceInputService.getSelectedText();
+
+      // 显示录音状态
+      this.voiceOverlay.show({
+        type: 'recording',
+        mode: this.settings.voice.defaultRecordingMode,
+      });
+
+      // 开始助手模式
+      await this.voiceInputService.startAssistant(selectedText ?? undefined);
+
+      // 根据录音模式设置不同的行为
+      if (this.settings.voice.defaultRecordingMode === 'press') {
+        // press 模式：设置 keyup 监听器，松开快捷键时自动停止
+        this.setupPressModeListener('voice-assistant');
+      }
+      // toggle 模式：悬浮窗显示取消/完成按钮，由用户控制
+
+    } catch (error) {
+      this.removePressModeListener();
+      this.voiceOverlay.hide();
+      const message = error instanceof Error ? error.message : String(error);
+      NoticeHelper.error(message);
+      errorLog('[VoiceAssistant] 错误:', error);
+    }
+  }
+
+  /**
+   * 取消当前录音
+   */
+  private cancelVoiceRecording(): void {
+    this.removePressModeListener();
+    if (this._voiceInputService?.isRecording()) {
+      this._voiceInputService.cancelRecording();
+      this.voiceOverlay.hide();
+      debugLog('[VoiceInput] 录音已取消');
+    }
+  }
+
+  /**
+   * 设置语音悬浮窗事件绑定
+   * 连接悬浮窗按钮到 VoiceInputService
+   */
+  private setupVoiceOverlayEvents(): void {
+    // 取消按钮
+    this.voiceOverlay.setOnCancel(() => {
+      this.cancelVoiceRecording();
+    });
+
+    // 完成按钮（toggle 模式）
+    this.voiceOverlay.setOnFinish(async () => {
+      await this.finishVoiceRecording();
+    });
+
+    // 监听服务事件
+    this.voiceInputService.on('audio-level', (level, waveform) => {
+      if (waveform) {
+        this.voiceOverlay.updateWaveform(waveform);
+      }
+    });
+
+    // 监听部分转录结果（实时模式）
+    this.voiceInputService.on('transcription-progress', (partialText) => {
+      this.voiceOverlay.updatePartialText(partialText);
+    });
+
+    this.voiceInputService.on('recording-stop', () => {
+      this.voiceOverlay.updateState({ type: 'processing' });
+    });
+
+    this.voiceInputService.on('transcription-complete', async (text) => {
+      await this.handleTranscriptionComplete(text);
+    });
+
+    this.voiceInputService.on('error', (error) => {
+      this.voiceOverlay.updateState({
+        type: 'error',
+        message: error.message,
+      });
+    });
+  }
+
+  /**
+   * 完成录音并处理结果
+   */
+  private async finishVoiceRecording(): Promise<void> {
+    // 移除按住模式监听器
+    this.removePressModeListener();
+    
+    const mode = this.voiceInputService.getRecordingMode();
+    
+    try {
+      this.voiceOverlay.updateState({ type: 'processing' });
+
+      if (mode === 'dictation') {
+        // 听写模式：执行完整流程
+        const result = await this.voiceInputService.executeDictationFlow();
+        
+        // 插入文本
+        const success = await this.textInserter.insertAtCursor(result.processedText);
+        
+        if (success) {
+          this.voiceOverlay.updateState({
+            type: 'success',
+            message: t('voiceInput.textInserted'),
+          });
+        }
+        
+        // 保存历史记录（仅当有实际内容时，无论插入是否成功）
+        if (result.originalText.trim()) {
+          const finalText = result.usedLLMProcessing ? result.processedText : result.originalText;
+          await this.historyManager.save({
+            timestamp: Date.now(),
+            mode: 'dictation',
+            originalText: result.originalText,
+            processedText: result.usedLLMProcessing ? result.processedText : undefined,
+            asrEngine: result.asrEngine,
+            usedFallback: result.usedFallback,
+            duration: result.duration,
+            asrDuration: result.asrDuration,
+            llmDuration: result.llmDuration,
+            charCount: finalText.length,
+          });
+        }
+      } else if (mode === 'assistant') {
+        // 助手模式：执行完整流程，使用 AssistantProcessor
+        const result = await this.voiceInputService.executeAssistantFlow(this.assistantProcessor);
+        
+        if (result.response) {
+          // 如果启用了移除末尾标点，在最终输出前处理
+          let finalResponse = result.response;
+          if (this.settings.voice.removeTrailingPunctuation) {
+            finalResponse = this.removeTrailingPunctuation(finalResponse);
+          }
+          
+          let success = false;
+          
+          if (result.mode === 'text_processing' && result.selectedText) {
+            // 替换选中文本
+            success = await this.textInserter.replaceSelection(finalResponse);
+          } else {
+            // 插入响应
+            success = await this.textInserter.insertAtCursor(finalResponse);
+          }
+          
+          if (success) {
+            this.voiceOverlay.updateState({
+              type: 'success',
+              message: result.mode === 'text_processing' 
+                ? t('voiceInput.textReplaced') 
+                : t('voiceInput.textInserted'),
+            });
+          }
+          
+          // 保存历史记录（仅当有实际内容时，无论插入是否成功）
+          if (result.voiceCommand.trim()) {
+            await this.historyManager.save({
+              timestamp: Date.now(),
+              mode: 'assistant',
+              originalText: result.voiceCommand,
+              processedText: result.response,
+              asrEngine: result.asrEngine,
+              usedFallback: result.usedFallback,
+              duration: result.duration,
+              asrDuration: result.asrDuration,
+              llmDuration: result.llmDuration,
+              charCount: result.response.length,
+            });
+          }
+        } else {
+          // 语音命令为空或 LLM 未启用，显示提示并隐藏悬浮窗
+          this.voiceOverlay.updateState({
+            type: 'error',
+            message: t('voiceInput.emptyVoiceCommand') || '未检测到语音命令',
+          });
+        }
+      }
+    } catch (error) {
+      // 使用 VoiceErrorHandler 处理错误
+      if (isLLMProcessingError(error)) {
+        // LLM 处理失败，显示回退选项对话框
+        debugLog('[VoiceInput] LLM 处理失败，显示回退选项');
+        this.voiceOverlay.hide();
+        
+        const handleResult = await this.voiceErrorHandler.handleError(error);
+        
+        if (handleResult.action === 'use_raw_text' && handleResult.rawText) {
+          // 用户选择使用原始文本
+          const success = await this.textInserter.insertAtCursor(handleResult.rawText);
+          if (success) {
+            this.voiceErrorHandler.showSuccessNotice(t('voiceInput.textInserted'));
+          }
+        } else if (handleResult.action === 'retry') {
+          // 用户选择重试 - 这里可以重新触发录音流程
+          // 目前简单地显示提示，让用户手动重试
+          this.voiceErrorHandler.showWarningNotice(
+            t('voiceError.llmFailed.hint') || '请重新开始录音'
+          );
+        }
+        // 如果是 cancel，不做任何操作
+      } else {
+        // 其他错误，使用 VoiceErrorHandler 显示错误通知
+        const handleResult = await this.voiceErrorHandler.handleError(error as Error);
+        
+        if (!handleResult.handled) {
+          // 如果错误处理器没有处理，显示在悬浮窗
+          const message = error instanceof Error ? error.message : String(error);
+          this.voiceOverlay.updateState({
+            type: 'error',
+            message,
+          });
+        } else {
+          // 错误已处理，隐藏悬浮窗
+          this.voiceOverlay.hide();
+        }
+        
+        errorLog('[VoiceInput] 处理失败:', error);
+      }
+    }
+  }
+
+  /**
+   * 处理转录完成事件
+   */
+  private async handleTranscriptionComplete(text: string): Promise<void> {
+    debugLog('[VoiceInput] 转录完成:', text);
+    // 转录完成后的处理由 finishVoiceRecording 统一处理
   }
 
   /**

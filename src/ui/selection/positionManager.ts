@@ -26,11 +26,6 @@ export class PositionManager {
    * @param viewport 视口尺寸（可选，默认使用 window）
    * @returns 计算后的位置
    * 
-   * Requirements:
-   * - 2.1: 工具栏默认显示在选区上方，水平居中
-   * - 2.2: 如果上方空间不足，显示在下方
-   * - 2.3: 如果左右超出边界，调整水平位置
-   * - 2.6: 保持最小 8px 边距
    */
   calculatePosition(
     selectionRect: DOMRect,

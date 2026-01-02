@@ -1,3 +1,0 @@
-[INFO] 服务器绑定到 127.0.0.1:51845
-[INFO] Voice server 已启动，监听端口: 51845
-[INFO] 正在监听 WebSocket 连接...

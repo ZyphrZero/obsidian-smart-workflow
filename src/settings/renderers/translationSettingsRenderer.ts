@@ -21,8 +21,8 @@ export class TranslationSettingsRenderer extends BaseSettingsRenderer {
   render(context: RendererContext): void {
     this.context = context;
 
-    // 翻译功能区块（可折叠，默认展开）
-    const isExpanded = !this.context.expandedSections.has('translation-feature-collapsed');
+    // 翻译功能区块（可折叠，默认收起）
+    const isExpanded = this.context.expandedSections.has('translation-feature-expanded');
     
     // 功能卡片
     const translationCard = context.containerEl.createDiv();
@@ -62,9 +62,9 @@ export class TranslationSettingsRenderer extends BaseSettingsRenderer {
     // 点击切换展开状态
     headerEl.addEventListener('click', () => {
       if (isExpanded) {
-        this.context.expandedSections.add('translation-feature-collapsed');
+        this.context.expandedSections.delete('translation-feature-expanded');
       } else {
-        this.context.expandedSections.delete('translation-feature-collapsed');
+        this.context.expandedSections.add('translation-feature-expanded');
       }
       this.refreshDisplay();
     });

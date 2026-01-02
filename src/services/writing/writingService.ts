@@ -3,6 +3,7 @@
  * 负责与 AI API 交互，支持流式输出
  * 
  * 使用 AIClient 进行 AI 通信，专注于写作业务逻辑
+ * 
  */
 
 import { App } from 'obsidian';
@@ -15,6 +16,7 @@ import { debugLog } from '../../utils/logger';
 import { t } from '../../i18n';
 import { AIClient, AIError, AIErrorCode, NetworkError, TimeoutError } from '../ai';
 import { MULTI_SELECTION_SEPARATOR } from '../../ui/selection/types';
+import { ServerManager } from '../server/serverManager';
 
 /**
  * 流式回调接口
@@ -44,14 +46,25 @@ export class WritingService {
   private settings: SmartWorkflowSettings;
   private configManager: ConfigManager;
   private aiClient: AIClient | null = null;
+  private serverManager: ServerManager | null = null;
 
   constructor(
     _app: App,
     settings: SmartWorkflowSettings,
-    onSettingsChange?: () => Promise<void>
+    onSettingsChange?: () => Promise<void>,
+    serverManager?: ServerManager
   ) {
     this.settings = settings;
     this.configManager = new ConfigManager(settings, onSettingsChange);
+    this.serverManager = serverManager ?? null;
+  }
+
+  /**
+   * 设置 ServerManager
+   * 用于启用 Rust 模式的流式处理
+   */
+  setServerManager(serverManager: ServerManager): void {
+    this.serverManager = serverManager;
   }
 
   // ============================================================================
@@ -90,6 +103,7 @@ export class WritingService {
         model,
         timeout: this.settings.timeout || 15000,
         debugMode: this.settings.debugMode,
+        serverManager: this.serverManager ?? undefined,
       });
 
       callbacks.onStart();

@@ -1,20 +1,21 @@
 /**
- * TerminalService - 基于 Rust PTY 服务器的终端服务
+ * TerminalService - 基于统一 Rust 服务器的终端服务
  * 
  * 职责:
- * 1. 管理 Rust PTY 服务器进程的生命周期
+ * 1. 使用 ServerManager 管理统一服务器
  * 2. 管理所有终端实例
  * 3. 处理服务器崩溃和自动重启
- * 4. 集成 BinaryManager 确保二进制文件可用
+ * 
+
  */
 
 import { App, Notice } from 'obsidian';
-import { spawn, ChildProcess } from 'child_process';
-import { BinaryManager, BinaryManagerError, BinaryErrorCode } from './binaryManager';
 import { TerminalSettings, getCurrentPlatformShell, getCurrentPlatformCustomShellPath } from '../../settings/settings';
 import { TerminalInstance } from './terminalInstance';
 import { debugLog, debugWarn, errorLog } from '../../utils/logger';
 import { t } from '../../i18n';
+import { ServerManager } from '../server/serverManager';
+import { PtyClient } from '../server/ptyClient';
 
 // 预加载 TerminalInstance 模块，避免首次创建终端时的动态 import 延迟
 let terminalInstanceModule: typeof import('./terminalInstance') | null = null;
@@ -28,292 +29,88 @@ const preloadTerminalInstance = async () => {
 preloadTerminalInstance();
 
 /**
- * 服务器信息
- */
-export interface ServerInfo {
-  port: number;  // 监听端口
-  pid: number;   // 进程 PID
-}
-
-/**
  * TerminalService
+ * 
+ * 使用 ServerManager 管理统一服务器，不再独立管理 PTY 服务器进程
  */
 export class TerminalService {
   private app: App;
   private settings: TerminalSettings;
-  private binaryManager: BinaryManager;
-  
-  // 服务器进程管理
-  private ptyServerProcess: ChildProcess | null = null;
-  private ptyServerPort: number | null = null;
-  private serverStartPromise: Promise<number> | null = null;
-  
-  // 服务器重启管理
-  private serverRestartAttempts = 0;
-  private readonly maxRestartAttempts: number = 3;
-  
-  // 关闭状态标志（防止卸载时触发重启逻辑）
-  private isShuttingDown = false;
+  private serverManager: ServerManager;
   
   // 终端实例管理
   private terminals: Map<string, TerminalInstance> = new Map();
+  
+  // 关闭状态标志
+  private isShuttingDown = false;
 
-  constructor(app: App, settings: TerminalSettings, pluginDir: string) {
+  constructor(app: App, settings: TerminalSettings, serverManager: ServerManager) {
     this.app = app;
     this.settings = settings;
+    this.serverManager = serverManager;
     
-    // 从 package.json 读取版本号，GitHub repo 需要配置
-    const version = '1.0.0'; // TODO: 从 manifest.json 或 package.json 读取
-    const githubRepo = 'ZyphrZero/obsidian-smart-workflow'; // TODO: 配置实际的 GitHub repo
-    
-    this.binaryManager = new BinaryManager(pluginDir, version, githubRepo);
+    // 监听服务器事件
+    this.setupServerEventHandlers();
   }
 
   /**
-   * 确保 PTY 服务器正在运行（单例模式）
-   * 
-   * @returns PTY 服务器监听的端口号
+   * 设置服务器事件处理器
    */
-  async ensurePtyServer(): Promise<number> {
-    // 如果服务器已经启动，直接返回端口号
-    if (this.ptyServerPort !== null) {
-      return this.ptyServerPort;
-    }
-
-    // 如果正在启动，等待启动完成
-    if (this.serverStartPromise) {
-      return this.serverStartPromise;
-    }
-
-    // 启动服务器
-    this.serverStartPromise = this.startPtyServer();
-    return this.serverStartPromise;
-  }
-
-  /**
-   * 启动 PTY 服务器进程
-   * 
-   * @returns PTY 服务器监听的端口号
-   * @throws Error 如果服务器启动失败
-   */
-  private async startPtyServer(): Promise<number> {
-    try {
-      debugLog('[TerminalService] 启动 PTY 服务器...');
-      
-      const binaryPath = await this.binaryManager.ensureBinary();
-      
-      // 使用端口 0 让系统自动分配可用端口
-      this.ptyServerProcess = spawn(binaryPath, ['--port', '0'], {
-        stdio: ['pipe', 'pipe', 'pipe'], // 捕获 stderr 以避免日志干扰
-        env: { 
-          ...process.env, 
-          // 确保 TERM 环境变量存在，否则 clear/vim 等命令无法正常工作
-          TERM: process.env.TERM || 'xterm-256color' 
-        },
-        windowsHide: true, // Windows: 隐藏控制台窗口
-        detached: false    // 不分离进程，确保随插件一起退出
-      });
-      
-      debugLog('[TerminalService] PTY 服务器进程已启动, PID:', this.ptyServerProcess.pid);
-      
-      // 监听进程错误事件
-      this.ptyServerProcess.on('error', (error) => {
-        errorLog('[TerminalService] PTY 服务器进程错误:', error);
-        this.handleServerError(error);
-      });
-      
-      const port = await this.waitForServerPort();
-      this.ptyServerPort = port;
-      this.serverRestartAttempts = 0; // 重置重启计数
-      
-      debugLog(`[TerminalService] PTY 服务器已启动，端口: ${port}`);
-      
-      this.setupServerExitHandler();
-      
-      return port;
-      
-    } catch (error) {
-      this.serverStartPromise = null;
-      
-      if (error instanceof BinaryManagerError) {
-        this.handleBinaryManagerError(error);
-      } else {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        errorLog('[TerminalService] 启动 PTY 服务器失败:', errorMessage);
-        
-        new Notice(t('notices.ptyServerStartFailed'), 0);
-      }
-      
-      throw error;
-    }
-  }
-
-  /**
-   * 等待 PTY 服务器输出端口信息
-   * 
-   * @returns 服务器监听的端口号
-   * @throws Error 如果无法获取端口信息或超时
-   */
-  private async waitForServerPort(): Promise<number> {
-    return new Promise((resolve, reject) => {
-      if (!this.ptyServerProcess || !this.ptyServerProcess.stdout) {
-        reject(new Error(t('terminalService.processNotStarted')));
-        return;
-      }
-
-      let buffer = '';
-      
-      const timeout = setTimeout(() => {
-        this.ptyServerProcess?.stdout?.off('data', onData);
-        
-        const errorMsg = t('terminalService.portInfoTimeout');
-        errorLog('[TerminalService]', errorMsg);
-        reject(new Error(errorMsg));
-      }, 10000);
-
-      const onData = (chunk: Buffer) => {
-        buffer += chunk.toString();
-        
-        // 格式: {"port": 12345, "pid": 67890}
-        try {
-          const match = buffer.match(/\{[^}]+\}/);
-          if (match) {
-            const info: ServerInfo = JSON.parse(match[0]);
-            if (info.port && typeof info.port === 'number') {
-              clearTimeout(timeout);
-              if (this.ptyServerProcess?.stdout) {
-                this.ptyServerProcess.stdout.off('data', onData);
-              }
-              debugLog('[TerminalService] 解析到服务器信息:', info);
-              resolve(info.port);
-            }
-          }
-        } catch (e) {
-          // JSON 解析失败，继续等待更多数据
-          debugLog('[TerminalService] JSON 解析失败，继续等待:', e);
-        }
-      };
-
-      this.ptyServerProcess.stdout.on('data', onData);
-
-      this.ptyServerProcess.on('error', (error) => {
-        clearTimeout(timeout);
-        reject(error);
-      });
-      
-      this.ptyServerProcess.on('exit', (code) => {
-        clearTimeout(timeout);
-        if (code !== 0 && code !== null) {
-          reject(new Error(t('terminalService.startFailedWithCode', { code: String(code) })));
-        }
-      });
-    });
-  }
-
-  /**
-   * 设置服务器退出事件处理器
-   */
-  private setupServerExitHandler(): void {
-    if (!this.ptyServerProcess) {
-      return;
-    }
-
-    this.ptyServerProcess.on('exit', (code, signal) => {
-      // 清理状态
-      this.ptyServerPort = null;
-      this.serverStartPromise = null;
-      
-      // 如果正在关闭，这是预期的退出，使用 debugLog
-      if (this.isShuttingDown) {
-        debugLog(`[TerminalService] PTY 服务器已停止: code=${code}, signal=${signal}`);
-        return;
-      }
-      
-      // 非预期退出，使用 errorLog
-      errorLog(`[TerminalService] PTY 服务器退出: code=${code}, signal=${signal}`);
-      
-      this.terminals.forEach(terminal => {
-        terminal.handleServerCrash();
-      });
-
-      const isAbnormalExit = code !== 0 && code !== null;
-      
-      if (isAbnormalExit) {
-        new Notice(
-          t('notices.terminal.serverCrashed', { 
-            code: String(code), 
-            signal: signal || 'N/A' 
-          }),
-          5000
-        );
-      }
-
-      if (this.serverRestartAttempts < this.maxRestartAttempts) {
-        this.serverRestartAttempts++;
-        debugLog(
-          `[TerminalService] 尝试重启服务器 ` +
-          `(${this.serverRestartAttempts}/${this.maxRestartAttempts})`
-        );
-        
-        // 使用指数退避策略
-        const delay = 1000 * Math.pow(2, this.serverRestartAttempts - 1);
-        
-        setTimeout(() => {
-          this.ensurePtyServer()
-            .then(() => {
-              new Notice(t('notices.terminal.serverRestartSuccess'), 3000);
-            })
-            .catch(err => {
-              errorLog('[TerminalService] 服务器重启失败:', err);
-              new Notice(t('notices.terminal.serverRestartFailed'), 0);
-            });
-        }, delay);
-      } else {
-        new Notice(t('notices.terminal.serverRestartFailed'), 0);
+  private setupServerEventHandlers(): void {
+    // 监听服务器崩溃事件
+    this.serverManager.on('server-error', (error) => {
+      if (!this.isShuttingDown) {
+        errorLog('[TerminalService] 服务器错误:', error);
+        this.handleServerCrash();
       }
     });
-  }
-
-  /**
-   * 停止 PTY 服务器进程
-   */
-  async stopPtyServer(): Promise<void> {
-    // 设置关闭标志，防止触发重启逻辑
-    this.isShuttingDown = true;
     
-    if (this.ptyServerProcess) {
-      debugLog('[TerminalService] 停止 PTY 服务器');
-      
-      try {
-        // 发送 SIGTERM 信号优雅关闭
-        this.ptyServerProcess.kill('SIGTERM');
-        
-        // 等待进程退出
-        await new Promise<void>((resolve) => {
-          const timeout = setTimeout(() => {
-            // 如果 1 秒后还没退出，强制终止
-            if (this.ptyServerProcess && !this.ptyServerProcess.killed) {
-              debugWarn('[TerminalService] 强制终止 PTY 服务器');
-              this.ptyServerProcess.kill('SIGKILL');
-            }
-            resolve();
-          }, 1000);
-
-          if (this.ptyServerProcess) {
-            this.ptyServerProcess.once('exit', () => {
-              clearTimeout(timeout);
-              resolve();
-            });
-          }
+    // 监听 WebSocket 断开事件
+    this.serverManager.on('ws-disconnected', () => {
+      if (!this.isShuttingDown) {
+        debugLog('[TerminalService] WebSocket 断开');
+        // 通知所有终端实例
+        this.terminals.forEach(terminal => {
+          terminal.handleServerCrash();
         });
-      } catch (error) {
-        errorLog('[TerminalService] 停止 PTY 服务器时出错:', error);
-      } finally {
-        this.ptyServerProcess = null;
-        this.ptyServerPort = null;
-        this.serverStartPromise = null;
       }
+    });
+    
+    // 监听服务器重启成功
+    this.serverManager.on('server-started', (port) => {
+      debugLog(`[TerminalService] 服务器已启动，端口: ${port}`);
+    });
+  }
+
+  /**
+   * 处理服务器崩溃
+   */
+  private handleServerCrash(): void {
+    // 通知所有终端实例
+    this.terminals.forEach(terminal => {
+      terminal.handleServerCrash();
+    });
+  }
+
+  /**
+   * 确保服务器运行
+   * 
+   * @returns 服务器端口号
+   */
+  async ensureServer(): Promise<number> {
+    await this.serverManager.ensureServer();
+    const port = this.serverManager.getServerPort();
+    if (port === null) {
+      throw new Error(t('terminalService.serverNotRunning') || '服务器未运行');
     }
+    return port;
+  }
+
+  /**
+   * 获取 PTY 客户端
+   */
+  getPtyClient(): PtyClient {
+    return this.serverManager.pty();
   }
 
   /**
@@ -324,9 +121,10 @@ export class TerminalService {
    */
   async createTerminal(): Promise<TerminalInstance> {
     try {
-      const port = await this.ensurePtyServer();
+      // 确保服务器运行
+      await this.serverManager.ensureServer();
       
-      debugLog(`[TerminalService] 创建终端，使用服务器端口: ${port}`);
+      debugLog('[TerminalService] 创建终端');
 
       // 使用预加载的模块
       const { TerminalInstance } = await preloadTerminalInstance();
@@ -353,7 +151,7 @@ export class TerminalService {
       // 获取 shell 启动参数
       const shellArgs = this.settings.shellArgs.length > 0 ? this.settings.shellArgs : undefined;
       
-      // 创建终端实例
+      // 创建终端实例，传入 ServerManager
       const terminal = new TerminalInstance({
         shellType: shellType,
         shellArgs: shellArgs,
@@ -376,8 +174,8 @@ export class TerminalService {
         textOpacity: this.settings.textOpacity,
       });
       
-      // 初始化终端（建立 WebSocket 连接）
-      await terminal.initialize(port);
+      // 初始化终端（使用 ServerManager）
+      await terminal.initializeWithServerManager(this.serverManager);
       
       this.terminals.set(terminal.id, terminal);
       
@@ -398,7 +196,7 @@ export class TerminalService {
    */
   private getVaultPath(): string | undefined {
     try {
-      const adapter = this.app.vault.adapter as any;
+      const adapter = this.app.vault.adapter as { getBasePath?: () => string };
       if (adapter && typeof adapter.getBasePath === 'function') {
         return adapter.getBasePath();
       }
@@ -441,12 +239,6 @@ export class TerminalService {
         errorLog(`[TerminalService] 销毁终端 ${id} 失败:`, error);
       } finally {
         this.terminals.delete(id);
-        
-        // 如果没有终端实例了，停止 PTY 服务器
-        if (this.terminals.size === 0) {
-          debugLog('[TerminalService] 所有终端已关闭，停止 PTY 服务器');
-          await this.stopPtyServer();
-        }
       }
     }
   }
@@ -488,125 +280,12 @@ export class TerminalService {
   }
 
   /**
-   * 处理 BinaryManager 错误
-   * 
-   * @param error BinaryManager 错误
-   */
-  private handleBinaryManagerError(error: BinaryManagerError): void {
-    errorLog('[TerminalService] BinaryManager 错误:', error);
-    
-    switch (error.code) {
-      case BinaryErrorCode.BINARY_MISSING:
-        new Notice(
-          '❌ 二进制文件缺失\n\n' +
-          error.message +
-          (error.downloadUrl ? `\n\n手动下载: ${error.downloadUrl}` : ''),
-          0
-        );
-        break;
-        
-      case BinaryErrorCode.CHECKSUM_FAILED:
-        new Notice(
-          '❌ 文件校验失败\n\n' +
-          error.message +
-          '\n\n文件可能已损坏，请重试',
-          0
-        );
-        break;
-        
-      case BinaryErrorCode.NETWORK_ERROR:
-        new Notice(
-          '❌ 网络错误\n\n' +
-          error.message +
-          '\n\n请检查网络连接' +
-          (error.downloadUrl ? `\n或手动下载: ${error.downloadUrl}` : ''),
-          0
-        );
-        break;
-        
-      case BinaryErrorCode.PERMISSION_ERROR:
-        new Notice(
-          '❌ 权限错误\n\n' +
-          error.message,
-          0
-        );
-        break;
-        
-      case BinaryErrorCode.DISK_SPACE_ERROR:
-        new Notice(
-          '❌ 磁盘空间不足\n\n' +
-          error.message +
-          '\n\n请清理磁盘空间后重试',
-          0
-        );
-        break;
-        
-      case BinaryErrorCode.CORRUPTED_FILE:
-        new Notice(
-          '❌ 文件损坏\n\n' +
-          error.message +
-          '\n\n正在重新下载...',
-          5000
-        );
-        break;
-        
-      default:
-        new Notice(
-          '❌ 未知错误\n\n' +
-          error.message,
-          0
-        );
-    }
-  }
-
-  /**
-   * 处理服务器进程错误
-   * 
-   * @param error 错误对象
-   */
-  private handleServerError(error: Error): void {
-    const errorCode = (error as NodeJS.ErrnoException).code;
-    
-    if (errorCode === 'ENOENT') {
-      new Notice(
-        '❌ 无法启动 PTY 服务器\n\n' +
-        '错误: 二进制文件未找到\n' +
-        '请重新加载插件',
-        0
-      );
-    } else if (errorCode === 'EACCES') {
-      new Notice(
-        '❌ 无法启动 PTY 服务器\n\n' +
-        '错误: 权限不足\n' +
-        '请检查文件权限',
-        0
-      );
-    } else {
-      new Notice(
-        `❌ PTY 服务器启动失败\n\n` +
-        `错误: ${error.message}\n` +
-        `请查看控制台获取详细信息`,
-        0
-      );
-    }
-  }
-
-  /**
-   * 生成终端 ID
-   * 
-   * @returns 唯一的终端 ID
-   */
-  private generateTerminalId(): string {
-    return `terminal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  }
-
-  /**
    * 获取服务器状态
    * 
    * @returns 服务器是否正在运行
    */
   isServerRunning(): boolean {
-    return this.ptyServerPort !== null && this.ptyServerProcess !== null;
+    return this.serverManager.isServerRunning();
   }
 
   /**
@@ -615,7 +294,7 @@ export class TerminalService {
    * @returns 服务器端口，如果未运行则返回 null
    */
   getServerPort(): number | null {
-    return this.ptyServerPort;
+    return this.serverManager.getServerPort();
   }
 
   /**
@@ -625,5 +304,17 @@ export class TerminalService {
    */
   getTerminalCount(): number {
     return this.terminals.size;
+  }
+
+  /**
+   * 关闭服务（插件卸载时调用）
+   */
+  async shutdown(): Promise<void> {
+    this.isShuttingDown = true;
+    
+    // 销毁所有终端
+    await this.destroyAllTerminals();
+    
+    debugLog('[TerminalService] 终端服务已关闭');
   }
 }

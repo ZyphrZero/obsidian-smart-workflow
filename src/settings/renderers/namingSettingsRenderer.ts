@@ -203,8 +203,8 @@ export class NamingSettingsRenderer extends BaseSettingsRenderer {
    * 渲染 AI 命名功能区块
    */
   private renderNamingFeature(containerEl: HTMLElement): void {
-    // AI 命名功能区块（可折叠，默认展开）
-    const isNamingExpanded = !this.context.expandedSections.has('naming-feature-collapsed');
+    // AI 命名功能区块（可折叠，默认收起）
+    const isNamingExpanded = this.context.expandedSections.has('naming-feature-expanded');
     
     // 功能卡片
     const namingCard = containerEl.createDiv();
@@ -244,9 +244,9 @@ export class NamingSettingsRenderer extends BaseSettingsRenderer {
     // 点击切换展开状态
     headerEl.addEventListener('click', () => {
       if (isNamingExpanded) {
-        this.context.expandedSections.add('naming-feature-collapsed');
+        this.context.expandedSections.delete('naming-feature-expanded');
       } else {
-        this.context.expandedSections.delete('naming-feature-collapsed');
+        this.context.expandedSections.add('naming-feature-expanded');
       }
       this.refreshDisplay();
     });
@@ -443,7 +443,7 @@ export class NamingSettingsRenderer extends BaseSettingsRenderer {
    */
   private renderSelectionToolbarFunctionSettings(containerEl: HTMLElement): void {
     // 选中工具栏功能区块（可折叠，默认收起）
-    const isExpanded = !this.context.expandedSections.has('selection-toolbar-collapsed');
+    const isExpanded = this.context.expandedSections.has('selection-toolbar-expanded');
     
     // 功能卡片
     const toolbarCard = containerEl.createDiv();
@@ -483,9 +483,9 @@ export class NamingSettingsRenderer extends BaseSettingsRenderer {
     // 点击切换展开状态
     headerEl.addEventListener('click', () => {
       if (isExpanded) {
-        this.context.expandedSections.add('selection-toolbar-collapsed');
+        this.context.expandedSections.delete('selection-toolbar-expanded');
       } else {
-        this.context.expandedSections.delete('selection-toolbar-collapsed');
+        this.context.expandedSections.add('selection-toolbar-expanded');
       }
       this.refreshDisplay();
     });
@@ -656,7 +656,8 @@ export class NamingSettingsRenderer extends BaseSettingsRenderer {
       inlineCode: t('selectionToolbar.actions.inlineCode'),
       inlineMath: t('selectionToolbar.actions.inlineMath'),
       clearFormat: t('selectionToolbar.actions.clearFormat'),
-      writing: t('writing.menu.writing')
+      writing: t('writing.menu.writing'),
+      translate: t('selectionToolbar.actions.translate')
     };
 
     // 默认图标映射
@@ -671,7 +672,8 @@ export class NamingSettingsRenderer extends BaseSettingsRenderer {
       inlineCode: 'code',
       inlineMath: 'sigma',
       clearFormat: 'eraser',
-      writing: 'pen-tool'
+      writing: 'pen-tool',
+      translate: 'languages'
     };
 
     // 有子菜单的按钮及其子项

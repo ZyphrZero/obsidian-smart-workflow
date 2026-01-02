@@ -3,10 +3,11 @@
  * 负责语言检测和翻译请求，支持流式输出
  * 
  * 功能：
- * - 自动语言检测（franc + 可选 LLM）
+ * - 自动语言检测（Rust 端 whatlang + 可选 LLM）
  * - 流式翻译响应
  * - 格式保留（段落、换行）
  * - 请求取消
+ * 
  */
 
 import { App } from 'obsidian';
@@ -17,6 +18,7 @@ import { AIClient, AIError, AIErrorCode, NetworkError, TimeoutError } from '../a
 import { debugLog } from '../../utils/logger';
 import { t } from '../../i18n';
 import { LanguageCode, SUPPORTED_LANGUAGES } from '../../settings/types';
+import { ServerManager } from '../server/serverManager';
 
 // ============================================================================
 // 类型定义
@@ -61,26 +63,45 @@ export class TranslationService {
   private configManager: ConfigManager;
   private languageDetector: LanguageDetector;
   private aiClient: AIClient | null = null;
+  private serverManager: ServerManager | null = null;
 
   /**
    * 构造函数
    * @param _app Obsidian App 实例（保留用于将来扩展）
    * @param settings 插件设置
    * @param onSettingsChange 设置变更回调
+   * @param serverManager ServerManager 实例（可选，用于 Rust 模式流式处理和语言检测）
    */
   constructor(
     _app: App,
     settings: SmartWorkflowSettings,
-    onSettingsChange?: () => Promise<void>
+    onSettingsChange?: () => Promise<void>,
+    serverManager?: ServerManager
   ) {
     this.settings = settings;
     this.configManager = new ConfigManager(settings, onSettingsChange);
+    this.serverManager = serverManager ?? null;
     
     // 初始化语言检测器
     this.languageDetector = new LanguageDetector({
       enableLLMDetection: settings.translation?.enableLLMDetection ?? false,
       llmConfidenceThreshold: settings.translation?.llmConfidenceThreshold ?? 0.8,
     });
+    
+    // 设置 ServerManager 用于 Rust 端语言检测
+    if (this.serverManager) {
+      this.languageDetector.setServerManager(this.serverManager);
+    }
+  }
+
+  /**
+   * 设置 ServerManager
+   * 用于启用 Rust 模式的流式处理和语言检测
+   */
+  setServerManager(serverManager: ServerManager): void {
+    this.serverManager = serverManager;
+    // 同时更新语言检测器的 ServerManager
+    this.languageDetector.setServerManager(serverManager);
   }
 
   // ============================================================================
@@ -185,6 +206,7 @@ export class TranslationService {
         model,
         timeout: this.settings.timeout || 30000, // 翻译可能需要更长时间
         debugMode: this.settings.debugMode,
+        serverManager: this.serverManager ?? undefined,
       });
 
       callbacks.onStart();

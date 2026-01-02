@@ -3,135 +3,154 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![GitHub Downloads](https://img.shields.io/github/downloads/ZyphrZero/obsidian-smart-workflow/total?logo=github&color=blue)](https://github.com/ZyphrZero/obsidian-smart-workflow/releases)
 
-> 🎯 **User Experience First** — This project prioritizes intuitive interaction and seamless workflow over feature bloat. Every design decision is made with the user's daily experience in mind.
+> 🎯 **User Experience First** — Intuitive interaction and seamless workflow over feature bloat.
 
-**Smart Workflow** is a powerful Obsidian plugin that enhances your knowledge management efficiency, keeping everything streamlined within Obsidian.
+**Smart Workflow** is a powerful Obsidian plugin that enhances your knowledge management with AI-powered features, integrated terminal, and voice input.
 
 [中文文档](./README_CN.md)
 
 ## ✨ Features
 
-### 🧠 Intelligent Note Naming
-- OpenAI-compatible API support (GPT, Claude, DeepSeek, etc.)
-- Multi-config management with quick switching
-- Custom Prompt templates with variable injection
-- Chain-of-thought model support (auto-filters `<think>` tags)
+### 🧠 AI Note Naming
+- OpenAI-compatible API support (GPT, Claude, DeepSeek, Qwen, etc.)
+- Multi-provider management with quick switching
+- Custom prompt templates with variable injection
+- Reasoning model support (auto-filters `<think>` tags)
 
 ### 💻 Integrated Terminal
 - Cross-platform: Windows, macOS, Linux
-- Rust-based PTY server with WebSocket communication
-- Multiple shell support: PowerShell, CMD, Bash, Zsh, WSL
-- Canvas/WebGL rendering options
-- Auto crash recovery and multi-session support
-- Customizable themes and background images
+- Rust PTY server with WebSocket communication
+- Multi-shell support: PowerShell, CMD, Bash, Zsh, WSL
+- Canvas/WebGL rendering, customizable themes
+
+### 🎤 Voice Input
+- Push-to-talk dictation mode
+- Multiple ASR engines: Alibaba Qwen, Doubao, SenseVoice
+- Realtime streaming transcription
+- LLM post-processing with custom presets
+
+### 🌐 Translation
+- Auto language detection
+- Bidirectional translation (Chinese ↔ English)
+- Selection toolbar integration
+
+### ✍️ Writing Assistant
+- Text polishing and refinement
+- Streaming LLM responses
+- Thinking process visualization
 
 ## 🚀 Installation
 
-### Manual Installation (Recommended)
-1.  Download `main.js`, `manifest.json`, `styles.css` from [Releases](https://github.com/ZyphrZero/obsidian-smart-workflow/releases).
-2.  Place the files in your library directory: `.obsidian/plugins/obsidian-smart-workflow/`.
-3.  Restart Obsidian and enable the plugin in the settings.
+### Manual Installation
+1. Download `main.js`, `manifest.json`, `styles.css` from [Releases](https://github.com/ZyphrZero/obsidian-smart-workflow/releases)
+2. Place files in `.obsidian/plugins/obsidian-smart-workflow/`
+3. Restart Obsidian and enable the plugin
 
-### Source Code Compilation
+### Build from Source
 ```bash
-# Clone repository
 git clone https://github.com/ZyphrZero/obsidian-smart-workflow.git
 cd obsidian-smart-workflow
 
-# Install dependencies
-pnpm i
-
-# Build plugin
+pnpm install
 pnpm build
-
-# Build PTY server binary (for terminal feature)
-node scripts/build-rust.js
-
-# Install to Obsidian (interactive)
-pnpm install:dev
+pnpm build:rust    # Build Rust server binary
+pnpm install:dev   # Install to Obsidian
 ```
 
-For more details, see [Build Scripts Guide](./scripts/README.md).
+## 📖 Quick Start
 
-## 📖 User Guide
+### Configure AI Provider
+1. Go to **Settings > AI Providers**
+2. Add a provider with endpoint and API key
+3. Add models under the provider
+4. Bind models to features (naming, translation, writing, etc.)
 
-### 1. Configure API
-Enter **Settings > General**:
-*   **API Endpoint**: Enter your API address (the plugin will automatically complete the path, like `/v1/chat/completions`).
-*   **API Key**: Enter your key.
-*   **Model**: Enter the model name (e.g., `gpt-4o`, `claude-4.5-sonnet`).
-*   Click **"Test Connection"** to ensure the configuration is correct.
-*   **Timeout Settings**: You can appropriately increase the timeout period when the network is slow.
+### AI File Naming
+- **Command Palette**: `Ctrl/Cmd + P` → "Generate AI File Name"
+- **Right-click Menu**: Right-click file or editor
 
-### 2. Generate File Name
-You can trigger it in any of the following ways:
-*   ~~**✨ Title Hover Button**: Hover over the title of the note (Inline Title) area, click the star icon that appears. (No suitable implementation method available yet)~~
-*   **Command Palette**: `Ctrl/Cmd + P` input "Generate AI File Name".
-*   **Right-click Menu**: Right-click in the file list or editor area.
+### Terminal
+- **Command Palette**: `Ctrl/Cmd + P` → "Open Terminal"
+- Supports custom shell paths and appearance settings
 
-### 3. Prompt Template Variables
-In the settings, you can use the following variables when customizing the prompt:
-*   `{{content}}`: Note content snippet (smartly truncated).
-*   `{{currentFileName}}`: Current file name.
-*   `{{#if currentFileName}}...{{/if}}`: Conditional block that only displays when there is a file name.
+### Voice Input
+- Configure ASR credentials in settings
+- Use hotkey to start/stop recording
+- Transcription auto-inserts at cursor
 
-**Example Template:**
-```text
-Please read the following note content and generate a filename that is concise and highly summary.
-Do not include the extension, do not use special characters.
+## ⚙️ Configuration
 
-Note content:
-{{content}}
+### Prompt Template Variables
 ```
-
-## ⚙️ Advanced Settings
-
-### AI File Naming Settings
-*   **Use Current Filename as Context**: When enabled, the AI will know the current filename, allowing you to ask it to "optimize" the existing name instead of regenerating it.
-*   **Analyze Directory Naming Style**: (Experimental) Attempts to analyze the naming habits of other files in the same directory.
-*   **Debug Mode**: Output the full Prompt and API response in the developer console (Ctrl+Shift+I) for troubleshooting.
+{{content}}           - Note content (smart truncated)
+{{currentFileName}}   - Current file name
+{{#if currentFileName}}...{{/if}}  - Conditional block
+```
 
 ### Terminal Settings
-*   **Shell Configuration**:
-    *   Support for custom Shell paths (e.g., `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`).
-    *   Automatic validation of Shell path validity to avoid startup failures.
-*   **Appearance Customization**:
-    *   **Renderer Selection**: canvas (better compatibility) or WebGL (better performance).
-    *   **Theme Colors**: Use Obsidian theme or customize foreground, background, cursor colors, etc.
-    *   **Background Image**: Support for background image URLs with adjustable opacity (0-1) and blur effects (0-50px).
-*   **Behavior Settings**:
-    *   **Scrollback Buffer**: Set terminal history lines (100-10000), default 1000 lines.
-    *   **Panel Height**: Set terminal panel default height (100-1000 pixels), default 300 pixels.
+- Shell path customization
+- Renderer: Canvas (compatible) / WebGL (performant)
+- Theme colors, background image, blur effects
+- Scrollback buffer (100-10000 lines)
+
+### Voice Settings
+- ASR provider: Qwen / Doubao / SenseVoice
+- Mode: Realtime (WebSocket) / HTTP
+- Recording mode: Press-to-talk / Toggle
+- LLM post-processing presets
+
+## 🏗️ Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                 Obsidian Plugin (TypeScript)                 │
+├─────────────────────────────────────────────────────────────┤
+│  Services                                                    │
+│  ├── naming/       AI file naming                           │
+│  ├── terminal/     Terminal management                      │
+│  ├── voice/        Voice input & ASR                        │
+│  ├── translation/  Language detection & translation         │
+│  ├── writing/      Writing assistant                        │
+│  └── config/       Provider & model management              │
+├─────────────────────────────────────────────────────────────┤
+│  UI                                                          │
+│  ├── settings/     Settings tabs                            │
+│  ├── terminal/     Terminal view (xterm.js)                 │
+│  ├── selection/    Selection toolbar                        │
+│  └── voice/        Voice overlay                            │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              │ WebSocket
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Smart Workflow Server (Rust)                    │
+│  ├── pty/      Terminal sessions                            │
+│  ├── voice/    Audio recording & ASR                        │
+│  ├── llm/      LLM streaming                                │
+│  └── utils/    Language detection                           │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ## 🧩 FAQ
 
-### AI File Naming
-**Q: Does it support DeepSeek or Claude?**
-A: Yes. This plugin is compatible with OpenAI format interfaces. For models like DeepSeek that output a "thinking process," the plugin automatically filters out `<think>` tags, keeping only the final result.
+**Q: Which AI providers are supported?**  
+A: Any OpenAI-compatible API. Tested with OpenAI, Claude, DeepSeek, Qwen, GLM, etc.
 
-**Q: Why hasn't the generated title changed?**
-A: Please check if the Prompt template is reasonable, or enable Debug Mode and press `Ctrl+Shift+I` to open the console and view the content actually returned by the AI.
+**Q: How to change terminal shell?**  
+A: Settings > Terminal > Shell Configuration. Enter custom path like `C:\Program Files\Git\bin\bash.exe`.
 
-### Terminal Features
-**Q: How do I change the terminal Shell?**
-A: In Settings > Terminal > Shell Configuration, enter a custom Shell path. For example:
-- Windows PowerShell: `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`
-- Windows CMD: `C:\Windows\System32\cmd.exe`
-- Git Bash: `C:\Program Files\Git\bin\bash.exe`
+**Q: Canvas or WebGL renderer?**  
+A: Try WebGL first for better performance. Switch to Canvas if issues occur.
 
-**Q: How do I set a terminal background image?**
-A: In Settings > Terminal > Appearance, enter an image URL (supports local paths or web addresses). You can adjust opacity and blur effects to achieve a frosted glass effect.
-
-**Q: Should I choose canvas or WebGL renderer?**
-A: 
-- **canvas**: Better compatibility, suitable for most scenarios.
-- **WebGL**: Better performance, but may not be supported on some systems. Try WebGL first, and switch to canvas if you encounter issues.
+**Q: Voice input not working?**  
+A: Check ASR credentials and ensure microphone permissions are granted.
 
 ---
+
 <div align="center">
 
-**Made with Love**
+**Made with ❤️**
 
-⭐ If this project helps you, please give us a Star! ❤️
+⭐ Star this project if it helps you!
 
 </div>

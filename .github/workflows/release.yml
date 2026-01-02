@@ -1,4 +1,4 @@
-name: Release Obsidian Plugin
+name: Release
 
 on:
   push:
@@ -6,7 +6,6 @@ on:
       - '*.*.*'
 
 jobs:
-  # 构建所有平台的 Rust 二进制文件
   build-rust:
     name: Build Rust ${{ matrix.platform }}-${{ matrix.arch }}
     runs-on: ${{ matrix.os }}
@@ -15,35 +14,26 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Windows x64
           - os: windows-latest
             platform: win32
             arch: x64
             target: x86_64-pc-windows-msvc
             ext: .exe
-            
-          # macOS ARM64 (Apple Silicon)
           - os: macos-latest
             platform: darwin
             arch: arm64
             target: aarch64-apple-darwin
             ext: ''
-            
-          # macOS x64 (Intel)
           - os: macos-latest
             platform: darwin
             arch: x64
             target: x86_64-apple-darwin
             ext: ''
-            
-          # Linux x64
           - os: ubuntu-latest
             platform: linux
             arch: x64
             target: x86_64-unknown-linux-gnu
             ext: ''
-            
-          # Linux ARM64
           - os: ubuntu-latest
             platform: linux
             arch: arm64
@@ -51,174 +41,117 @@ jobs:
             ext: ''
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Rust toolchain
+      - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install cross-compilation tools (Linux ARM64)
+      - name: Install dependencies (Linux ARM64)
         if: matrix.platform == 'linux' && matrix.arch == 'arm64'
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
+          sudo apt-get install -y gcc-aarch64-linux-gnu libasound2-dev
 
-      - name: Cache Rust dependencies
+      - name: Install dependencies (Linux x64)
+        if: matrix.platform == 'linux' && matrix.arch == 'x64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev
+
+      - name: Cache Rust
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: pty-server -> target
+          workspaces: rust-servers -> target
           key: ${{ matrix.target }}
 
-      - name: Build PTY server
-        working-directory: pty-server
+      - name: Build
+        working-directory: rust-servers
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: ${{ matrix.platform == 'linux' && matrix.arch == 'arm64' && 'aarch64-linux-gnu-gcc' || '' }}
         run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Prepare binary and checksum
+      - name: Prepare binary
         shell: bash
         run: |
           mkdir -p binaries
-          BINARY_NAME="pty-server-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}"
-          cp "pty-server/target/${{ matrix.target }}/release/pty-server${{ matrix.ext }}" "binaries/${BINARY_NAME}"
+          BINARY_NAME="smart-workflow-server-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}"
+          cp "rust-servers/target/${{ matrix.target }}/release/smart-workflow-server${{ matrix.ext }}" "binaries/${BINARY_NAME}"
           
-          # 生成 SHA256 校验和
           cd binaries
           if command -v sha256sum &> /dev/null; then
             sha256sum "${BINARY_NAME}" > "${BINARY_NAME}.sha256"
-          elif command -v shasum &> /dev/null; then
-            shasum -a 256 "${BINARY_NAME}" > "${BINARY_NAME}.sha256"
           else
-            echo "Error: No SHA256 tool found"
-            exit 1
+            shasum -a 256 "${BINARY_NAME}" > "${BINARY_NAME}.sha256"
           fi
-          
-          echo "Generated checksum:"
-          cat "${BINARY_NAME}.sha256"
 
-      - name: Upload binary artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pty-server-${{ matrix.platform }}-${{ matrix.arch }}
+          name: server-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
-            binaries/pty-server-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}
-            binaries/pty-server-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}.sha256
+            binaries/smart-workflow-server-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}
+            binaries/smart-workflow-server-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}.sha256
 
-  # 构建和打包插件
-  build-plugin:
-    name: Build and Package Plugin
+  release:
+    name: Release
     needs: build-rust
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v4
 
-      - name: Download all Rust binaries
+      - name: Download binaries
         uses: actions/download-artifact@v4
         with:
-          pattern: pty-server-*
+          pattern: 'server-*'
           path: binaries
           merge-multiple: true
 
-      - name: Set executable permissions
+      - name: Set permissions
         run: |
-          chmod +x binaries/pty-server-darwin-arm64 || true
-          chmod +x binaries/pty-server-darwin-x64 || true
-          chmod +x binaries/pty-server-linux-x64 || true
-          chmod +x binaries/pty-server-linux-arm64 || true
+          chmod +x binaries/smart-workflow-server-darwin-* || true
+          chmod +x binaries/smart-workflow-server-linux-* || true
 
-      - name: Install dependencies
-        run: pnpm i
-
-      - name: Build plugin
-        run: pnpm build
-
-      - name: Create plugin package directory
+      - name: Install and build
         run: |
-          mkdir -p plugin-package/binaries
-          
-          # 复制核心文件
-          cp main.js plugin-package/
-          cp manifest.json plugin-package/
-          cp styles.css plugin-package/
-          
-          # 复制内置平台的二进制文件（覆盖 95% 用户）
-          cp binaries/pty-server-win32-x64.exe plugin-package/binaries/
-          cp binaries/pty-server-win32-x64.exe.sha256 plugin-package/binaries/
-          cp binaries/pty-server-darwin-arm64 plugin-package/binaries/
-          cp binaries/pty-server-darwin-arm64.sha256 plugin-package/binaries/
-          cp binaries/pty-server-linux-x64 plugin-package/binaries/
-          cp binaries/pty-server-linux-x64.sha256 plugin-package/binaries/
-          
-          # 设置可执行权限
-          chmod +x plugin-package/binaries/pty-server-darwin-arm64
-          chmod +x plugin-package/binaries/pty-server-linux-x64
-          
-          # 创建 ZIP 包
-          cd plugin-package
-          zip -r ../obsidian-smart-workflow.zip .
-          cd ..
-          
-          echo "📦 插件包创建完成"
-          ls -lh obsidian-smart-workflow.zip
+          pnpm i
+          pnpm build
 
-      - name: Create Release
+      - name: Package
+        run: |
+          mkdir -p obsidian-smart-workflow/binaries
+          cp main.js manifest.json styles.css obsidian-smart-workflow/
+          
+          # 所有平台
+          cp binaries/smart-workflow-server-* obsidian-smart-workflow/binaries/
+          
+          chmod +x obsidian-smart-workflow/binaries/smart-workflow-server-darwin-*
+          chmod +x obsidian-smart-workflow/binaries/smart-workflow-server-linux-*
+          
+          zip -r obsidian-smart-workflow.zip obsidian-smart-workflow
+
+      - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          files: |
-            obsidian-smart-workflow.zip
-            main.js
-            manifest.json
-            styles.css
-            binaries/pty-server-win32-x64.exe
-            binaries/pty-server-win32-x64.exe.sha256
-            binaries/pty-server-darwin-arm64
-            binaries/pty-server-darwin-arm64.sha256
-            binaries/pty-server-darwin-x64
-            binaries/pty-server-darwin-x64.sha256
-            binaries/pty-server-linux-x64
-            binaries/pty-server-linux-x64.sha256
-            binaries/pty-server-linux-arm64
-            binaries/pty-server-linux-arm64.sha256
-          draft: false
-          prerelease: false
+          files: obsidian-smart-workflow.zip
           body: |
-            ## 安装说明
+            ## Installation
             
-            ### 方式 1: 使用插件包（推荐）
-            下载 `obsidian-smart-workflow.zip`，解压到 Obsidian 插件目录。
+            Download `obsidian-smart-workflow.zip` and extract to `.obsidian/plugins/`.
             
-            包含内容：
-            - 核心文件：`main.js`, `manifest.json`, `styles.css`
-            - 内置平台二进制文件（覆盖 95% 用户）：
-              - Windows x64
-              - macOS ARM64 (Apple Silicon)
-              - Linux x64
-            
-            ### 方式 2: 手动安装
-            1. 下载 `main.js`, `manifest.json`, `styles.css`
-            2. 放到 Obsidian 插件目录
-            3. 如果你的平台是 macOS Intel 或 Linux ARM64，插件会在首次启动时自动下载对应的二进制文件
-            
-            ## 支持的平台
-            - ✅ Windows x64（内置）
-            - ✅ macOS ARM64 / Apple Silicon（内置）
-            - ✅ macOS x64 / Intel（自动下载）
-            - ✅ Linux x64（内置）
-            - ✅ Linux ARM64（自动下载）
-            
-            ## 二进制文件
-            所有平台的 PTY 服务器二进制文件都已包含在此 Release 中，并附带 SHA256 校验和文件。
+            **Includes:**
+            - Core files: `main.js`, `manifest.json`, `styles.css`
+            - Binaries: Windows x64, macOS ARM64/x64, Linux x64/ARM64
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

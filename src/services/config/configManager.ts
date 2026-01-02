@@ -411,6 +411,18 @@ export class ConfigManager {
         }
       }
     }
+    
+    // 重置语音 LLM 后处理配置
+    if (this.settings.voice?.postProcessingProviderId === providerId) {
+      this.settings.voice.postProcessingProviderId = undefined;
+      this.settings.voice.postProcessingModelId = undefined;
+    }
+    
+    // 重置 AI 助手配置
+    if (this.settings.voice?.assistantConfig?.providerId === providerId) {
+      this.settings.voice.assistantConfig.providerId = undefined;
+      this.settings.voice.assistantConfig.modelId = undefined;
+    }
   }
 
   /**
@@ -430,6 +442,18 @@ export class ConfigManager {
         }
       }
     }
+    
+    // 重置语音 LLM 后处理配置
+    if (this.settings.voice?.postProcessingProviderId === providerId &&
+        this.settings.voice?.postProcessingModelId === modelId) {
+      this.settings.voice.postProcessingModelId = undefined;
+    }
+    
+    // 重置 AI 助手配置
+    if (this.settings.voice?.assistantConfig?.providerId === providerId &&
+        this.settings.voice?.assistantConfig?.modelId === modelId) {
+      this.settings.voice.assistantConfig.modelId = undefined;
+    }
   }
 
   /**
@@ -439,5 +463,97 @@ export class ConfigManager {
     if (this.onSettingsChange) {
       this.onSettingsChange();
     }
+  }
+
+  // ============================================================================
+  // 密钥轮询
+  // ============================================================================
+
+  /**
+   * 获取供应商的当前 API 密钥
+   * 支持多密钥轮询模式
+   */
+  getCurrentApiKey(providerId: string): string | undefined {
+    const provider = this.getProvider(providerId);
+    if (!provider) return undefined;
+
+    // 如果有多密钥配置，使用轮询
+    if (provider.apiKeys && provider.apiKeys.length > 0) {
+      const index = provider.currentKeyIndex ?? 0;
+      return provider.apiKeys[index];
+    }
+
+    // 否则返回单个密钥
+    return provider.apiKey;
+  }
+
+  /**
+   * 轮询到下一个密钥
+   * 在请求失败（如限流）时调用
+   */
+  rotateApiKey(providerId: string): string | undefined {
+    const provider = this.getProvider(providerId);
+    if (!provider) return undefined;
+
+    // 只有多密钥时才轮询
+    if (!provider.apiKeys || provider.apiKeys.length <= 1) {
+      return provider.apiKey;
+    }
+
+    // 计算下一个索引
+    const currentIndex = provider.currentKeyIndex ?? 0;
+    const nextIndex = (currentIndex + 1) % provider.apiKeys.length;
+    
+    // 更新索引
+    provider.currentKeyIndex = nextIndex;
+    this.saveSettings();
+
+    return provider.apiKeys[nextIndex];
+  }
+
+  /**
+   * 获取供应商的密钥数量
+   */
+  getApiKeyCount(providerId: string): number {
+    const provider = this.getProvider(providerId);
+    if (!provider) return 0;
+
+    if (provider.apiKeys && provider.apiKeys.length > 0) {
+      return provider.apiKeys.length;
+    }
+
+    return provider.apiKey ? 1 : 0;
+  }
+
+  // ============================================================================
+  // 供应商查找
+  // ============================================================================
+
+  /**
+   * 根据 endpoint 特征查找硅基流动供应商
+   * 用于 ASR 配置复用已有的 API Key
+   * @returns 硅基流动供应商，如果未找到则返回 undefined
+   */
+  findSiliconFlowProvider(): Provider | undefined {
+    // 硅基流动的 endpoint 特征
+    const siliconFlowEndpoints = [
+      'api.siliconflow.cn',
+      'siliconflow.cn',
+    ];
+
+    return this.settings.providers.find(provider => {
+      const endpoint = provider.endpoint.toLowerCase();
+      return siliconFlowEndpoints.some(pattern => endpoint.includes(pattern));
+    });
+  }
+
+  /**
+   * 获取硅基流动供应商的 API Key
+   * @returns API Key，如果未找到供应商或无 API Key 则返回 undefined
+   */
+  getSiliconFlowApiKey(): string | undefined {
+    const provider = this.findSiliconFlowProvider();
+    if (!provider) return undefined;
+    return this.getCurrentApiKey(provider.id);
   }
 }

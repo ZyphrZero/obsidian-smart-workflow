@@ -12,7 +12,6 @@
 export { AIClient } from './aiClient';
 export { RequestBuilder } from './requestBuilder';
 export { ResponseParser, type ResponseFormat } from './responseParser';
-export { StreamHandler } from './streamHandler';
 export { ThinkingProcessor, THINKING_PATTERNS } from './thinkingProcessor';
 export { EndpointNormalizer } from './endpointNormalizer';
 export { ConnectionTester, type ConnectionTesterOptions, type ConnectionTestResult } from './connectionTester';
@@ -88,8 +87,6 @@ export type {
   ResponsesOutputItem,
   // 请求构建器类型
   RequestBuilderOptions,
-  // 流式处理器类型
-  StreamHandlerOptions,
   // 思考处理类型
   ThinkingPattern,
   ThinkingProcessResult,

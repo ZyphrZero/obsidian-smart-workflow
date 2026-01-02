@@ -1,9 +1,58 @@
-[workspace]
-resolver = "2"
-members = [
-    "pty-server",
-    "voice-server",
-]
+# Rust 统一服务器
+[package]
+name = "smart-workflow-server"
+version = "1.0.0"
+edition = "2021"
+description = "Unified server for obsidian-smart-workflow plugin"
+
+[[bin]]
+name = "smart-workflow-server"
+path = "src/main.rs"
+
+[dependencies]
+# PTY 支持
+portable-pty = "0.9"
+
+# 异步运行时
+tokio = { version = "1", features = ["rt", "net", "sync", "signal", "macros", "time"] }
+
+# WebSocket (native-tls 用于 wss:// 连接)
+tokio-tungstenite = { version = "0.28", features = ["native-tls"] }
+futures-util = "0.3"
+
+# 音频录制
+cpal = "0.15"
+
+# 音频播放 (提示音)
+rodio = { version = "0.21", default-features = false, features = ["wav", "playback"] }
+
+# 音频编码
+hound = "3.5"
+
+# 序列化
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# HTTP 客户端 (用于 ASR 和 LLM API)
+reqwest = { version = "0.12", features = ["json", "multipart", "stream", "native-tls"] }
+
+# 错误处理
+thiserror = "2.0"
+
+# Base64 编码
+base64 = "0.22"
+
+# Gzip 压缩
+flate2 = "1.0"
+
+# 异步 trait 支持
+async-trait = "0.1"
+
+# 取消令牌
+tokio-util = "0.7"
+
+# 语言检测
+whatlang = "0.18"
 
 # 共享的 release profile 配置
 [profile.release]

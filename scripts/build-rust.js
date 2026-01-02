@@ -1,7 +1,7 @@
 /**
- * Rust Servers Build Script (Cargo Workspace)
- * Auto-detect current platform and build the corresponding binaries
- * Supports building individual members or all members in the workspace
+ * Unified Rust Server Build Script
+ * Auto-detect current platform and build the unified server binary
+ * Binary naming: smart-workflow-server-{platform}-{arch}
  */
 
 const { execSync } = require('child_process');
@@ -38,25 +38,18 @@ const PLATFORMS = {
   },
 };
 
-// Workspace members configuration
-const WORKSPACE_MEMBERS = {
-  'pty-server': {
-    name: 'pty-server',
-    displayName: 'PTY Server',
-    binaryName: 'pty-server'
-  },
-  'voice-server': {
-    name: 'voice-server',
-    displayName: 'Voice Server',
-    binaryName: 'voice-server'
-  }
+// Unified server configuration
+const SERVER_CONFIG = {
+  name: 'smart-workflow-server',
+  displayName: 'Smart Workflow Server',
+  binaryPrefix: 'smart-workflow-server'
 };
 
 // Reference binary size (for hints only)
-const REFERENCE_BINARY_SIZE = 2 * 1024 * 1024;
+const REFERENCE_BINARY_SIZE = 5 * 1024 * 1024;
 
 // Project paths
-const WORKSPACE_DIR = path.join(__dirname, '..', 'rust-servers');
+const RUST_DIR = path.join(__dirname, '..', 'rust-servers');
 const BINARIES_DIR = path.join(__dirname, '..', 'binaries');
 
 /**
@@ -72,23 +65,18 @@ function getCurrentPlatform() {
 function parseArgs() {
   const args = process.argv.slice(2);
   const options = {
-    members: [],      // Which members to build (empty = all available)
     skipInstall: false,
-    help: false
+    help: false,
+    clean: false
   };
 
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
+  for (const arg of args) {
     if (arg === '--skip-install') {
       options.skipInstall = true;
     } else if (arg === '--help' || arg === '-h') {
       options.help = true;
-    } else if (arg === '--member' || arg === '-m') {
-      if (i + 1 < args.length) {
-        options.members.push(args[++i]);
-      }
-    } else if (arg.startsWith('--member=')) {
-      options.members.push(arg.substring('--member='.length));
+    } else if (arg === '--clean') {
+      options.clean = true;
     }
   }
 
@@ -99,90 +87,79 @@ function parseArgs() {
  * Show help message
  */
 function showHelp() {
-  console.log('Rust Servers Build Script (Cargo Workspace)');
+  console.log('Unified Rust Server Build Script');
   console.log('');
   console.log('Usage: node build-rust.js [OPTIONS]');
   console.log('');
   console.log('Options:');
-  console.log('  -m, --member <name>  Build specific member (can be used multiple times)');
-  console.log('                       Available members: pty-server, voice-server');
   console.log('  --skip-install       Skip rustup target installation');
+  console.log('  --clean              Clean build cache before building');
   console.log('  -h, --help           Show this help message');
   console.log('');
+  console.log('Output:');
+  console.log('  Binary: binaries/smart-workflow-server-{platform}-{arch}[.exe]');
+  console.log('');
   console.log('Examples:');
-  console.log('  node build-rust.js                    # Build all available members');
-  console.log('  node build-rust.js -m pty-server      # Build only pty-server');
-  console.log('  node build-rust.js -m pty-server -m voice-server  # Build both');
+  console.log('  node build-rust.js              # Build for current platform');
+  console.log('  node build-rust.js --clean      # Clean build');
 }
 
 /**
- * Get available workspace members (those that exist on disk)
+ * Build the unified server
  */
-function getAvailableMembers() {
-  const available = [];
-  for (const [key, config] of Object.entries(WORKSPACE_MEMBERS)) {
-    const memberPath = path.join(WORKSPACE_DIR, key);
-    if (fs.existsSync(memberPath) && fs.existsSync(path.join(memberPath, 'Cargo.toml'))) {
-      available.push({ key, ...config });
-    }
-  }
-  return available;
-}
-
-/**
- * Build a single workspace member
- */
-function buildMember(member, platformName, config) {
-  const binaryName = `${member.binaryName}-${platformName}${config.ext}`;
+function buildServer(platformName, config, options) {
+  const binaryName = `${SERVER_CONFIG.binaryPrefix}-${platformName}${config.ext}`;
   const outputPath = path.join(BINARIES_DIR, binaryName);
   
-  console.log(`  📦 Building ${member.displayName}...`);
+  console.log(`📦 Building ${SERVER_CONFIG.displayName}...`);
   
-  // 1. Clean cache for this member
-  console.log('    🧹 Cleaning cache...');
-  try {
-    execSync(
-      `cargo clean -p ${member.name} --release --target ${config.target}`,
-      {
-        cwd: WORKSPACE_DIR,
-        stdio: 'pipe',
-        encoding: 'utf8'
-      }
-    );
-  } catch (error) {
-    console.log('    ⚠️  Cache clean skipped (may be first build)');
+  // 1. Clean cache if requested
+  if (options.clean) {
+    console.log('  🧹 Cleaning build cache...');
+    try {
+      execSync(
+        `cargo clean --release --target ${config.target}`,
+        {
+          cwd: RUST_DIR,
+          stdio: 'pipe',
+          encoding: 'utf8'
+        }
+      );
+    } catch (error) {
+      console.log('  ⚠️  Cache clean skipped (may be first build)');
+    }
   }
   
   // 2. Compile
-  console.log('    📦 Compiling...');
+  console.log('  📦 Compiling...');
   const startTime = Date.now();
   
   try {
     execSync(
-      `cargo build -p ${member.name} --release --target ${config.target}`,
+      `cargo build --release --target ${config.target}`,
       {
-        cwd: WORKSPACE_DIR,
-        stdio: 'pipe',
+        cwd: RUST_DIR,
+        stdio: 'inherit',
         encoding: 'utf8'
       }
     );
   } catch (error) {
-    throw new Error(`Compilation failed for ${member.name}: ${error.stderr || error.message}`);
+    throw new Error(`Compilation failed: ${error.message}`);
   }
   
   const buildTime = ((Date.now() - startTime) / 1000).toFixed(1);
-  console.log(`    ⏱️  Build time: ${buildTime}s`);
+  console.log(`  ⏱️  Build time: ${buildTime}s`);
   
   // 3. Find build artifact
-  const targetDir = path.join(WORKSPACE_DIR, 'target', config.target, 'release');
-  const sourceBinary = path.join(targetDir, `${member.binaryName}${config.ext}`);
+  const targetDir = path.join(RUST_DIR, 'target', config.target, 'release');
+  const sourceBinary = path.join(targetDir, `${SERVER_CONFIG.name}${config.ext}`);
   
   if (!fs.existsSync(sourceBinary)) {
     throw new Error(`Build artifact not found: ${sourceBinary}`);
   }
   
   // 4. Copy to binaries directory
-  console.log('    📋 Copying binary...');
+  console.log('  📋 Copying binary...');
   fs.copyFileSync(sourceBinary, outputPath);
   
   // 5. Verify file size
@@ -190,20 +167,20 @@ function buildMember(member, platformName, config) {
   const sizeMB = (stats.size / 1024 / 1024).toFixed(2);
   const sizeKB = (stats.size / 1024).toFixed(0);
   
-  console.log(`    📊 File size: ${sizeMB} MB (${sizeKB} KB)`);
+  console.log(`  📊 File size: ${sizeMB} MB (${sizeKB} KB)`);
   
   if (stats.size > REFERENCE_BINARY_SIZE) {
-    console.log(`    💡 Note: File size exceeds 2MB reference, this is normal`);
+    console.log(`  💡 Note: File size exceeds 5MB reference, this is expected for unified server`);
   }
   
   // 6. Generate SHA256 checksum
-  console.log('    🔐 Generating SHA256 checksum...');
+  console.log('  🔐 Generating SHA256 checksum...');
   const checksum = generateChecksum(outputPath);
   const checksumPath = `${outputPath}.sha256`;
   fs.writeFileSync(checksumPath, `${checksum}  ${binaryName}\n`);
-  console.log(`    ✓ SHA256: ${checksum}`);
+  console.log(`  ✓ SHA256: ${checksum}`);
   
-  return { binaryName, outputPath, checksum };
+  return { binaryName, outputPath, checksum, sizeMB };
 }
 
 /**
@@ -216,6 +193,43 @@ function generateChecksum(filePath) {
   return hash.digest('hex');
 }
 
+/**
+ * Clean up legacy binary files
+ */
+function cleanupLegacyBinaries() {
+  const legacyPatterns = [
+    /^pty-server-/,
+    /^voice-server-/
+  ];
+  
+  if (!fs.existsSync(BINARIES_DIR)) {
+    return;
+  }
+  
+  const files = fs.readdirSync(BINARIES_DIR);
+  let cleaned = 0;
+  
+  for (const file of files) {
+    for (const pattern of legacyPatterns) {
+      if (pattern.test(file)) {
+        const filePath = path.join(BINARIES_DIR, file);
+        try {
+          fs.unlinkSync(filePath);
+          console.log(`  🗑️  Removed legacy binary: ${file}`);
+          cleaned++;
+        } catch (error) {
+          console.warn(`  ⚠️  Failed to remove ${file}: ${error.message}`);
+        }
+        break;
+      }
+    }
+  }
+  
+  if (cleaned > 0) {
+    console.log(`  ✓ Cleaned ${cleaned} legacy binary file(s)`);
+  }
+}
+
 // Main execution
 const options = parseArgs();
 
@@ -224,7 +238,7 @@ if (options.help) {
   process.exit(0);
 }
 
-console.log('🦀 Rust Servers Build Script (Cargo Workspace)');
+console.log('🦀 Unified Rust Server Build Script');
 console.log('');
 
 // Detect current platform
@@ -250,9 +264,9 @@ try {
   process.exit(1);
 }
 
-// Check workspace directory
-if (!fs.existsSync(WORKSPACE_DIR)) {
-  console.error(`❌ Error: Workspace directory not found: ${WORKSPACE_DIR}`);
+// Check Rust source directory
+if (!fs.existsSync(RUST_DIR)) {
+  console.error(`❌ Error: Rust source directory not found: ${RUST_DIR}`);
   process.exit(1);
 }
 
@@ -262,40 +276,11 @@ if (!fs.existsSync(BINARIES_DIR)) {
   console.log(`📁 Created binaries directory: ${BINARIES_DIR}`);
 }
 
+// Clean up legacy binaries
 console.log('');
+console.log('🧹 Checking for legacy binaries...');
+cleanupLegacyBinaries();
 
-// Get available members
-const availableMembers = getAvailableMembers();
-
-if (availableMembers.length === 0) {
-  console.error('❌ Error: No workspace members found');
-  process.exit(1);
-}
-
-console.log(`📦 Available workspace members: ${availableMembers.map(m => m.name).join(', ')}`);
-
-// Determine which members to build
-let membersToBuild = availableMembers;
-
-if (options.members.length > 0) {
-  // Filter to only requested members
-  membersToBuild = [];
-  for (const requestedMember of options.members) {
-    const found = availableMembers.find(m => m.key === requestedMember || m.name === requestedMember);
-    if (found) {
-      membersToBuild.push(found);
-    } else {
-      console.warn(`⚠️  Warning: Member "${requestedMember}" not found or not available`);
-    }
-  }
-  
-  if (membersToBuild.length === 0) {
-    console.error('❌ Error: No valid members to build');
-    process.exit(1);
-  }
-}
-
-console.log(`🔨 Members to build: ${membersToBuild.map(m => m.name).join(', ')}`);
 console.log('');
 
 // Install build target
@@ -305,7 +290,7 @@ if (!options.skipInstall) {
     console.log(`  - ${platformConfig.target}`);
     execSync(`rustup target add ${platformConfig.target}`, { 
       stdio: 'pipe',
-      cwd: WORKSPACE_DIR 
+      cwd: RUST_DIR 
     });
   } catch (error) {
     console.warn(`  ⚠️  Cannot install ${platformConfig.target}, may already be installed`);
@@ -313,43 +298,25 @@ if (!options.skipInstall) {
   console.log('');
 }
 
-// Build each member
+// Build the unified server
 console.log(`🔨 Building for ${platformConfig.displayName}...`);
 console.log('');
 
-const results = [];
-let hasError = false;
-
-for (const member of membersToBuild) {
-  try {
-    const result = buildMember(member, currentPlatform, platformConfig);
-    results.push({ member: member.name, success: true, ...result });
-    console.log(`  ✅ ${member.displayName} built successfully`);
-    console.log('');
-  } catch (error) {
-    console.error(`  ❌ ${member.displayName} build failed: ${error.message}`);
-    results.push({ member: member.name, success: false, error: error.message });
-    hasError = true;
-    console.log('');
-  }
-}
-
-// Summary
-console.log('');
-console.log('📊 Build Summary:');
-for (const result of results) {
-  if (result.success) {
-    console.log(`  ✅ ${result.member}: ${result.binaryName}`);
-  } else {
-    console.log(`  ❌ ${result.member}: ${result.error}`);
-  }
-}
-
-console.log('');
-if (hasError) {
-  console.log('⚠️  Build completed with errors');
-  process.exit(1);
-} else {
+try {
+  const result = buildServer(currentPlatform, platformConfig, options);
+  
+  console.log('');
+  console.log('📊 Build Summary:');
+  console.log(`  ✅ ${SERVER_CONFIG.displayName}`);
+  console.log(`     Binary: ${result.binaryName}`);
+  console.log(`     Size: ${result.sizeMB} MB`);
+  console.log(`     SHA256: ${result.checksum.substring(0, 16)}...`);
+  
+  console.log('');
   console.log('🎉 Build complete!');
-  console.log(`📁 Binary location: ${BINARIES_DIR}`);
+  console.log(`�u Binary location: ${BINARIES_DIR}`);
+} catch (error) {
+  console.error('');
+  console.error(`❌ Build failed: ${error.message}`);
+  process.exit(1);
 }

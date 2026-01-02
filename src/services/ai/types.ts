@@ -6,6 +6,7 @@
  */
 
 import { Provider, ModelConfig, APIFormat, ReasoningEffort } from '../../settings/settings';
+import { ServerManager } from '../server/serverManager';
 
 // ============================================================================
 // AIClient 配置类型
@@ -24,6 +25,8 @@ export interface AIClientOptions {
   timeout?: number;
   /** 是否启用调试模式 */
   debugMode?: boolean;
+  /** ServerManager 实例（用于流式请求，非流式请求可选） */
+  serverManager?: ServerManager;
 }
 
 /**
@@ -311,26 +314,6 @@ export interface RequestBuilderOptions {
   systemPrompt?: string;
   /** 是否流式响应 */
   stream?: boolean;
-}
-
-// ============================================================================
-// 流式处理器类型
-// ============================================================================
-
-/**
- * 流式处理器选项
- */
-export interface StreamHandlerOptions {
-  /** API 格式 */
-  apiFormat: APIFormat;
-  /** 内容块回调 */
-  onChunk: (content: string) => void;
-  /** 思考内容回调（可选） */
-  onThinking?: (content: string) => void;
-  /** 完成回调 */
-  onComplete: (fullContent: string) => void;
-  /** 错误回调 */
-  onError: (error: Error) => void;
 }
 
 // ============================================================================

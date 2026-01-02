@@ -2,7 +2,6 @@
  * TranslationModal - 翻译模态窗口
  * 显示翻译结果，支持语言选择、流式更新、复制和替换功能
  * 
- * Requirements: 2.1, 2.2, 2.3, 2.4, 2.6
  */
 
 import { App, Modal, setIcon } from 'obsidian';

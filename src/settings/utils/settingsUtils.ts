@@ -37,6 +37,7 @@ export function getSettingTabs(): SettingTab[] {
   return [
     { id: 'general', name: t('settings.tabs.general'), icon: 'settings' },
     { id: 'naming', name: t('settings.tabs.naming'), icon: 'tag' },
+    { id: 'voice', name: t('settings.tabs.voice'), icon: 'mic' },
     { id: 'terminal', name: t('settings.tabs.terminal'), icon: 'terminal' },
     { id: 'advanced', name: t('settings.tabs.advanced'), icon: 'sliders-horizontal' }
   ];

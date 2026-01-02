@@ -3,133 +3,154 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![GitHub Downloads](https://img.shields.io/github/downloads/ZyphrZero/obsidian-smart-workflow/total?logo=github&color=blue)](https://github.com/ZyphrZero/obsidian-smart-workflow/releases)
 
-> 🎯 **用户体验至上** — 本项目始终将用户交互体验放在首位，追求直观流畅的操作体验，而非功能堆砌。每一个设计决策都以用户的日常使用感受为核心考量。
+> 🎯 **用户体验至上** — 追求直观流畅的操作体验，而非功能堆砌。
 
-**Smart Workflow** 是一款强大的 Obsidian 智能工作流插件，提升您的知识管理效率，让一切都在 Obsidian 中高效完成。
+**Smart Workflow** 是一款强大的 Obsidian 插件，集成 AI 智能功能、终端、语音输入，提升知识管理效率。
+
+[English](./README.md)
 
 ## ✨ 功能特性
 
-### 🧠 智能笔记命名
-- 支持 OpenAI 兼容 API（GPT、Claude、DeepSeek 等）
-- 多配置管理，快速切换
+### 🧠 AI 智能命名
+- 支持 OpenAI 兼容 API（GPT、Claude、DeepSeek、Qwen 等）
+- 多供应商管理，快速切换
 - 自定义 Prompt 模板，支持变量注入
-- 支持思考链模型（自动过滤 `<think>` 标签）
+- 支持推理模型（自动过滤 `<think>` 标签）
 
 ### 💻 集成终端
 - 跨平台：Windows、macOS、Linux
-- 基于 Rust 的 PTY 服务器，WebSocket 通信
+- Rust PTY 服务器，WebSocket 通信
 - 多 Shell 支持：PowerShell、CMD、Bash、Zsh、WSL
-- Canvas/WebGL 渲染可选
-- 自动崩溃恢复，多会话支持
-- 可自定义主题和背景图片
+- Canvas/WebGL 渲染，可自定义主题
+
+### 🎤 语音输入
+- 按键说话听写模式
+- 多 ASR 引擎：阿里云 Qwen、豆包 Doubao、SenseVoice
+- 实时流式转录
+- LLM 后处理，自定义预设
+
+### 🌐 翻译功能
+- 自动语言检测
+- 双向翻译（中文 ↔ 英文）
+- 选中文字工具栏集成
+
+### ✍️ 写作助手
+- 文本润色优化
+- LLM 流式响应
+- 思考过程可视化
 
 ## 🚀 安装
 
-### 手动安装（推荐）
-1.  从 [Releases](https://github.com/ZyphrZero/obsidian-smart-workflow/releases) 下载 `main.js`, `manifest.json`, `styles.css`。
-2.  将文件放入您的插件目录：`.obsidian/plugins/obsidian-smart-workflow/`。
-3.  重启 Obsidian 并在设置中启用插件。
+### 手动安装
+1. 从 [Releases](https://github.com/ZyphrZero/obsidian-smart-workflow/releases) 下载 `main.js`、`manifest.json`、`styles.css`
+2. 放入 `.obsidian/plugins/obsidian-smart-workflow/`
+3. 重启 Obsidian 并启用插件
 
-### 源码编译
+### 源码构建
 ```bash
-# 克隆仓库
 git clone https://github.com/ZyphrZero/obsidian-smart-workflow.git
 cd obsidian-smart-workflow
 
-# 安装依赖
-pnpm i
-
-# 构建插件
+pnpm install
 pnpm build
-
-# 构建 PTY 服务器二进制（终端功能需要）
-node scripts/build-rust.js
-
-# 安装到 Obsidian（交互式）
-pnpm install:dev
+pnpm build:rust    # 构建 Rust 服务器
+pnpm install:dev   # 安装到 Obsidian
 ```
 
-更多详情请参阅 [构建脚本指南](./scripts/README.md)。
+## 📖 快速开始
 
-## 📖 使用指南
+### 配置 AI 供应商
+1. 进入 **设置 > AI 供应商**
+2. 添加供应商，填写端点和 API Key
+3. 在供应商下添加模型
+4. 将模型绑定到功能（命名、翻译、写作等）
 
-### 1. 配置 API
-进入 **设置 > 常规设置**：
-*   **API 端点**：输入您的 API 地址（插件会自动补全路径，如 `/v1/chat/completions`）。
-*   **API Key**：输入您的密钥。
-*   **模型**：输入模型名称（如 `gpt-4o`, `claude-4.5-sonnet`）。
-*   点击 **"测试连接"** 确保配置正确。
-*   **超时设置**：网络较慢时可适当增加超时时间。
+### AI 文件命名
+- **命令面板**：`Ctrl/Cmd + P` → "Generate AI File Name"
+- **右键菜单**：右键文件或编辑器
 
-### 2. 生成文件名
-您可以通过以下任意方式触发：
-*   ~~**✨ 标题悬浮按钮**：鼠标悬停在笔记标题（Inline Title）区域，点击出现的星星图标。(暂无合适的实现方式)~~
-*   **命令面板**：`Ctrl/Cmd + P` 输入 "Generate AI File Name"。
-*   **右键菜单**：在文件列表或编辑器区域右键点击。
+### 终端
+- **命令面板**：`Ctrl/Cmd + P` → "Open Terminal"
+- 支持自定义 Shell 路径和外观设置
 
-### 3. Prompt 模板变量
-在设置中自定义 Prompt 时，可以使用以下变量：
-*   `{{content}}`：笔记内容片段（智能截断）。
-*   `{{currentFileName}}`：当前文件名。
-*   `{{#if currentFileName}}...{{/if}}`：条件块，仅当有文件名时显示。
+### 语音输入
+- 在设置中配置 ASR 凭证
+- 使用快捷键开始/停止录音
+- 转录结果自动插入光标位置
 
-**Example Template:**
-```text
-请阅读以下笔记内容，为其生成一个不仅简洁而且极具概括性的文件名。
-不要包含扩展名，不要使用特殊字符。
+## ⚙️ 配置说明
 
-笔记内容：
-{{content}}
+### Prompt 模板变量
 ```
-
-## ⚙️ 高级设置
-
-### AI 文件命名设置
-*   **使用当前文件名作为上下文**：开启后，AI 会知道当前文件名叫什么，您可以让它"优化"现有名称而不是重新生成。
-*   **分析目录命名风格**：(实验性) 尝试分析同目录下其他文件的命名习惯。
-*   **调试模式**：在开发者控制台 (Ctrl+Shift+I) 输出完整的 Prompt 和 API 响应，便于排查问题。
+{{content}}           - 笔记内容（智能截断）
+{{currentFileName}}   - 当前文件名
+{{#if currentFileName}}...{{/if}}  - 条件块
+```
 
 ### 终端设置
-*   **Shell 配置**：
-    *   支持自定义 Shell 路径（如 `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`）。
-    *   自动验证 Shell 路径有效性，避免启动失败。
-*   **外观定制**：
-    *   **渲染器选择**：canvas（兼容性好）或 WebGL（性能更佳）。
-    *   **主题颜色**：使用 Obsidian 主题或自定义前景色、背景色、光标颜色等。
-    *   **背景图片**：支持设置背景图片 URL，可调节透明度（0-1）和毛玻璃模糊效果（0-50px）。
-*   **行为设置**：
-    *   **滚动缓冲区**：设置终端历史记录行数（100-10000），默认 1000 行。
-    *   **面板高度**：设置终端面板默认高度（100-1000 像素），默认 300 像素。
+- 自定义 Shell 路径
+- 渲染器：Canvas（兼容性好）/ WebGL（性能更佳）
+- 主题颜色、背景图片、模糊效果
+- 滚动缓冲区（100-10000 行）
+
+### 语音设置
+- ASR 供应商：Qwen / Doubao / SenseVoice
+- 模式：Realtime（WebSocket）/ HTTP
+- 录音模式：按住说话 / 切换模式
+- LLM 后处理预设
+
+## 🏗️ 架构
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                 Obsidian 插件 (TypeScript)                   │
+├─────────────────────────────────────────────────────────────┤
+│  服务层                                                      │
+│  ├── naming/       AI 文件命名                              │
+│  ├── terminal/     终端管理                                 │
+│  ├── voice/        语音输入 & ASR                           │
+│  ├── translation/  语言检测 & 翻译                          │
+│  ├── writing/      写作助手                                 │
+│  └── config/       供应商 & 模型管理                        │
+├─────────────────────────────────────────────────────────────┤
+│  UI 层                                                       │
+│  ├── settings/     设置标签页                               │
+│  ├── terminal/     终端视图 (xterm.js)                      │
+│  ├── selection/    选中文字工具栏                           │
+│  └── voice/        语音悬浮窗                               │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              │ WebSocket
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Smart Workflow Server (Rust)                    │
+│  ├── pty/      终端会话                                     │
+│  ├── voice/    音频录制 & ASR                               │
+│  ├── llm/      LLM 流式处理                                 │
+│  └── utils/    语言检测                                     │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ## 🧩 常见问题
 
-### AI 文件命名
-**Q: 支持 DeepSeek 或 Claude 吗？**
-A: 支持。本插件兼容 OpenAI 格式接口。对于 DeepSeek 等输出 "思考过程" 的模型，插件会自动过滤 `<think>` 标签，只保留最终结果。
+**Q: 支持哪些 AI 供应商？**  
+A: 任何 OpenAI 兼容 API。已测试 OpenAI、Claude、DeepSeek、Qwen、GLM 等。
 
-**Q: 为什么生成的标题没变化？**
-A: 请检查 Prompt 模板是否合理，或者开启调试模式并按下 `Ctrl+Shift+I` 打开控制台，查看 AI 实际返回的内容。
+**Q: 如何更换终端 Shell？**  
+A: 设置 > 终端 > Shell 配置，输入自定义路径如 `C:\Program Files\Git\bin\bash.exe`。
 
-### 终端功能
-**Q: 如何更换终端 Shell？**
-A: 在设置 > 终端 > Shell 配置中，输入自定义 Shell 路径。例如：
-- Windows PowerShell: `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`
-- Windows CMD: `C:\Windows\System32\cmd.exe`
-- Git Bash: `C:\Program Files\Git\bin\bash.exe`
+**Q: Canvas 还是 WebGL 渲染器？**  
+A: 建议先尝试 WebGL 获得更好性能，如遇问题再切换到 Canvas。
 
-**Q: 如何设置终端背景图片？**
-A: 在设置 > 终端 > 外观中，输入图片 URL（支持本地路径或网络地址）。可以调节透明度和模糊效果，实现毛玻璃效果。
-
-**Q: canvas 和 WebGL 渲染器应该选哪个？**
-A: 
-- **canvas**: 兼容性更好，适合大多数场景。
-- **WebGL**: 性能更佳，但某些系统可能不支持。建议先尝试 WebGL，如遇问题再切换到 canvas。
+**Q: 语音输入不工作？**  
+A: 检查 ASR 凭证配置，确保已授予麦克风权限。
 
 ---
+
 <div align="center">
 
-**用 ❤️ 构建 | Made with Love**
+**用 ❤️ 构建**
 
-⭐ 如果这个项目对你有帮助，请给我们一个 Star！❤️
+⭐ 如果这个项目对你有帮助，请给个 Star！
 
 </div>

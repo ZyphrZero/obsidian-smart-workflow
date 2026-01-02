@@ -15,7 +15,8 @@ import {
   GeneralSettingsRenderer, 
   NamingSettingsRenderer, 
   TerminalSettingsRenderer, 
-  AdvancedSettingsRenderer
+  AdvancedSettingsRenderer,
+  VoiceSettingsRenderer
 } from './renderers';
 
 /**
@@ -27,12 +28,14 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
   private activeTab = 'general';
   private expandedSections: Set<string> = new Set();
   private configManager: ConfigManager;
+  private sidebarExpanded = false; // 侧边栏默认收起
 
   // 渲染器实例
   private generalRenderer: GeneralSettingsRenderer;
   private namingRenderer: NamingSettingsRenderer;
   private terminalRenderer: TerminalSettingsRenderer;
   private advancedRenderer: AdvancedSettingsRenderer;
+  private voiceRenderer: VoiceSettingsRenderer;
 
   constructor(app: App, plugin: SmartWorkflowPlugin) {
     super(app, plugin);
@@ -47,6 +50,7 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
     this.namingRenderer = new NamingSettingsRenderer();
     this.terminalRenderer = new TerminalSettingsRenderer();
     this.advancedRenderer = new AdvancedSettingsRenderer();
+    this.voiceRenderer = new VoiceSettingsRenderer();
   }
 
   display(): void {
@@ -59,15 +63,68 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
       () => this.plugin.saveSettings()
     );
 
-    // 渲染头部
-    this.renderHeader(containerEl);
+    // 添加主容器类
+    containerEl.addClass('smart-workflow-settings-container');
 
-    // 渲染标签页导航
-    this.renderTabs(containerEl);
+    // 创建主布局容器（左侧导航 + 右侧内容）
+    const layoutEl = containerEl.createDiv({ cls: 'smart-workflow-layout' });
+
+    // 渲染左侧导航栏
+    this.renderSidebar(layoutEl);
+
+    // 渲染右侧主内容区
+    const mainEl = layoutEl.createDiv({ cls: 'smart-workflow-main' });
+    
+    // 渲染头部
+    this.renderHeader(mainEl);
 
     // 渲染内容区域
-    const contentEl = containerEl.createDiv({ cls: 'smart-workflow-content' });
+    const contentEl = mainEl.createDiv({ cls: 'smart-workflow-content' });
     this.renderContent(contentEl);
+  }
+
+  /**
+   * 渲染左侧导航栏
+   */
+  private renderSidebar(layoutEl: HTMLElement): void {
+    const sidebarEl = layoutEl.createDiv({ 
+      cls: `smart-workflow-sidebar ${this.sidebarExpanded ? 'expanded' : ''}` 
+    });
+
+    // 展开/收起按钮
+    const toggleBtn = sidebarEl.createDiv({ cls: 'sidebar-toggle' });
+    setIcon(toggleBtn, this.sidebarExpanded ? 'chevron-left' : 'chevron-right');
+    toggleBtn.setAttribute('aria-label', this.sidebarExpanded ? '收起导航' : '展开导航');
+    toggleBtn.addEventListener('click', () => {
+      this.sidebarExpanded = !this.sidebarExpanded;
+      this.display();
+    });
+
+    // 导航项容器
+    const navEl = sidebarEl.createDiv({ cls: 'sidebar-nav' });
+
+    getSettingTabs().forEach(tab => {
+      const navItem = navEl.createDiv({
+        cls: `sidebar-nav-item ${tab.id === this.activeTab ? 'active' : ''}`
+      });
+
+      // 图标
+      const iconEl = navItem.createDiv({ cls: 'sidebar-nav-icon' });
+      setIcon(iconEl, tab.icon);
+
+      // 文字标签（仅展开时显示）
+      const labelEl = navItem.createSpan({ cls: 'sidebar-nav-label', text: tab.name });
+      
+      // 设置 tooltip（收起时显示）
+      if (!this.sidebarExpanded) {
+        navItem.setAttribute('aria-label', tab.name);
+      }
+
+      navItem.addEventListener('click', () => {
+        this.activeTab = tab.id;
+        this.display();
+      });
+    });
   }
 
   /**
@@ -78,19 +135,10 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
     
     // 标题行（包含标题和重载按钮）
     const titleRow = headerEl.createDiv({ cls: 'settings-title-row' });
-    titleRow.setCssProps({
-      display: 'flex',
-      'align-items': 'center',
-      'justify-content': 'space-between',
-      'margin-bottom': '0'
-    });
 
     // 标题
     const titleEl = titleRow.createEl('h2', { text: 'Smart Workflow' });
-    titleEl.setCssProps({
-      margin: '0',
-      'font-weight': '700'
-    });
+    titleEl.addClass('settings-title');
 
     // 重载按钮
     const reloadBtn = titleRow.createEl('button', { cls: 'clickable-icon' });
@@ -107,39 +155,11 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
     });
 
     // GitHub Feedback Link
-    const feedbackContainer = headerEl.createDiv({ cls: 'setting-item-description' });
-    feedbackContainer.setCssProps({
-      'margin-bottom': '10px'
-    });
+    const feedbackContainer = headerEl.createDiv({ cls: 'settings-feedback' });
     feedbackContainer.appendText(t('settings.header.feedbackText'));
     feedbackContainer.createEl('a', {
       text: t('settings.header.feedbackLink'),
       href: 'https://github.com/ZyphrZero/obsidian-smart-workflow'
-    });
-  }
-
-  /**
-   * 渲染标签页导航
-   */
-  private renderTabs(containerEl: HTMLElement): void {
-    const tabsEl = containerEl.createDiv({ cls: 'smart-workflow-tabs' });
-
-    getSettingTabs().forEach(tab => {
-      const tabEl = tabsEl.createEl('div', {
-        cls: 'smart-workflow-tab'
-      });
-
-      if (tab.id === this.activeTab) {
-        tabEl.addClass('active');
-      }
-
-      setIcon(tabEl, tab.icon);
-      tabEl.createSpan({ text: tab.name });
-
-      tabEl.addEventListener('click', () => {
-        this.activeTab = tab.id;
-        this.display();
-      });
     });
   }
 
@@ -165,6 +185,9 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
         break;
       case 'naming':
         this.namingRenderer.render(context);
+        break;
+      case 'voice':
+        this.voiceRenderer.render(context);
         break;
       case 'terminal':
         this.terminalRenderer.render(context);

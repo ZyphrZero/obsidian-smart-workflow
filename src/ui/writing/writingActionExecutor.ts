@@ -9,6 +9,7 @@ import { WritingService } from '../../services/writing/writingService';
 import { WritingApplyView, WRITING_APPLY_VIEW_TYPE, WritingApplyViewState } from './writingApplyView';
 import { debugLog } from '../../utils/logger';
 import { SelectionRange } from '../selection/types';
+import { ServerManager } from '../../services/server/serverManager';
 
 /**
  * 写作动作上下文
@@ -40,6 +41,7 @@ export class WritingActionExecutor {
   private settings: SmartWorkflowSettings;
   private writingService: WritingService;
   private onSettingsChange?: () => Promise<void>;
+  private serverManager: ServerManager | null = null;
   
   // 当前活动的视图
   private currentView: WritingApplyView | null = null;
@@ -49,12 +51,23 @@ export class WritingActionExecutor {
   constructor(
     app: App,
     settings: SmartWorkflowSettings,
-    onSettingsChange?: () => Promise<void>
+    onSettingsChange?: () => Promise<void>,
+    serverManager?: ServerManager
   ) {
     this.app = app;
     this.settings = settings;
     this.onSettingsChange = onSettingsChange;
-    this.writingService = new WritingService(app, settings, onSettingsChange);
+    this.serverManager = serverManager ?? null;
+    this.writingService = new WritingService(app, settings, onSettingsChange, serverManager);
+  }
+
+  /**
+   * 设置 ServerManager
+   * 用于启用 Rust 模式的流式处理
+   */
+  setServerManager(serverManager: ServerManager): void {
+    this.serverManager = serverManager;
+    this.writingService.setServerManager(serverManager);
   }
 
   // ============================================================================
@@ -110,7 +123,7 @@ export class WritingActionExecutor {
    */
   updateSettings(settings: SmartWorkflowSettings): void {
     this.settings = settings;
-    this.writingService = new WritingService(this.app, settings, this.onSettingsChange);
+    this.writingService = new WritingService(this.app, settings, this.onSettingsChange, this.serverManager ?? undefined);
   }
 
   /**

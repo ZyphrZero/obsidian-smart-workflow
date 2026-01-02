@@ -1,11 +1,15 @@
 /**
- * 终端实例类 - 基于 Rust PTY 服务器的 WebSocket 通信实现
+ * 终端实例类 - 基于统一 Rust 服务器的 PtyClient 通信实现
+ * 
+
  */
 
 import { platform } from 'os';
 import { exec } from 'child_process';
 import { debugLog, debugWarn, errorLog } from '../../utils/logger';
 import { t } from '../../i18n';
+import { ServerManager } from '../server/serverManager';
+import { PtyClient } from '../server/ptyClient';
 
 // xterm.js CSS（静态导入，esbuild 会处理）
 import '@xterm/xterm/css/xterm.css';
@@ -84,10 +88,6 @@ export interface TerminalOptions {
   textOpacity?: number;
 }
 
-interface ResizeMessage { type: 'resize'; cols: number; rows: number; }
-interface InitMessage { type: 'init'; shell_type?: string; shell_args?: string[]; cwd?: string; env?: Record<string, string>; }
-type WSInputMessage = string | Uint8Array | ResizeMessage | InitMessage;
-
 /** 搜索状态变化回调 */
 export type SearchStateCallback = (visible: boolean) => void;
 /** 字体大小变化回调 */
@@ -101,12 +101,16 @@ export class TerminalInstance {
   private fitAddon!: FitAddon;
   private searchAddon!: SearchAddon;
   private renderer: CanvasAddon | WebglAddon | null = null;
-  private ws: WebSocket | null = null;
-  private serverPort = 0;
-  private reconnectAttempts = 0;
-  private maxReconnectAttempts = 3;
-  private reconnectTimeout: NodeJS.Timeout | null = null;
-  private connectionTimeout: NodeJS.Timeout | null = null;
+  
+  // 使用 PtyClient 替代直接的 WebSocket
+  private ptyClient: PtyClient | null = null;
+  private serverManager: ServerManager | null = null;
+  
+  // 事件取消函数
+  private outputUnsubscribe: (() => void) | null = null;
+  private exitUnsubscribe: (() => void) | null = null;
+  private errorUnsubscribe: (() => void) | null = null;
+  
   private containerEl: HTMLElement | null = null;
   private options: TerminalOptions;
   private title: string;
@@ -251,17 +255,45 @@ export class TerminalInstance {
     }
   }
 
-  async initialize(serverPort: number): Promise<void> {
+
+  /**
+   * 使用 ServerManager 初始化终端
+   * 
+
+   */
+  async initializeWithServerManager(serverManager: ServerManager): Promise<void> {
     if (this.isInitialized || this.isDestroyed) return;
 
     try {
       // 动态加载 xterm.js 模块
       await this.initXterm();
       
-      this.serverPort = serverPort;
-      await this.connectToServer();
+      this.serverManager = serverManager;
+      
+      // 确保服务器运行
+      await serverManager.ensureServer();
+      
+      // 获取 PtyClient
+      this.ptyClient = serverManager.pty();
+      
+      // 设置事件处理器
+      this.setupPtyClientHandlers();
+      
+      // 初始化 PTY 会话
+      this.ptyClient.init({
+        shell_type: this.shellType === 'default' ? undefined : this.shellType,
+        shell_args: this.options.shellArgs,
+        cwd: this.options.cwd,
+        env: {
+          TERM: process.env.TERM || 'xterm-256color',
+          ...this.options.env
+        }
+      });
+      
       this.setupXtermHandlers();
       this.isInitialized = true;
+      
+      debugLog('[Terminal] 终端已初始化');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       errorLog('[Terminal] Init failed:', error);
@@ -272,96 +304,45 @@ export class TerminalInstance {
     }
   }
 
-  private async connectToServer(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      if (this.isDestroyed) {
-        reject(new Error(t('terminalInstance.instanceDestroyed')));
-        return;
-      }
-
-      const wsUrl = `ws://127.0.0.1:${this.serverPort}`;
-
-      this.connectionTimeout = setTimeout(() => {
-        if (this.ws && this.ws.readyState !== WebSocket.OPEN) {
-          this.ws.close();
-          reject(new Error(t('terminalInstance.connectionTimeout')));
-        }
-      }, 10000);
-
-      try {
-        this.ws = new WebSocket(wsUrl);
-
-        this.ws.onopen = () => {
-          if (this.connectionTimeout) {
-            clearTimeout(this.connectionTimeout);
-            this.connectionTimeout = null;
-          }
-          this.reconnectAttempts = 0;
-
-          const initMsg: InitMessage = {
-            type: 'init',
-            shell_type: this.shellType === 'default' ? undefined : this.shellType,
-            shell_args: this.options.shellArgs,
-            cwd: this.options.cwd,
-            env: {
-              TERM: process.env.TERM || 'xterm-256color',
-              ...this.options.env
-            }
-          };
-          this.sendMessage(initMsg);
-          resolve();
-        };
-
-        this.ws.onerror = () => {
-          if (this.connectionTimeout) {
-            clearTimeout(this.connectionTimeout);
-            this.connectionTimeout = null;
-          }
-          this.xterm.write('\r\n\x1b[1;31m[Connection Error]\x1b[0m\r\n');
-          reject(new Error(t('terminalInstance.cannotConnect')));
-        };
-
-        this.ws.onmessage = (event) => {
-          if (typeof event.data === 'string') {
-            // 尝试提取目录信息（从 OSC 序列）
-            this.extractCwdFromOutput(event.data);
-            this.xterm.write(event.data);
-          } else if (event.data instanceof ArrayBuffer) {
-            const text = new TextDecoder().decode(event.data);
-            this.extractCwdFromOutput(text);
-            this.xterm.write(new Uint8Array(event.data));
-          } else if (event.data instanceof Blob) {
-            event.data.arrayBuffer().then(buffer => {
-              const text = new TextDecoder().decode(buffer);
-              this.extractCwdFromOutput(text);
-              this.xterm.write(new Uint8Array(buffer));
-            });
-          }
-        };
-
-        this.ws.onclose = () => {
-          if (this.connectionTimeout) {
-            clearTimeout(this.connectionTimeout);
-            this.connectionTimeout = null;
-          }
-          this.handleConnectionClose();
-        };
-
-      } catch (error) {
-        if (this.connectionTimeout) {
-          clearTimeout(this.connectionTimeout);
-          this.connectionTimeout = null;
-        }
-        reject(error);
-      }
+  /**
+   * 设置 PtyClient 事件处理器
+   */
+  private setupPtyClientHandlers(): void {
+    if (!this.ptyClient) return;
+    
+    // 处理输出数据
+    this.outputUnsubscribe = this.ptyClient.onOutput((data: Uint8Array) => {
+      const text = new TextDecoder().decode(data);
+      this.extractCwdFromOutput(text);
+      this.xterm.write(data);
+    });
+    
+    // 处理退出事件
+    this.exitUnsubscribe = this.ptyClient.onExit((code: number) => {
+      debugLog('[Terminal] PTY 会话退出, code:', code);
+      this.xterm.write(`\r\n\x1b[33m[会话已结束, 退出码: ${code}]\x1b[0m\r\n`);
+    });
+    
+    // 处理错误事件
+    this.errorUnsubscribe = this.ptyClient.onError((code: string, message: string) => {
+      errorLog('[Terminal] PTY 错误:', code, message);
+      this.xterm.write(`\r\n\x1b[1;31m[错误] ${message}\x1b[0m\r\n`);
     });
   }
 
   private setupXtermHandlers(): void {
-    this.xterm.onData((data) => this.sendMessage(data));
+    // 处理用户输入
+    this.xterm.onData((data) => {
+      if (this.ptyClient) {
+        this.ptyClient.write(data);
+      }
+    });
+    
     this.xterm.onBinary((data) => {
-      const binaryData = Uint8Array.from(atob(data), c => c.charCodeAt(0));
-      this.sendMessage(binaryData);
+      if (this.ptyClient) {
+        const binaryData = Uint8Array.from(atob(data), c => c.charCodeAt(0));
+        this.ptyClient.writeBinary(binaryData);
+      }
     });
     
     // 自定义键盘事件处理:实现智能 Ctrl+C 行为
@@ -399,8 +380,8 @@ export class TerminalInstance {
       if (event.ctrlKey && event.key === 'v') {
         event.preventDefault();
         navigator.clipboard.readText().then(text => {
-          if (text) {
-            this.sendMessage(text);
+          if (text && this.ptyClient) {
+            this.ptyClient.write(text);
           }
         }).catch(error => {
           errorLog('[Terminal] Paste failed:', error);
@@ -413,17 +394,12 @@ export class TerminalInstance {
     });
   }
 
-  sendMessage(message: WSInputMessage): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-
-    try {
-      if (typeof message === 'string' || message instanceof Uint8Array) {
-        this.ws.send(message);
-      } else {
-        this.ws.send(JSON.stringify(message));
-      }
-    } catch (error) {
-      errorLog('[Terminal] Send failed:', error);
+  /**
+   * 发送调整大小消息
+   */
+  private sendResize(cols: number, rows: number): void {
+    if (this.ptyClient) {
+      this.ptyClient.resize(cols, rows);
     }
   }
 
@@ -435,45 +411,14 @@ export class TerminalInstance {
       if (clientWidth === 0 || clientHeight === 0) return;
 
       this.fitAddon.fit();
-      this.sendMessage({ type: 'resize', cols: this.xterm.cols, rows: this.xterm.rows });
+      this.sendResize(this.xterm.cols, this.xterm.rows);
     } catch (error) {
       debugWarn('[Terminal] Fit failed:', error);
     }
   }
 
-  private handleConnectionClose(): void {
-    if (this.isDestroyed) return;
-
-    if (this.reconnectTimeout) {
-      clearTimeout(this.reconnectTimeout);
-      this.reconnectTimeout = null;
-    }
-
-    this.xterm.write('\r\n\x1b[33m[连接已断开]\x1b[0m\r\n');
-
-    if (this.reconnectAttempts < this.maxReconnectAttempts) {
-      this.reconnectAttempts++;
-      const delay = 1000 * Math.pow(2, this.reconnectAttempts - 1);
-      this.xterm.write(`\x1b[33m正在重连 (${this.reconnectAttempts}/${this.maxReconnectAttempts})...\x1b[0m\r\n`);
-
-      this.reconnectTimeout = setTimeout(() => {
-        this.connectToServer().catch(() => {
-          this.xterm.write('\x1b[31m重连失败\x1b[0m\r\n');
-        });
-      }, delay);
-    } else {
-      this.xterm.write('\x1b[31m已达到最大重连次数\x1b[0m\r\n');
-    }
-  }
-
   handleServerCrash(): void {
     if (this.isDestroyed) return;
-
-    if (this.reconnectTimeout) {
-      clearTimeout(this.reconnectTimeout);
-      this.reconnectTimeout = null;
-    }
-    this.reconnectAttempts = 0;
 
     this.xterm.write('\r\n\x1b[1;31m[服务器已崩溃]\x1b[0m\r\n');
     this.xterm.write('\x1b[33m正在尝试重启服务器...\x1b[0m\r\n');
@@ -483,8 +428,14 @@ export class TerminalInstance {
     if (this.isDestroyed) return;
     this.isDestroyed = true;
 
-    if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
-    if (this.connectionTimeout) clearTimeout(this.connectionTimeout);
+    // 取消事件订阅
+    this.outputUnsubscribe?.();
+    this.exitUnsubscribe?.();
+    this.errorUnsubscribe?.();
+    
+    this.outputUnsubscribe = null;
+    this.exitUnsubscribe = null;
+    this.errorUnsubscribe = null;
 
     this.detach();
 
@@ -493,14 +444,9 @@ export class TerminalInstance {
       this.renderer = null;
     }
 
-    if (this.ws) {
-      try {
-        if (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING) {
-          this.ws.close(1000, 'Terminal destroyed');
-        }
-      } catch { /* ignore */ }
-      this.ws = null;
-    }
+    // 清理 PtyClient 引用（不销毁，因为它是共享的）
+    this.ptyClient = null;
+    this.serverManager = null;
 
     try { this.xterm.dispose(); } catch { /* ignore */ }
   }
@@ -690,8 +636,8 @@ export class TerminalInstance {
       async () => {
         try {
           const text = await navigator.clipboard.readText();
-          if (text) {
-            this.sendMessage(text);
+          if (text && this.ptyClient) {
+            this.ptyClient.write(text);
           }
         } catch (error) {
           errorLog('[Terminal] Paste failed:', error);
@@ -1237,9 +1183,18 @@ export class TerminalInstance {
 
   // ==================== 其他公共方法 ====================
 
+  /**
+   * 写入数据到终端
+   */
+  write(data: string): void {
+    if (this.ptyClient) {
+      this.ptyClient.write(data);
+    }
+  }
+
   detach(): void {
     if (this.containerEl) {
-      this.containerEl.empty();
+      this.containerEl.innerHTML = '';
       this.containerEl = null;
     }
   }
@@ -1249,7 +1204,7 @@ export class TerminalInstance {
   }
 
   isAlive(): boolean {
-    return !this.isDestroyed && this.ws !== null && this.ws.readyState === WebSocket.OPEN;
+    return !this.isDestroyed && this.ptyClient !== null && this.ptyClient.isConnected();
   }
 
   getTitle(): string { return this.title; }
@@ -1258,6 +1213,7 @@ export class TerminalInstance {
     this.title = title;
     this.titleChangeCallback?.(title);
   }
+
 
   /**
    * 从 shell 输出中提取当前工作目录
@@ -1472,12 +1428,16 @@ export class TerminalInstance {
    */
   private clearScreen(): void {
     // 先发送 Ctrl+C 中断当前输入
-    this.sendMessage('\x03');
+    if (this.ptyClient) {
+      this.ptyClient.write('\x03');
+    }
     
     // 等待一小段时间让中断生效,然后发送清屏命令
     setTimeout(() => {
       const clearCommand = platform() === 'win32' ? 'cls\r' : 'clear\r';
-      this.sendMessage(clearCommand);
+      if (this.ptyClient) {
+        this.ptyClient.write(clearCommand);
+      }
       debugLog('[Terminal] Screen cleared');
     }, 50);
   }
@@ -1488,13 +1448,17 @@ export class TerminalInstance {
    */
   clearBuffer(): void {
     // 先发送 Ctrl+C 中断当前输入
-    this.sendMessage('\x03');
+    if (this.ptyClient) {
+      this.ptyClient.write('\x03');
+    }
     
     // 等待一小段时间让中断生效
     setTimeout(() => {
       // 发送清屏命令到 shell
       const clearCommand = platform() === 'win32' ? 'cls\r' : 'clear\r';
-      this.sendMessage(clearCommand);
+      if (this.ptyClient) {
+        this.ptyClient.write(clearCommand);
+      }
       
       // 清除 xterm.js 的滚动缓冲区和状态
       this.xterm.clear();

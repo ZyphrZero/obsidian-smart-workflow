@@ -1,11 +1,18 @@
 /**
  * Plugin Package Script
- * Auto-detect current platform and package the corresponding binary
+ * Auto-detect current platform and package the unified server binary
+ * Binary naming: smart-workflow-server-{platform}-{arch}
  */
 
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+
+// Unified server configuration
+const SERVER_CONFIG = {
+  name: 'smart-workflow-server',
+  displayName: 'Smart Workflow Server'
+};
 
 /**
  * Get current platform identifier
@@ -53,7 +60,7 @@ console.log('');
 console.log('🔍 Checking binary file...');
 
 const ext = currentPlatform.startsWith('win32') ? '.exe' : '';
-const binaryName = `pty-server-${currentPlatform}${ext}`;
+const binaryName = `${SERVER_CONFIG.name}-${currentPlatform}${ext}`;
 const binaryPath = path.join(BINARIES_DIR, binaryName);
 
 if (!fs.existsSync(binaryPath)) {
@@ -86,19 +93,16 @@ for (const file of requiredFiles) {
 }
 
 // 5. Copy binary file
-const srcBinaryPath = path.join(BINARIES_DIR, binaryName);
 const destBinaryPath = path.join(PACKAGE_DIR, 'binaries', binaryName);
+fs.copyFileSync(binaryPath, destBinaryPath);
 
-fs.copyFileSync(srcBinaryPath, destBinaryPath);
-
-// Copy SHA256 file
-const checksumSrc = `${srcBinaryPath}.sha256`;
+// Copy SHA256 file if exists
+const checksumSrc = `${binaryPath}.sha256`;
 if (fs.existsSync(checksumSrc)) {
   fs.copyFileSync(checksumSrc, `${destBinaryPath}.sha256`);
 }
 
 console.log(`  ✓ binaries/${binaryName}`);
-
 console.log('');
 
 // 6. Calculate package size
@@ -113,8 +117,7 @@ for (const file of requiredFiles) {
   console.log(`  ${file}: ${sizeKB} KB`);
 }
 
-const packagedBinaryPath = path.join(PACKAGE_DIR, 'binaries', binaryName);
-const packagedBinaryStats = fs.statSync(packagedBinaryPath);
+const packagedBinaryStats = fs.statSync(destBinaryPath);
 totalSize += packagedBinaryStats.size;
 const sizeMB = (packagedBinaryStats.size / 1024 / 1024).toFixed(2);
 console.log(`  ${binaryName}: ${sizeMB} MB`);
@@ -163,3 +166,6 @@ if (createZip) {
 console.log('🎉 Package complete!');
 console.log(`📁 Package directory: ${PACKAGE_DIR}`);
 console.log(`📋 Packaged platform: ${currentPlatform}`);
+console.log('');
+console.log('📦 Packaged server:');
+console.log(`  - ${SERVER_CONFIG.displayName}: ${binaryName}`);

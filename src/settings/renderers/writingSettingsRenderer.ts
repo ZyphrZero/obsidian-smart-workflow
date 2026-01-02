@@ -22,8 +22,8 @@ export class WritingSettingsRenderer extends BaseSettingsRenderer {
   render(context: RendererContext): void {
     this.context = context;
 
-    // 写作功能区块（可折叠，默认展开）
-    const isExpanded = !this.context.expandedSections.has('writing-feature-collapsed');
+    // 写作功能区块（可折叠，默认收起）
+    const isExpanded = this.context.expandedSections.has('writing-feature-expanded');
     
     // 功能卡片
     const writingCard = context.containerEl.createDiv();
@@ -63,9 +63,9 @@ export class WritingSettingsRenderer extends BaseSettingsRenderer {
     // 点击切换展开状态
     headerEl.addEventListener('click', () => {
       if (isExpanded) {
-        this.context.expandedSections.add('writing-feature-collapsed');
+        this.context.expandedSections.delete('writing-feature-expanded');
       } else {
-        this.context.expandedSections.delete('writing-feature-collapsed');
+        this.context.expandedSections.add('writing-feature-expanded');
       }
       this.refreshDisplay();
     });

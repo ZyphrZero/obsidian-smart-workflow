@@ -34,7 +34,7 @@ export class EndpointNormalizer {
    * 规范化为 Chat Completions 端点
    * 自动补全 /v1/chat/completions 路径
    * @param endpoint 原始端点 URL
-   * @returns 规范化后的完整 URL（以 /v1/chat/completions 结尾）
+   * @returns 规范化后的完整 URL（以 /chat/completions 结尾）
    */
   static normalizeChatCompletions(endpoint: string): string {
     let normalized = this.addProtocol(endpoint);
@@ -51,10 +51,20 @@ export class EndpointNormalizer {
     const hasPath = chatCompletionsPaths.some(path => normalized.includes(path));
 
     if (!hasPath) {
-      // 移除已有的 API 路径，获取基础 URL
-      normalized = this.removeExistingPath(normalized);
-      // 添加 /v1/chat/completions 路径
-      normalized = normalized + '/v1/chat/completions';
+      // 检查是否以版本号结尾（如 /v1, /v2, /v3, /v4 等）
+      const versionMatch = normalized.match(/\/v\d+$/);
+      // 检查是否以 /openai 结尾（Gemini 等兼容格式）
+      const openaiMatch = normalized.endsWith('/openai');
+      
+      if (versionMatch || openaiMatch) {
+        // 已有版本号或 /openai 后缀，直接添加 /chat/completions
+        normalized = normalized + '/chat/completions';
+      } else {
+        // 移除已有的 API 路径，获取基础 URL
+        normalized = this.removeExistingPath(normalized);
+        // 添加 /v1/chat/completions 路径
+        normalized = normalized + '/v1/chat/completions';
+      }
     }
 
     return this.fixDoubleSlashes(normalized);
