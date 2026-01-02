@@ -145,6 +145,10 @@ A: Try WebGL first for better performance. Switch to Canvas if issues occur.
 **Q: Voice input not working?**  
 A: Check ASR credentials and ensure microphone permissions are granted.
 
+## 🙏 Acknowledgements
+
+- [push-2-talk](https://github.com/yyyzl/push-2-talk) - Voice input architecture inspiration
+
 ---
 
 <div align="center">
