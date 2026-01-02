@@ -192,7 +192,34 @@ export class ActionExecutor {
    * @returns 高亮格式文本 ==text==
    */
   transformToHighlight(text: string): string {
-    return `==${text}==`;
+    return this.applyInlineFormat(text, '==', '==');
+  }
+
+  /**
+   * 对文本应用行内格式（支持跨行处理）
+   * 每一行都会被独立包裹格式标记
+   * @param text 原始文本
+   * @param prefix 格式前缀（如 ** 或 ==）
+   * @param suffix 格式后缀（如 ** 或 ==）
+   * @returns 格式化后的文本
+   */
+  private applyInlineFormat(text: string, prefix: string, suffix: string): string {
+    // 检查是否包含换行符
+    if (!text.includes('\n')) {
+      return `${prefix}${text}${suffix}`;
+    }
+
+    // 跨行处理：每行独立包裹格式标记
+    const lines = text.split('\n');
+    const formattedLines = lines.map(line => {
+      // 空行保持不变
+      if (line.trim() === '') {
+        return line;
+      }
+      return `${prefix}${line}${suffix}`;
+    });
+
+    return formattedLines.join('\n');
   }
 
   /**
@@ -200,7 +227,7 @@ export class ActionExecutor {
    */
   addBold(context: SelectionContext): string {
     const { text, range } = context;
-    const newText = `**${text}**`;
+    const newText = this.applyInlineFormat(text, '**', '**');
     this.replaceSelectionText(range, newText);
     return newText;
   }
@@ -210,7 +237,7 @@ export class ActionExecutor {
    */
   addItalic(context: SelectionContext): string {
     const { text, range } = context;
-    const newText = `*${text}*`;
+    const newText = this.applyInlineFormat(text, '*', '*');
     this.replaceSelectionText(range, newText);
     return newText;
   }
@@ -220,7 +247,7 @@ export class ActionExecutor {
    */
   addStrikethrough(context: SelectionContext): string {
     const { text, range } = context;
-    const newText = `~~${text}~~`;
+    const newText = this.applyInlineFormat(text, '~~', '~~');
     this.replaceSelectionText(range, newText);
     return newText;
   }
@@ -230,7 +257,7 @@ export class ActionExecutor {
    */
   addInlineCode(context: SelectionContext): string {
     const { text, range } = context;
-    const newText = `\`${text}\``;
+    const newText = this.applyInlineFormat(text, '`', '`');
     this.replaceSelectionText(range, newText);
     return newText;
   }
@@ -240,7 +267,7 @@ export class ActionExecutor {
    */
   addInlineMath(context: SelectionContext): string {
     const { text, range } = context;
-    const newText = `$${text}$`;
+    const newText = this.applyInlineFormat(text, '$', '$');
     this.replaceSelectionText(range, newText);
     return newText;
   }
@@ -303,10 +330,13 @@ export class ActionExecutor {
     
     editor.replaceRange(newText, from, to);
     
-    // 重新选中替换后的文本
+    // 重新选中替换后的文本（支持跨行）
+    const newLines = newText.split('\n');
     const newTo = {
-      line: from.line,
-      ch: from.ch + newText.length
+      line: from.line + newLines.length - 1,
+      ch: newLines.length === 1 
+        ? from.ch + newText.length 
+        : newLines[newLines.length - 1].length
     };
     editor.setSelection(from, newTo);
     
