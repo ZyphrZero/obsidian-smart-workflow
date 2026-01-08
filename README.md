@@ -1,7 +1,6 @@
 # Smart Workflow
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![GitHub Downloads](https://img.shields.io/github/downloads/ZyphrZero/obsidian-smart-workflow/total?logo=github&color=blue)](https://github.com/ZyphrZero/obsidian-smart-workflow/releases)
 
 > 🎯 **User Experience First** — Intuitive interaction and seamless workflow over feature bloat.
 
