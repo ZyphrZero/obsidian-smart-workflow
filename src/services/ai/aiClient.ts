@@ -277,9 +277,8 @@ export class AIClient {
       throw new AIError(AIErrorCode.NO_PROVIDER_CONFIGURED, t('aiService.noProviderConfigured'), false);
     }
 
-    // 检查是否有有效的 API 密钥（单密钥或多密钥）
-    const hasApiKey = (provider.apiKey && provider.apiKey.trim() !== '') ||
-                      (provider.apiKeys && provider.apiKeys.length > 0);
+    // 检查是否有有效的 API 密钥配置
+    const hasApiKey = AIClient.hasValidApiKey(provider);
     if (!hasApiKey) {
       throw new AIError(AIErrorCode.INVALID_API_KEY, t('aiService.invalidApiKey'), false);
     }
@@ -295,6 +294,33 @@ export class AIClient {
     if (!model.name || model.name.trim() === '') {
       throw new AIError(AIErrorCode.INVALID_RESPONSE, 'Model name is required', false);
     }
+  }
+
+  /**
+   * 检查 Provider 是否有有效的 API 密钥
+   * 支持新的 keyConfig 结构和旧的 apiKey/apiKeys 字段
+   */
+  private static hasValidApiKey(provider: Provider): boolean {
+    // 检查 keyConfig
+    if (provider.keyConfig) {
+      if (provider.keyConfig.mode === 'shared' && provider.keyConfig.secretId) {
+        return true;
+      }
+      if (provider.keyConfig.mode === 'local' && provider.keyConfig.localValue && provider.keyConfig.localValue.trim() !== '') {
+        return true;
+      }
+    }
+    
+    // 检查 keyConfigs（多密钥）
+    if (provider.keyConfigs && provider.keyConfigs.length > 0) {
+      return provider.keyConfigs.some(kc => {
+        if (kc.mode === 'shared' && kc.secretId) return true;
+        if (kc.mode === 'local' && kc.localValue && kc.localValue.trim() !== '') return true;
+        return false;
+      });
+    }
+    
+    return false;
   }
 
   // ============================================================================
@@ -327,16 +353,33 @@ export class AIClient {
 
   /**
    * 获取当前使用的 API 密钥
-   * 支持多密钥轮询模式
+   * 支持新的 keyConfig 结构和多密钥轮询模式
+   * 注意：共享密钥需要在调用前通过 ConfigManager 解析
    */
   private getCurrentApiKey(): string {
     // 如果有多密钥配置，使用轮询
-    if (this.provider.apiKeys && this.provider.apiKeys.length > 0) {
+    if (this.provider.keyConfigs && this.provider.keyConfigs.length > 0) {
       const index = this.provider.currentKeyIndex ?? 0;
-      return this.provider.apiKeys[index];
+      const keyConfig = this.provider.keyConfigs[index];
+      // 对于本地模式，直接返回值
+      if (keyConfig.mode === 'local' && keyConfig.localValue) {
+        return keyConfig.localValue;
+      }
+      // 对于共享模式，secretId 应该已经被解析为实际值
+      // 如果没有解析，返回空字符串（调用方应该先解析）
+      return '';
     }
-    // 否则返回单个密钥
-    return this.provider.apiKey;
+    
+    // 使用主密钥配置
+    if (this.provider.keyConfig) {
+      if (this.provider.keyConfig.mode === 'local' && this.provider.keyConfig.localValue) {
+        return this.provider.keyConfig.localValue;
+      }
+      // 共享模式需要预先解析
+      return '';
+    }
+    
+    return '';
   }
 
   /**

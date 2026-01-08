@@ -48,6 +48,26 @@ export type APIFormat = 'chat-completions' | 'responses';
 export type ReasoningEffort = 'low' | 'medium' | 'high';
 
 /**
+ * 密钥存储模式
+ * - shared: 共享密钥，存储在 Obsidian SecretStorage 中，可被多个插件访问
+ * - local: 本地密钥，仅存储在插件设置中
+ */
+export type SecretStorageMode = 'shared' | 'local';
+
+/**
+ * 单个密钥配置
+ * 支持共享密钥引用或本地存储
+ */
+export interface KeyConfig {
+  /** 存储模式 */
+  mode: SecretStorageMode;
+  /** 共享密钥 ID (mode='shared' 时使用) */
+  secretId?: string;
+  /** 本地存储的密钥值 (mode='local' 时使用) */
+  localValue?: string;
+}
+
+/**
  * 模型配置接口
  * 属于某个供应商，包含模型名称和参数
  */
@@ -73,8 +93,8 @@ export interface Provider {
   id: string;              // 唯一标识符
   name: string;            // 供应商名称（如 'OpenAI', 'Anthropic'）
   endpoint: string;        // API 端点
-  apiKey: string;          // API 密钥（主密钥）
-  apiKeys?: string[];      // 多密钥列表（用于轮询）
+  keyConfig: KeyConfig;    // 主密钥配置
+  keyConfigs?: KeyConfig[]; // 多密钥配置列表（用于轮询）
   currentKeyIndex?: number; // 当前使用的密钥索引
   models: ModelConfig[];   // 该供应商下的模型列表
 }
@@ -437,17 +457,23 @@ export interface VoiceASRProviderConfig {
   mode: VoiceASRMode;
   
   // Qwen 特有配置
-  /** DashScope API Key (阿里云) */
+  /** DashScope 密钥配置 (阿里云) */
+  dashscopeKeyConfig?: KeyConfig;
+  /** @deprecated 使用 dashscopeKeyConfig 替代 */
   dashscope_api_key?: string;
   
   // Doubao 特有配置
   /** 应用 ID (豆包) */
   app_id?: string;
-  /** 访问令牌 (豆包) */
+  /** Doubao access_token 密钥配置 */
+  doubaoKeyConfig?: KeyConfig;
+  /** @deprecated 使用 doubaoKeyConfig 替代 */
   access_token?: string;
   
   // SenseVoice 特有配置
-  /** 硅基流动 API Key */
+  /** SiliconFlow 密钥配置 (硅基流动) */
+  siliconflowKeyConfig?: KeyConfig;
+  /** @deprecated 使用 siliconflowKeyConfig 替代 */
   siliconflow_api_key?: string;
 }
 

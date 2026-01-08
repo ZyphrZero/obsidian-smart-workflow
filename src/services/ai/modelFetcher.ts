@@ -113,12 +113,41 @@ export class ModelFetcher {
    * 验证供应商配置
    */
   private validateProvider(provider: Provider): void {
-    if (!provider.apiKey || provider.apiKey.trim() === '') {
+    // 检查是否有有效的 API 密钥配置
+    const hasApiKey = this.hasValidApiKey(provider);
+    if (!hasApiKey) {
       throw new Error(t('aiService.providerApiKeyNotConfigured', { provider: provider.name }));
     }
     if (!provider.endpoint || provider.endpoint.trim() === '') {
       throw new Error(t('aiService.providerEndpointNotConfigured', { provider: provider.name }));
     }
+  }
+
+  /**
+   * 检查 Provider 是否有有效的 API 密钥
+   */
+  private hasValidApiKey(provider: Provider): boolean {
+    // 检查 keyConfig
+    if (provider.keyConfig) {
+      if (provider.keyConfig.mode === 'local' && provider.keyConfig.localValue && provider.keyConfig.localValue.trim() !== '') {
+        return true;
+      }
+      if (provider.keyConfig.mode === 'shared' && provider.keyConfig.secretId) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * 获取 Provider 的 API 密钥
+   */
+  private getApiKey(provider: Provider): string {
+    if (provider.keyConfig?.mode === 'local' && provider.keyConfig.localValue) {
+      return provider.keyConfig.localValue;
+    }
+    // 共享模式需要预先解析
+    return '';
   }
 
   /**
@@ -142,7 +171,7 @@ export class ModelFetcher {
       url: modelsEndpoint,
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${provider.apiKey}`
+        'Authorization': `Bearer ${this.getApiKey(provider)}`
       },
       throw: false
     });

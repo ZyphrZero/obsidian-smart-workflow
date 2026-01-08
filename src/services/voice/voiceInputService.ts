@@ -16,6 +16,7 @@ import { debugLog, errorLog } from '../../utils/logger';
 import { t } from '../../i18n';
 import { ServerManager } from '../server/serverManager';
 import { VoiceClient } from '../server/voiceClient';
+import { ConfigManager } from '../config/configManager';
 import {
   IVoiceInputService,
   VoiceInputMode,
@@ -110,6 +111,7 @@ export class VoiceInputService implements IVoiceInputService {
   private app: App;
   private settings: VoiceSettings;
   private serverManager: ServerManager;
+  private configManager: ConfigManager;
   
   /** VoiceClient 实例 */
   private voiceClient: VoiceClient | null = null;
@@ -143,11 +145,13 @@ export class VoiceInputService implements IVoiceInputService {
   constructor(
     app: App,
     settings: VoiceSettings,
-    serverManager: ServerManager
+    serverManager: ServerManager,
+    configManager: ConfigManager
   ) {
     this.app = app;
     this.settings = settings;
     this.serverManager = serverManager;
+    this.configManager = configManager;
     this._recordingMode = settings.defaultRecordingMode;
   }
 
@@ -881,16 +885,18 @@ export class VoiceInputService implements IVoiceInputService {
 
   /**
    * 构建 ASR 配置
+   * 使用 ConfigManager 统一接口解析密钥值
    */
   private buildASRConfig(): ASRConfig {
     const config: ASRConfig = {
       primary: {
         provider: this.settings.primaryASR.provider,
         mode: this.settings.primaryASR.mode,
-        dashscope_api_key: this.settings.primaryASR.dashscope_api_key,
+        // 使用 ConfigManager 解析密钥值
+        dashscope_api_key: this.configManager.resolveKeyValue(this.settings.primaryASR.dashscopeKeyConfig),
         app_id: this.settings.primaryASR.app_id,
-        access_token: this.settings.primaryASR.access_token,
-        siliconflow_api_key: this.settings.primaryASR.siliconflow_api_key,
+        access_token: this.configManager.resolveKeyValue(this.settings.primaryASR.doubaoKeyConfig),
+        siliconflow_api_key: this.configManager.resolveKeyValue(this.settings.primaryASR.siliconflowKeyConfig),
       },
       enable_fallback: this.settings.enableFallback,
       enable_audio_feedback: this.settings.enableAudioFeedback,
@@ -900,10 +906,11 @@ export class VoiceInputService implements IVoiceInputService {
       config.fallback = {
         provider: this.settings.backupASR.provider,
         mode: this.settings.backupASR.mode,
-        dashscope_api_key: this.settings.backupASR.dashscope_api_key,
+        // 使用 ConfigManager 解析密钥值
+        dashscope_api_key: this.configManager.resolveKeyValue(this.settings.backupASR.dashscopeKeyConfig),
         app_id: this.settings.backupASR.app_id,
-        access_token: this.settings.backupASR.access_token,
-        siliconflow_api_key: this.settings.backupASR.siliconflow_api_key,
+        access_token: this.configManager.resolveKeyValue(this.settings.backupASR.doubaoKeyConfig),
+        siliconflow_api_key: this.configManager.resolveKeyValue(this.settings.backupASR.siliconflowKeyConfig),
       };
     }
 

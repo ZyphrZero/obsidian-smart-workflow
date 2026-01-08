@@ -361,6 +361,15 @@ export const en: TranslationKeys = {
       endpoint: 'API Endpoint',
       endpointDesc: 'The API endpoint URL for this provider',
       endpointRequired: 'API endpoint is required',
+      // Secret storage mode
+      storageMode: 'Key Storage Mode',
+      storageModeDesc: 'Choose how to store the API key: shared secrets can be accessed by other plugins, local keys are stored only in this plugin',
+      storageModeLocal: 'Local Key',
+      storageModeShared: 'Shared Secret',
+      // Shared secret
+      sharedSecret: 'Select Shared Secret',
+      sharedSecretDesc: 'Select or create a new shared secret from Obsidian SecretStorage',
+      // Local key
       apiKey: 'API Key',
       apiKeyDesc: 'Your API key for this provider (supports multiple keys rotation)',
       apiKeyPlaceholder: 'sk-...',
@@ -372,7 +381,11 @@ export const en: TranslationKeys = {
       desc: 'Configure multiple API keys for automatic rotation',
       keyCount: '{{count}} keys total',
       addKey: 'Add Key',
+      addKeyMode: 'Storage Mode',
+      addSharedKey: 'Add Shared Key',
+      selectSharedSecret: 'Select Shared Secret',
       keyEmpty: 'Key cannot be empty',
+      secretIdEmpty: 'Please select a shared secret',
       keyDuplicate: 'This key already exists',
       importHint: 'Tip: You can enter multiple keys separated by commas in the provider edit form',
       moveUp: 'Move up',
@@ -385,6 +398,13 @@ export const en: TranslationKeys = {
       statusChecking: 'Checking...',
       statusHealthy: 'Valid',
       statusUnhealthy: 'Invalid',
+      // Storage mode related
+      modeLocal: 'Local Key',
+      modeShared: 'Shared Key',
+      modeLocalBadge: 'Local',
+      modeSharedBadge: 'Shared',
+      modeLocalTooltip: 'Key stored only in this plugin',
+      modeSharedTooltip: 'Key stored in Obsidian, can be shared with other plugins',
     },
     modelEdit: {
       titleAdd: 'Add Model',
@@ -1049,6 +1069,12 @@ export const en: TranslationKeys = {
       apiKeyPlaceholder: 'Enter API Key',
       appIdPlaceholder: 'Enter App ID',
       accessTokenPlaceholder: 'Enter access token',
+      
+      // Key storage mode
+      keyStorageMode: 'Key Storage Mode',
+      keyStorageModeDesc: 'Choose how to store the API key',
+      localKey: 'Local Key',
+      sharedKey: 'Shared Key',
       
       // LLM post-processing
       llmPostProcessing: 'LLM Post-Processing',

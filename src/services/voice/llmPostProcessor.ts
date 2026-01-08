@@ -354,7 +354,10 @@ export class LLMPostProcessor implements ILLMPostProcessor {
       id: 'voice-llm-custom',
       name: 'Voice LLM Custom',
       endpoint,
-      apiKey,
+      keyConfig: {
+        mode: 'local',
+        localValue: apiKey,
+      },
       models: [],
     };
     

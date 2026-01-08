@@ -1,31 +1,62 @@
 import { App, Modal, Setting, Notice, setIcon } from 'obsidian';
 import { t } from '../../i18n';
+import type { KeyConfig, SecretStorageMode } from '../settings';
+import type { ISecretService } from '../../services/secret';
 
 /** 密钥健康状态 */
 type KeyHealthStatus = 'unknown' | 'checking' | 'healthy' | 'unhealthy';
 
 /**
+ * 检查 SecretComponent 是否可用
+ * Obsidian 1.11.1+ 才支持 SecretComponent
+ */
+function isSecretComponentAvailable(app: App): boolean {
+  return !!(app as any).secretStorage;
+}
+
+/**
+ * 动态创建 SecretComponent
+ */
+function createSecretComponent(app: App, containerEl: HTMLElement): any {
+  try {
+    const obsidian = require('obsidian');
+    if (obsidian.SecretComponent) {
+      return new obsidian.SecretComponent(app, containerEl);
+    }
+  } catch {
+    // SecretComponent 不可用
+  }
+  return null;
+}
+
+/**
  * API 密钥管理模态窗口
  * 支持添加、删除、排序多个 API 密钥，以及健康度检查
+ * 支持共享密钥和本地密钥两种存储模式
  */
 export class ApiKeyManagerModal extends Modal {
-  private apiKeys: string[];
-  private onSave: (keys: string[]) => void;
+  private keyConfigs: KeyConfig[];
+  private onSave: (keys: KeyConfig[]) => void;
   private endpoint: string;
   private keyHealthStatus: Map<number, KeyHealthStatus> = new Map();
   private isCheckingAll = false;
+  private secretService?: ISecretService;
+  private secretComponentAvailable: boolean;
 
   constructor(
     app: App,
-    apiKeys: string[],
-    onSave: (keys: string[]) => void,
-    endpoint?: string
+    keyConfigs: KeyConfig[],
+    onSave: (keys: KeyConfig[]) => void,
+    endpoint?: string,
+    secretService?: ISecretService
   ) {
     super(app);
     // 复制数组避免直接修改原数据
-    this.apiKeys = [...apiKeys];
+    this.keyConfigs = keyConfigs.map(kc => ({ ...kc }));
     this.onSave = onSave;
     this.endpoint = endpoint || '';
+    this.secretService = secretService;
+    this.secretComponentAvailable = isSecretComponentAvailable(app);
   }
 
   onOpen() {
@@ -38,7 +69,7 @@ export class ApiKeyManagerModal extends Modal {
 
     // 设置弹窗宽度
     this.modalEl.setCssProps({
-      width: '550px',
+      width: '600px',
       'max-width': '90vw'
     });
 
@@ -58,10 +89,10 @@ export class ApiKeyManagerModal extends Modal {
     const countEl = headerContainer.createDiv({ cls: 'api-key-count' });
     countEl.style.fontSize = '0.85em';
     countEl.style.color = 'var(--text-muted)';
-    countEl.setText(t('modals.apiKeyManager.keyCount', { count: this.apiKeys.length }));
+    countEl.setText(t('modals.apiKeyManager.keyCount', { count: this.keyConfigs.length }));
 
     // 全部检查按钮
-    if (this.apiKeys.length > 0 && this.endpoint) {
+    if (this.keyConfigs.length > 0 && this.endpoint) {
       const checkAllBtn = headerContainer.createEl('button', {
         cls: 'mod-cta',
         text: this.isCheckingAll 
@@ -80,41 +111,12 @@ export class ApiKeyManagerModal extends Modal {
     listEl.style.marginBottom = '12px';
 
     // 渲染每个密钥
-    this.apiKeys.forEach((key, index) => {
-      this.renderKeyItem(listEl, key, index);
+    this.keyConfigs.forEach((keyConfig, index) => {
+      this.renderKeyItem(listEl, keyConfig, index);
     });
 
-    // 添加新密钥
-    const addContainer = contentEl.createDiv({ cls: 'api-key-add' });
-    addContainer.style.marginBottom = '16px';
-
-    let newKeyInput: HTMLInputElement;
-    new Setting(addContainer)
-      .setName(t('modals.apiKeyManager.addKey'))
-      .addText(text => {
-        text
-          .setPlaceholder('sk-...')
-          .onChange(() => {});
-        text.inputEl.type = 'password';
-        text.inputEl.style.minWidth = '200px';
-        newKeyInput = text.inputEl;
-      })
-      .addButton(button => button
-        .setIcon('plus')
-        .setCta()
-        .onClick(() => {
-          const newKey = newKeyInput.value.trim();
-          if (!newKey) {
-            new Notice('❌ ' + t('modals.apiKeyManager.keyEmpty'));
-            return;
-          }
-          if (this.apiKeys.includes(newKey)) {
-            new Notice('❌ ' + t('modals.apiKeyManager.keyDuplicate'));
-            return;
-          }
-          this.apiKeys.push(newKey);
-          this.render();
-        }));
+    // 添加新密钥区域
+    this.renderAddKeySection(contentEl);
 
     // 批量导入提示
     const importHint = contentEl.createDiv({ cls: 'api-key-import-hint' });
@@ -141,12 +143,159 @@ export class ApiKeyManagerModal extends Modal {
       cls: 'mod-cta'
     });
     saveButton.addEventListener('click', () => {
-      this.onSave(this.apiKeys);
+      this.onSave(this.keyConfigs);
       this.close();
     });
   }
 
-  private renderKeyItem(containerEl: HTMLElement, key: string, index: number) {
+  /**
+   * 渲染添加密钥区域
+   * 支持选择存储模式
+   */
+  private renderAddKeySection(containerEl: HTMLElement) {
+    const addContainer = containerEl.createDiv({ cls: 'api-key-add' });
+    addContainer.style.marginBottom = '16px';
+    addContainer.style.padding = '12px';
+    addContainer.style.backgroundColor = 'var(--background-secondary)';
+    addContainer.style.borderRadius = '6px';
+
+    // 存储模式选择（仅当 SecretComponent 可用时显示）
+    let selectedMode: SecretStorageMode = 'local';
+    let secretComponentContainer: HTMLElement | null = null;
+    let localKeyContainer: HTMLElement | null = null;
+    let newSecretId = '';
+    let newLocalValue = '';
+
+    if (this.secretComponentAvailable) {
+      new Setting(addContainer)
+        .setName(t('modals.apiKeyManager.addKeyMode'))
+        .addDropdown(dropdown => {
+          dropdown
+            .addOption('local', t('modals.apiKeyManager.modeLocal'))
+            .addOption('shared', t('modals.apiKeyManager.modeShared'))
+            .setValue(selectedMode)
+            .onChange((value: string) => {
+              selectedMode = value as SecretStorageMode;
+              updateModeUI();
+            });
+        });
+
+      // 共享密钥容器
+      secretComponentContainer = addContainer.createDiv({ cls: 'add-secret-container' });
+      const secretSetting = new Setting(secretComponentContainer)
+        .setName(t('modals.apiKeyManager.selectSharedSecret'));
+      
+      secretSetting.controlEl.empty();
+      const secretComponent = createSecretComponent(this.app, secretSetting.controlEl);
+      if (secretComponent) {
+        secretComponent
+          .setValue('')
+          .onChange((value: string) => {
+            newSecretId = value;
+          });
+      }
+    }
+
+    // 本地密钥容器
+    localKeyContainer = addContainer.createDiv({ cls: 'add-local-container' });
+    let newKeyInput: HTMLInputElement;
+    new Setting(localKeyContainer)
+      .setName(t('modals.apiKeyManager.addKey'))
+      .addText(text => {
+        text
+          .setPlaceholder('sk-...')
+          .onChange((value) => {
+            newLocalValue = value;
+          });
+        text.inputEl.type = 'password';
+        text.inputEl.style.minWidth = '200px';
+        newKeyInput = text.inputEl;
+      })
+      .addButton(button => button
+        .setIcon('plus')
+        .setCta()
+        .onClick(() => {
+          this.addNewKey(selectedMode, newSecretId, newLocalValue, newKeyInput);
+        }));
+
+    // 更新模式 UI
+    const updateModeUI = () => {
+      if (secretComponentContainer && localKeyContainer) {
+        if (selectedMode === 'shared') {
+          secretComponentContainer.style.display = 'block';
+          localKeyContainer.style.display = 'none';
+        } else {
+          secretComponentContainer.style.display = 'none';
+          localKeyContainer.style.display = 'block';
+        }
+      }
+    };
+
+    // 初始化 UI
+    if (this.secretComponentAvailable) {
+      updateModeUI();
+    }
+
+    // 添加共享密钥按钮（仅当选择共享模式时）
+    if (this.secretComponentAvailable && secretComponentContainer) {
+      new Setting(secretComponentContainer)
+        .addButton(button => button
+          .setIcon('plus')
+          .setCta()
+          .setButtonText(t('modals.apiKeyManager.addSharedKey'))
+          .onClick(() => {
+            this.addNewKey(selectedMode, newSecretId, newLocalValue);
+          }));
+    }
+  }
+
+  /**
+   * 添加新密钥
+   */
+  private addNewKey(
+    mode: SecretStorageMode, 
+    secretId: string, 
+    localValue: string,
+    inputEl?: HTMLInputElement
+  ) {
+    if (mode === 'shared') {
+      if (!secretId) {
+        new Notice('❌ ' + t('modals.apiKeyManager.secretIdEmpty'));
+        return;
+      }
+      // 检查是否已存在相同的共享密钥
+      if (this.keyConfigs.some(kc => kc.mode === 'shared' && kc.secretId === secretId)) {
+        new Notice('❌ ' + t('modals.apiKeyManager.keyDuplicate'));
+        return;
+      }
+      this.keyConfigs.push({
+        mode: 'shared',
+        secretId
+      });
+    } else {
+      const newKey = localValue.trim();
+      if (!newKey) {
+        new Notice('❌ ' + t('modals.apiKeyManager.keyEmpty'));
+        return;
+      }
+      // 检查是否已存在相同的本地密钥
+      if (this.keyConfigs.some(kc => kc.mode === 'local' && kc.localValue === newKey)) {
+        new Notice('❌ ' + t('modals.apiKeyManager.keyDuplicate'));
+        return;
+      }
+      this.keyConfigs.push({
+        mode: 'local',
+        localValue: newKey
+      });
+      // 清空输入框
+      if (inputEl) {
+        inputEl.value = '';
+      }
+    }
+    this.render();
+  }
+
+  private renderKeyItem(containerEl: HTMLElement, keyConfig: KeyConfig, index: number) {
     const itemEl = containerEl.createDiv({ cls: 'api-key-item' });
     itemEl.style.display = 'flex';
     itemEl.style.alignItems = 'center';
@@ -163,6 +312,26 @@ export class ApiKeyManagerModal extends Modal {
     indexEl.style.fontSize = '0.85em';
     indexEl.setText(`#${index + 1}`);
 
+    // 存储模式标识
+    const modeEl = itemEl.createSpan({ cls: 'api-key-mode' });
+    modeEl.style.minWidth = '50px';
+    modeEl.style.fontSize = '0.75em';
+    modeEl.style.padding = '2px 6px';
+    modeEl.style.borderRadius = '3px';
+    modeEl.style.textAlign = 'center';
+    
+    if (keyConfig.mode === 'shared') {
+      modeEl.setText(t('modals.apiKeyManager.modeSharedBadge'));
+      modeEl.style.backgroundColor = 'var(--interactive-accent)';
+      modeEl.style.color = 'var(--text-on-accent)';
+      modeEl.setAttribute('title', t('modals.apiKeyManager.modeSharedTooltip'));
+    } else {
+      modeEl.setText(t('modals.apiKeyManager.modeLocalBadge'));
+      modeEl.style.backgroundColor = 'var(--background-modifier-border)';
+      modeEl.style.color = 'var(--text-normal)';
+      modeEl.setAttribute('title', t('modals.apiKeyManager.modeLocalTooltip'));
+    }
+
     // 健康状态指示器
     const statusEl = itemEl.createSpan({ cls: 'api-key-status' });
     statusEl.style.minWidth = '20px';
@@ -174,7 +343,7 @@ export class ApiKeyManagerModal extends Modal {
     keyEl.style.flex = '1';
     keyEl.style.fontFamily = 'monospace';
     keyEl.style.fontSize = '0.85em';
-    keyEl.setText(this.maskKey(key));
+    keyEl.setText(this.getDisplayValue(keyConfig));
 
     // 健康检查按钮
     if (this.endpoint) {
@@ -197,7 +366,7 @@ export class ApiKeyManagerModal extends Modal {
       setIcon(upBtn, 'chevron-up');
       upBtn.setAttribute('aria-label', t('modals.apiKeyManager.moveUp'));
       upBtn.addEventListener('click', () => {
-        [this.apiKeys[index - 1], this.apiKeys[index]] = [this.apiKeys[index], this.apiKeys[index - 1]];
+        [this.keyConfigs[index - 1], this.keyConfigs[index]] = [this.keyConfigs[index], this.keyConfigs[index - 1]];
         // 同步交换健康状态
         const status1 = this.keyHealthStatus.get(index - 1);
         const status2 = this.keyHealthStatus.get(index);
@@ -210,12 +379,12 @@ export class ApiKeyManagerModal extends Modal {
     }
 
     // 下移按钮
-    if (index < this.apiKeys.length - 1) {
+    if (index < this.keyConfigs.length - 1) {
       const downBtn = itemEl.createEl('button', { cls: 'clickable-icon' });
       setIcon(downBtn, 'chevron-down');
       downBtn.setAttribute('aria-label', t('modals.apiKeyManager.moveDown'));
       downBtn.addEventListener('click', () => {
-        [this.apiKeys[index], this.apiKeys[index + 1]] = [this.apiKeys[index + 1], this.apiKeys[index]];
+        [this.keyConfigs[index], this.keyConfigs[index + 1]] = [this.keyConfigs[index + 1], this.keyConfigs[index]];
         // 同步交换健康状态
         const status1 = this.keyHealthStatus.get(index);
         const status2 = this.keyHealthStatus.get(index + 1);
@@ -233,7 +402,7 @@ export class ApiKeyManagerModal extends Modal {
     deleteBtn.style.color = 'var(--text-error)';
     deleteBtn.setAttribute('aria-label', t('common.delete'));
     deleteBtn.addEventListener('click', () => {
-      this.apiKeys.splice(index, 1);
+      this.keyConfigs.splice(index, 1);
       this.keyHealthStatus.delete(index);
       // 重新映射后续索引的状态
       const newStatusMap = new Map<number, KeyHealthStatus>();
@@ -247,6 +416,35 @@ export class ApiKeyManagerModal extends Modal {
       this.keyHealthStatus = newStatusMap;
       this.render();
     });
+  }
+
+  /**
+   * 获取密钥的显示值（脱敏）
+   */
+  private getDisplayValue(keyConfig: KeyConfig): string {
+    if (keyConfig.mode === 'shared') {
+      // 共享密钥显示 ID
+      return keyConfig.secretId ? `🔗 ${keyConfig.secretId}` : '🔗 (未选择)';
+    } else {
+      // 本地密钥显示脱敏值
+      return this.maskKey(keyConfig.localValue || '');
+    }
+  }
+
+  /**
+   * 解析密钥值
+   * 用于健康检查
+   */
+  private resolveKeyValue(keyConfig: KeyConfig): string | undefined {
+    if (keyConfig.mode === 'shared') {
+      if (!keyConfig.secretId || !this.secretService) {
+        return undefined;
+      }
+      const value = this.secretService.getSecret(keyConfig.secretId);
+      return value ?? undefined;
+    } else {
+      return keyConfig.localValue;
+    }
   }
 
   /**
@@ -286,12 +484,21 @@ export class ApiKeyManagerModal extends Modal {
   private async checkKeyHealth(index: number): Promise<void> {
     if (!this.endpoint) return;
     
-    const key = this.apiKeys[index];
+    const keyConfig = this.keyConfigs[index];
+    const keyValue = this.resolveKeyValue(keyConfig);
+    
+    if (!keyValue) {
+      // 无法解析密钥值（共享密钥不存在或本地密钥为空）
+      this.keyHealthStatus.set(index, 'unhealthy');
+      this.render();
+      return;
+    }
+
     this.keyHealthStatus.set(index, 'checking');
     this.render();
 
     try {
-      const isHealthy = await this.testApiKey(key);
+      const isHealthy = await this.testApiKey(keyValue);
       this.keyHealthStatus.set(index, isHealthy ? 'healthy' : 'unhealthy');
     } catch {
       this.keyHealthStatus.set(index, 'unhealthy');
@@ -310,12 +517,19 @@ export class ApiKeyManagerModal extends Modal {
     this.render();
 
     // 并行检查所有密钥
-    const promises = this.apiKeys.map(async (key, index) => {
+    const promises = this.keyConfigs.map(async (keyConfig, index) => {
+      const keyValue = this.resolveKeyValue(keyConfig);
+      
+      if (!keyValue) {
+        this.keyHealthStatus.set(index, 'unhealthy');
+        return;
+      }
+
       this.keyHealthStatus.set(index, 'checking');
       this.render();
       
       try {
-        const isHealthy = await this.testApiKey(key);
+        const isHealthy = await this.testApiKey(keyValue);
         this.keyHealthStatus.set(index, isHealthy ? 'healthy' : 'unhealthy');
       } catch {
         this.keyHealthStatus.set(index, 'unhealthy');
@@ -393,7 +607,7 @@ export class ApiKeyManagerModal extends Modal {
    * 脱敏显示密钥
    */
   private maskKey(key: string): string {
-    if (key.length <= 8) {
+    if (!key || key.length <= 8) {
       return '****';
     }
     return key.substring(0, 4) + '****' + key.substring(key.length - 4);

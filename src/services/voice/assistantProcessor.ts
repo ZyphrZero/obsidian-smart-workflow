@@ -385,7 +385,10 @@ ${selectedText}
       id: 'voice-assistant-custom',
       name: 'Voice Assistant Custom',
       endpoint,
-      apiKey,
+      keyConfig: {
+        mode: 'local',
+        localValue: apiKey,
+      },
       models: [],
     };
     

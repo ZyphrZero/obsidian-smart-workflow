@@ -382,6 +382,15 @@ export interface TranslationKeys {
       endpoint: string;
       endpointDesc: string;
       endpointRequired: string;
+      // 密钥存储模式
+      storageMode: string;
+      storageModeDesc: string;
+      storageModeLocal: string;
+      storageModeShared: string;
+      // 共享密钥
+      sharedSecret: string;
+      sharedSecretDesc: string;
+      // 本地密钥
       apiKey: string;
       apiKeyDesc: string;
       apiKeyPlaceholder: string;
@@ -393,7 +402,11 @@ export interface TranslationKeys {
       desc: string;
       keyCount: string;
       addKey: string;
+      addKeyMode: string;
+      addSharedKey: string;
+      selectSharedSecret: string;
       keyEmpty: string;
+      secretIdEmpty: string;
       keyDuplicate: string;
       importHint: string;
       moveUp: string;
@@ -406,6 +419,13 @@ export interface TranslationKeys {
       statusChecking: string;
       statusHealthy: string;
       statusUnhealthy: string;
+      // 存储模式相关
+      modeLocal: string;
+      modeShared: string;
+      modeLocalBadge: string;
+      modeSharedBadge: string;
+      modeLocalTooltip: string;
+      modeSharedTooltip: string;
     };
     // 模型编辑弹窗
     modelEdit: {
@@ -1087,6 +1107,12 @@ export interface TranslationKeys {
       apiKeyPlaceholder: string;
       appIdPlaceholder: string;
       accessTokenPlaceholder: string;
+      
+      // 密钥存储模式
+      keyStorageMode: string;
+      keyStorageModeDesc: string;
+      localKey: string;
+      sharedKey: string;
       
       // LLM 后处理
       llmPostProcessing: string;
