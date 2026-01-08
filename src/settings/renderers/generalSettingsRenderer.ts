@@ -619,7 +619,7 @@ export class GeneralSettingsRenderer extends BaseSettingsRenderer {
       url: modelsEndpoint,
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${provider.apiKey}`,
+        'Authorization': `Bearer ${this.getProviderApiKey(provider)}`,
         'Content-Type': 'application/json'
       },
       throw: false
@@ -646,7 +646,8 @@ export class GeneralSettingsRenderer extends BaseSettingsRenderer {
    */
   private async fetchProviderModels(provider: Provider): Promise<void> {
     // 验证 API Key
-    if (!provider.apiKey || provider.apiKey.trim() === '') {
+    const apiKey = this.getProviderApiKey(provider);
+    if (!apiKey || apiKey.trim() === '') {
       new Notice('❌ ' + t('settingsDetails.general.fetchModelsNoApiKey'));
       return;
     }
@@ -698,5 +699,24 @@ export class GeneralSettingsRenderer extends BaseSettingsRenderer {
         message: error instanceof Error ? error.message : String(error) 
       }));
     }
+  }
+
+  /**
+   * 获取供应商的 API 密钥
+   * 支持新的 keyConfig 结构
+   */
+  private getProviderApiKey(provider: Provider): string {
+    // 使用 ConfigManager 的统一接口获取密钥
+    const apiKey = this.context.configManager.getApiKey(provider.id);
+    if (apiKey) {
+      return apiKey;
+    }
+    
+    // 如果 ConfigManager 无法获取（可能是临时 provider），直接从 keyConfig 获取
+    if (provider.keyConfig?.mode === 'local' && provider.keyConfig.localValue) {
+      return provider.keyConfig.localValue;
+    }
+    
+    return '';
   }
 }

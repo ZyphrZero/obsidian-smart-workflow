@@ -1,6 +1,6 @@
 import { App, Modal, Setting, Notice, setIcon } from 'obsidian';
 import type { ConfigManager } from '../../services/config/configManager';
-import type { Provider } from '../settings';
+import type { Provider, KeyConfig, SecretStorageMode } from '../settings';
 import { t } from '../../i18n';
 import { EndpointNormalizer } from '../../services/ai';
 import { ApiKeyManagerModal } from './apiKeyManagerModal';
@@ -100,7 +100,34 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
 ];
 
 /**
+ * 检查 SecretComponent 是否可用
+ * Obsidian 1.11.1+ 才支持 SecretComponent
+ */
+function isSecretComponentAvailable(app: App): boolean {
+  // 检查 app.secretStorage 是否存在
+  return !!(app as any).secretStorage;
+}
+
+/**
+ * 动态创建 SecretComponent
+ * 由于 TypeScript 类型定义可能不包含 SecretComponent，使用动态导入
+ */
+function createSecretComponent(app: App, containerEl: HTMLElement): any {
+  try {
+    // 尝试从 obsidian 模块动态获取 SecretComponent
+    const obsidian = require('obsidian');
+    if (obsidian.SecretComponent) {
+      return new obsidian.SecretComponent(app, containerEl);
+    }
+  } catch {
+    // SecretComponent 不可用
+  }
+  return null;
+}
+
+/**
  * 供应商编辑弹窗
+ * 支持共享密钥和本地密钥两种存储模式
  */
 export class ProviderEditModal extends Modal {
   private provider: Provider | null;
@@ -136,29 +163,56 @@ export class ProviderEditModal extends Modal {
       .setName(this.isNew ? t('modals.providerEdit.titleAdd') : t('modals.providerEdit.titleEdit'))
       .setHeading();
 
+    // 从现有 provider 中提取 keyConfig 信息
+    const existingKeyConfig = this.provider?.keyConfig;
+    const existingKeyConfigs = this.provider?.keyConfigs;
+
     // 表单数据
     const formData = {
       name: this.provider?.name || '',
       endpoint: this.provider?.endpoint || '',
-      apiKey: this.provider?.apiKey || '',
-      apiKeys: this.provider?.apiKeys || []
+      // 密钥存储模式
+      storageMode: (existingKeyConfig?.mode || 'local') as SecretStorageMode,
+      // 共享密钥 ID
+      secretId: existingKeyConfig?.secretId || '',
+      // 本地密钥值
+      localValue: existingKeyConfig?.localValue || '',
+      // 多密钥配置
+      keyConfigs: existingKeyConfigs ? [...existingKeyConfigs] : []
     };
 
     // 用于更新表单 UI 的引用
     let nameInput: HTMLInputElement | null = null;
     let endpointInput: HTMLInputElement | null = null;
-    let apiKeyInput: HTMLInputElement | null = null;
     let keyCountEl: HTMLElement | null = null;
+    let secretComponentContainer: HTMLElement | null = null;
+    let localKeyContainer: HTMLElement | null = null;
+
+    // 检查 SecretComponent 是否可用
+    const secretComponentAvailable = isSecretComponentAvailable(this.app);
 
     // 更新密钥数量显示
     const updateKeyCount = () => {
       if (keyCountEl) {
-        const count = formData.apiKeys.length;
+        const count = formData.keyConfigs.length;
         if (count > 0) {
           keyCountEl.setText(t('modals.providerEdit.multiKeyCount', { count }));
           keyCountEl.style.display = 'block';
         } else {
           keyCountEl.style.display = 'none';
+        }
+      }
+    };
+
+    // 更新存储模式 UI 显示
+    const updateStorageModeUI = () => {
+      if (secretComponentContainer && localKeyContainer) {
+        if (formData.storageMode === 'shared') {
+          secretComponentContainer.style.display = 'block';
+          localKeyContainer.style.display = 'none';
+        } else {
+          secretComponentContainer.style.display = 'none';
+          localKeyContainer.style.display = 'block';
         }
       }
     };
@@ -244,20 +298,61 @@ export class ProviderEditModal extends Modal {
     // 初始化显示
     updateActualUrl(formData.endpoint);
 
-    // API Key
-    const apiKeySetting = new Setting(contentEl)
+    // 密钥存储模式选择器（仅当 SecretComponent 可用时显示）
+    if (secretComponentAvailable) {
+      new Setting(contentEl)
+        .setName(t('modals.providerEdit.storageMode'))
+        .setDesc(t('modals.providerEdit.storageModeDesc'))
+        .addDropdown(dropdown => {
+          dropdown
+            .addOption('local', t('modals.providerEdit.storageModeLocal'))
+            .addOption('shared', t('modals.providerEdit.storageModeShared'))
+            .setValue(formData.storageMode)
+            .onChange((value: string) => {
+              const newMode = value as SecretStorageMode;
+              // 存储模式切换时的值保留逻辑
+              if (formData.storageMode !== newMode) {
+                formData.storageMode = newMode;
+                updateStorageModeUI();
+              }
+            });
+        });
+
+      // 共享密钥容器 (SecretComponent)
+      secretComponentContainer = contentEl.createDiv({ cls: 'secret-component-container' });
+      const secretSetting = new Setting(secretComponentContainer)
+        .setName(t('modals.providerEdit.sharedSecret'))
+        .setDesc(t('modals.providerEdit.sharedSecretDesc'));
+      
+      // 使用动态创建的 SecretComponent
+      secretSetting.controlEl.empty();
+      const secretComponent = createSecretComponent(this.app, secretSetting.controlEl);
+      if (secretComponent) {
+        secretComponent
+          .setValue(formData.secretId)
+          .onChange((value: string) => {
+            formData.secretId = value;
+          });
+      }
+    }
+
+    // 本地密钥容器 (TextComponent with password type)
+    localKeyContainer = contentEl.createDiv({ cls: 'local-key-container' });
+    let localKeyInput: HTMLInputElement | null = null;
+    
+    const localKeySetting = new Setting(localKeyContainer)
       .setName(t('modals.providerEdit.apiKey'))
       .setDesc(t('modals.providerEdit.apiKeyDesc'))
       .addText(text => {
         text
           .setPlaceholder(t('modals.providerEdit.apiKeyPlaceholder'))
-          .setValue(formData.apiKey)
+          .setValue(formData.localValue)
           .onChange(value => {
-            formData.apiKey = value;
+            formData.localValue = value;
           });
         text.inputEl.type = 'password';
         text.inputEl.setCssProps({ 'min-width': '180px' });
-        apiKeyInput = text.inputEl;
+        localKeyInput = text.inputEl;
       })
       .addButton(button => {
         button
@@ -265,22 +360,43 @@ export class ProviderEditModal extends Modal {
           .setTooltip(t('modals.providerEdit.manageKeys'))
           .onClick(() => {
             // 打开密钥管理模态窗口
+            // 准备 keyConfigs 数组
+            let keysToEdit = [...formData.keyConfigs];
+            
             // 如果当前有单个密钥但没有多密钥列表，先初始化
-            let keysToEdit = [...formData.apiKeys];
-            if (keysToEdit.length === 0 && formData.apiKey) {
-              keysToEdit = [formData.apiKey];
+            if (keysToEdit.length === 0) {
+              if (formData.storageMode === 'shared' && formData.secretId) {
+                keysToEdit.push({
+                  mode: 'shared',
+                  secretId: formData.secretId
+                });
+              } else if (formData.localValue) {
+                keysToEdit.push({
+                  mode: 'local',
+                  localValue: formData.localValue
+                });
+              }
             }
             
             new ApiKeyManagerModal(
               this.app,
               keysToEdit,
-              (newKeys) => {
-                formData.apiKeys = newKeys;
+              (newKeyConfigs) => {
+                // 更新 keyConfigs
+                formData.keyConfigs = newKeyConfigs;
                 // 更新主密钥为第一个
-                if (newKeys.length > 0) {
-                  formData.apiKey = newKeys[0];
-                  if (apiKeyInput) {
-                    apiKeyInput.value = newKeys[0];
+                if (newKeyConfigs.length > 0) {
+                  const firstKey = newKeyConfigs[0];
+                  formData.storageMode = firstKey.mode;
+                  if (firstKey.mode === 'shared') {
+                    formData.secretId = firstKey.secretId || '';
+                    formData.localValue = '';
+                  } else {
+                    formData.localValue = firstKey.localValue || '';
+                    formData.secretId = '';
+                    if (localKeyInput) {
+                      localKeyInput.value = formData.localValue;
+                    }
                   }
                 }
                 updateKeyCount();
@@ -299,6 +415,11 @@ export class ProviderEditModal extends Modal {
       'margin-bottom': '12px'
     });
     updateKeyCount();
+
+    // 初始化存储模式 UI（仅当 SecretComponent 可用时）
+    if (secretComponentAvailable) {
+      updateStorageModeUI();
+    }
 
     // 按钮容器
     const buttonContainer = contentEl.createDiv({ cls: 'modal-button-container' });
@@ -331,21 +452,31 @@ export class ProviderEditModal extends Modal {
           return;
         }
 
+        // 构建 keyConfig
+        const keyConfig: KeyConfig = {
+          mode: formData.storageMode,
+          secretId: formData.storageMode === 'shared' ? formData.secretId : undefined,
+          localValue: formData.storageMode === 'local' ? formData.localValue : undefined
+        };
+
+        // 构建 keyConfigs（多密钥）
+        const keyConfigs = formData.keyConfigs.length > 0 ? formData.keyConfigs : undefined;
+
         if (this.isNew) {
-          // 创建新供应商（不添加默认模型，用户需要手动添加）
+          // 创建新供应商
           this.configManager.addProvider({
             name: formData.name.trim(),
             endpoint: formData.endpoint.trim(),
-            apiKey: formData.apiKey,
-            apiKeys: formData.apiKeys.length > 0 ? formData.apiKeys : undefined
+            keyConfig,
+            keyConfigs
           });
         } else if (this.provider) {
           // 更新现有供应商
           this.configManager.updateProvider(this.provider.id, {
             name: formData.name.trim(),
             endpoint: formData.endpoint.trim(),
-            apiKey: formData.apiKey,
-            apiKeys: formData.apiKeys.length > 0 ? formData.apiKeys : undefined
+            keyConfig,
+            keyConfigs
           });
         }
 

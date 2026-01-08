@@ -361,6 +361,15 @@ export const zhCN: TranslationKeys = {
       endpoint: 'API 端点',
       endpointDesc: '此供应商的 API 端点 URL',
       endpointRequired: 'API 端点不能为空',
+      // 密钥存储模式
+      storageMode: '密钥存储模式',
+      storageModeDesc: '选择密钥的存储方式：共享密钥可被其他插件访问，本地密钥仅存储在本插件中',
+      storageModeLocal: '本地密钥',
+      storageModeShared: '共享密钥',
+      // 共享密钥
+      sharedSecret: '选择共享密钥',
+      sharedSecretDesc: '从 Obsidian 密钥库中选择或创建新的共享密钥',
+      // 本地密钥
       apiKey: 'API 密钥',
       apiKeyDesc: '此供应商的 API 密钥（支持多密钥轮询）',
       apiKeyPlaceholder: 'sk-...',
@@ -372,7 +381,11 @@ export const zhCN: TranslationKeys = {
       desc: '配置多个 API 密钥，系统将自动轮询使用',
       keyCount: '当前共 {{count}} 个密钥',
       addKey: '添加密钥',
+      addKeyMode: '存储模式',
+      addSharedKey: '添加共享密钥',
+      selectSharedSecret: '选择共享密钥',
       keyEmpty: '密钥不能为空',
+      secretIdEmpty: '请选择一个共享密钥',
       keyDuplicate: '该密钥已存在',
       importHint: '提示：可以在供应商编辑框中用逗号分隔输入多个密钥',
       moveUp: '上移',
@@ -385,6 +398,13 @@ export const zhCN: TranslationKeys = {
       statusChecking: '检查中...',
       statusHealthy: '有效',
       statusUnhealthy: '无效',
+      // 存储模式相关
+      modeLocal: '本地密钥',
+      modeShared: '共享密钥',
+      modeLocalBadge: '本地',
+      modeSharedBadge: '共享',
+      modeLocalTooltip: '仅存储在本插件中的密钥',
+      modeSharedTooltip: '存储在 Obsidian 中，可被其他插件共享',
     },
     modelEdit: {
       titleAdd: '添加模型',
@@ -1049,6 +1069,12 @@ export const zhCN: TranslationKeys = {
       apiKeyPlaceholder: '输入 API Key',
       appIdPlaceholder: '输入应用 ID',
       accessTokenPlaceholder: '输入访问令牌',
+      
+      // 密钥存储模式
+      keyStorageMode: '密钥存储模式',
+      keyStorageModeDesc: '选择密钥的存储方式',
+      localKey: '本地密钥',
+      sharedKey: '共享密钥',
       
       // LLM 后处理
       llmPostProcessing: 'LLM 后处理',

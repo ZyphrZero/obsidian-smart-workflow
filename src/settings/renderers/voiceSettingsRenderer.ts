@@ -3,7 +3,7 @@
  * 负责渲染语音输入功能的所有设置
  */
 
-import { Setting, Notice, setIcon, TextAreaComponent } from 'obsidian';
+import { Setting, Notice, setIcon, TextAreaComponent, App } from 'obsidian';
 import type { RendererContext } from '../types';
 import { BaseSettingsRenderer } from './baseRenderer';
 import { createHotkeyInput } from '../components';
@@ -16,6 +16,8 @@ import type {
   VoiceLLMPreset,
   VoiceASRProviderConfig,
   VoiceSettings,
+  SecretStorageMode,
+  KeyConfig,
 } from '../settings';
 import {
   DEFAULT_VOICE_LLM_PRESETS,
@@ -24,6 +26,30 @@ import {
 } from '../settings';
 import type { TranscriptionHistory } from '../../services/voice/types';
 import { HistoryManager } from '../../services/voice/historyManager';
+
+/**
+ * 检查 SecretComponent 是否可用
+ * Obsidian 1.11.1+ 才支持 SecretComponent
+ */
+function isSecretComponentAvailable(app: App): boolean {
+  return !!(app as any).secretStorage;
+}
+
+/**
+ * 动态创建 SecretComponent
+ * 由于 TypeScript 类型定义可能不包含 SecretComponent，使用动态导入
+ */
+function createSecretComponent(app: App, containerEl: HTMLElement): any {
+  try {
+    const obsidian = require('obsidian');
+    if (obsidian.SecretComponent) {
+      return new obsidian.SecretComponent(app, containerEl);
+    }
+  } catch {
+    // SecretComponent 不可用
+  }
+  return null;
+}
 
 /**
  * ASR 供应商显示信息
@@ -854,6 +880,7 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
 
   /**
    * 渲染 ASR API Key 输入
+   * 支持共享密钥和本地密钥两种存储模式
    */
   private renderASRApiKeyInputs(
     containerEl: HTMLElement,
@@ -903,21 +930,27 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
       });
     }
 
+    // 检查 SecretComponent 是否可用
+    const secretComponentAvailable = isSecretComponentAvailable(this.context.app);
+
     switch (config.provider) {
       case 'qwen':
-        new Setting(containerEl)
-          .setName(t('voice.settings.dashscopeApiKey'))
-          .setDesc(t('voice.settings.dashscopeApiKeyDesc'))
-          .addText(text => text
-            .setPlaceholder(t('voice.settings.apiKeyPlaceholder'))
-            .setValue(config.dashscope_api_key || '')
-            .onChange(async (value) => {
-              await updateConfig({ dashscope_api_key: value });
-            })
-            .inputEl.type = 'password');
+        this.renderASRKeyWithStorageMode(
+          containerEl,
+          {
+            keyName: t('voice.settings.dashscopeApiKey'),
+            keyDesc: t('voice.settings.dashscopeApiKeyDesc'),
+            keyConfig: config.dashscopeKeyConfig,
+            secretComponentAvailable,
+            onKeyConfigChange: async (keyConfig: KeyConfig | undefined) => {
+              await updateConfig({ dashscopeKeyConfig: keyConfig });
+            },
+          }
+        );
         break;
 
       case 'doubao':
+        // App ID（非密钥，直接存储）
         new Setting(containerEl)
           .setName(t('voice.settings.doubaoAppId'))
           .setDesc(t('voice.settings.doubaoAppIdDesc'))
@@ -928,16 +961,19 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
               await updateConfig({ app_id: value });
             }));
 
-        new Setting(containerEl)
-          .setName(t('voice.settings.doubaoAccessToken'))
-          .setDesc(t('voice.settings.doubaoAccessTokenDesc'))
-          .addText(text => text
-            .setPlaceholder(t('voice.settings.accessTokenPlaceholder'))
-            .setValue(config.access_token || '')
-            .onChange(async (value) => {
-              await updateConfig({ access_token: value });
-            })
-            .inputEl.type = 'password');
+        // Access Token（密钥，支持共享存储）
+        this.renderASRKeyWithStorageMode(
+          containerEl,
+          {
+            keyName: t('voice.settings.doubaoAccessToken'),
+            keyDesc: t('voice.settings.doubaoAccessTokenDesc'),
+            keyConfig: config.doubaoKeyConfig,
+            secretComponentAvailable,
+            onKeyConfigChange: async (keyConfig: KeyConfig | undefined) => {
+              await updateConfig({ doubaoKeyConfig: keyConfig });
+            },
+          }
+        );
         break;
 
       case 'sensevoice': {
@@ -969,12 +1005,18 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
             providerName: siliconFlowProvider?.name || '硅基流动' 
           }));
 
-          // 自动同步 API Key 到配置
-          if (config.siliconflow_api_key !== siliconFlowApiKey) {
-            updateConfig({ siliconflow_api_key: siliconFlowApiKey });
+          // 自动同步 API Key 到配置（使用本地模式）
+          const currentKeyValue = this.context.configManager.resolveKeyValue(config.siliconflowKeyConfig);
+          if (currentKeyValue !== siliconFlowApiKey) {
+            updateConfig({ 
+              siliconflowKeyConfig: {
+                mode: 'local',
+                localValue: siliconFlowApiKey,
+              },
+            });
           }
         } else {
-          // 未配置硅基流动供应商，提示用户去添加
+          // 未配置硅基流动供应商，提示用户去添加或手动配置
           hintEl.style.backgroundColor = 'var(--background-modifier-error)';
           
           const iconEl = hintEl.createSpan();
@@ -983,8 +1025,142 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
           const textEl = hintEl.createSpan();
           textEl.style.color = 'var(--text-normal)';
           textEl.setText(t('voice.settings.siliconflowNoProviderHint'));
+
+          // 如果没有现有供应商，显示手动配置选项
+          this.renderASRKeyWithStorageMode(
+            containerEl,
+            {
+              keyName: t('voice.settings.siliconflowApiKey') || 'SiliconFlow API Key',
+              keyDesc: t('voice.settings.siliconflowApiKeyDesc') || '硅基流动 API Key',
+              keyConfig: config.siliconflowKeyConfig,
+              secretComponentAvailable,
+              onKeyConfigChange: async (keyConfig: KeyConfig | undefined) => {
+                await updateConfig({ siliconflowKeyConfig: keyConfig });
+              },
+            }
+          );
         }
         break;
+      }
+    }
+  }
+
+  /**
+   * 渲染带存储模式选择的 ASR 密钥输入
+   * 支持共享密钥（SecretComponent）和本地密钥（TextComponent）
+   */
+  private renderASRKeyWithStorageMode(
+    containerEl: HTMLElement,
+    options: {
+      keyName: string;
+      keyDesc: string;
+      keyConfig: KeyConfig | undefined;
+      secretComponentAvailable: boolean;
+      onKeyConfigChange: (keyConfig: KeyConfig | undefined) => Promise<void>;
+    }
+  ): void {
+    const { keyName, keyDesc, keyConfig, secretComponentAvailable, onKeyConfigChange } = options;
+
+    // 确定当前存储模式
+    let currentMode: SecretStorageMode = keyConfig?.mode || 'local';
+    let currentSecretId = keyConfig?.secretId || '';
+    let currentLocalValue = keyConfig?.localValue || '';
+
+    // 创建容器
+    const keyContainer = containerEl.createDiv({ cls: 'voice-asr-key-container' });
+    keyContainer.style.marginBottom = '16px';
+
+    // 存储模式选择器（仅当 SecretComponent 可用时显示）
+    let secretComponentContainer: HTMLElement | null = null;
+    let localKeyContainer: HTMLElement | null = null;
+
+    const updateStorageModeUI = () => {
+      if (secretComponentContainer && localKeyContainer) {
+        if (currentMode === 'shared') {
+          secretComponentContainer.style.display = 'block';
+          localKeyContainer.style.display = 'none';
+        } else {
+          secretComponentContainer.style.display = 'none';
+          localKeyContainer.style.display = 'block';
+        }
+      }
+    };
+
+    if (secretComponentAvailable) {
+      new Setting(keyContainer)
+        .setName(t('voice.settings.keyStorageMode') || '密钥存储模式')
+        .setDesc(t('voice.settings.keyStorageModeDesc') || '选择密钥的存储方式')
+        .addDropdown(dropdown => {
+          dropdown
+            .addOption('local', t('voice.settings.localKey') || '本地密钥')
+            .addOption('shared', t('voice.settings.sharedKey') || '共享密钥')
+            .setValue(currentMode)
+            .onChange(async (value: SecretStorageMode) => {
+              currentMode = value;
+              updateStorageModeUI();
+              
+              // 更新配置
+              if (currentMode === 'shared') {
+                await onKeyConfigChange({
+                  mode: 'shared',
+                  secretId: currentSecretId,
+                });
+              } else {
+                await onKeyConfigChange({
+                  mode: 'local',
+                  localValue: currentLocalValue,
+                });
+              }
+            });
+        });
+
+      // 共享密钥容器 (SecretComponent)
+      secretComponentContainer = keyContainer.createDiv({ cls: 'voice-secret-component-container' });
+      const secretSetting = new Setting(secretComponentContainer)
+        .setName(keyName)
+        .setDesc(keyDesc);
+
+      secretSetting.controlEl.empty();
+      const secretComponent = createSecretComponent(this.context.app, secretSetting.controlEl);
+      if (secretComponent) {
+        secretComponent
+          .setValue(currentSecretId)
+          .onChange(async (value: string) => {
+            currentSecretId = value;
+            await onKeyConfigChange({
+              mode: 'shared',
+              secretId: value,
+            });
+          });
+      }
+    }
+
+    // 本地密钥容器 (TextComponent)
+    localKeyContainer = keyContainer.createDiv({ cls: 'voice-local-key-container' });
+    new Setting(localKeyContainer)
+      .setName(keyName)
+      .setDesc(keyDesc)
+      .addText(text => {
+        text
+          .setPlaceholder(t('voice.settings.apiKeyPlaceholder'))
+          .setValue(currentLocalValue)
+          .onChange(async (value) => {
+            currentLocalValue = value;
+            await onKeyConfigChange({
+              mode: 'local',
+              localValue: value,
+            });
+          });
+        text.inputEl.type = 'password';
+      });
+
+    // 初始化 UI 显示
+    if (secretComponentAvailable) {
+      updateStorageModeUI();
+    } else {
+      // SecretComponent 不可用时，只显示本地密钥输入
+      if (localKeyContainer) {
+        localKeyContainer.style.display = 'block';
       }
     }
   }

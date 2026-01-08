@@ -5,8 +5,10 @@ import {
   FeatureBinding,
   ResolvedConfig,
   SmartWorkflowSettings,
-  DEFAULT_FEATURE_BINDINGS
+  DEFAULT_FEATURE_BINDINGS,
+  KeyConfig,
 } from '../../settings/settings';
+import type { ISecretService } from '../secret';
 
 /**
  * 配置管理器
@@ -15,13 +17,24 @@ import {
 export class ConfigManager {
   private settings: SmartWorkflowSettings;
   private onSettingsChange?: () => Promise<void>;
+  private _secretService?: ISecretService;
 
   constructor(
     settings: SmartWorkflowSettings,
-    onSettingsChange?: () => Promise<void>
+    onSettingsChange?: () => Promise<void>,
+    secretService?: ISecretService
   ) {
     this.settings = settings;
     this.onSettingsChange = onSettingsChange;
+    this._secretService = secretService;
+  }
+
+  /**
+   * 设置密钥服务
+   * 用于延迟注入 SecretService
+   */
+  setSecretService(secretService: ISecretService): void {
+    this._secretService = secretService;
   }
 
   /**
@@ -92,9 +105,6 @@ export class ConfigManager {
     }
     if (updates.endpoint !== undefined && updates.endpoint.trim() === '') {
       throw new Error('Provider endpoint cannot be empty');
-    }
-    if (updates.apiKey !== undefined && updates.apiKey.trim() === '') {
-      throw new Error('Provider API key cannot be empty');
     }
 
     // 应用更新
@@ -466,49 +476,178 @@ export class ConfigManager {
   }
 
   // ============================================================================
+  // 统一密钥管理（支持共享密钥和本地密钥）
+  // ============================================================================
+
+  /**
+   * 解析单个密钥配置
+   * 根据存储模式从 SecretStorage 或本地设置获取密钥值
+   * @param keyConfig 密钥配置
+   * @returns 密钥值，不可用返回 undefined
+   */
+  resolveKeyValue(keyConfig: KeyConfig | undefined): string | undefined {
+    if (!keyConfig) {
+      return undefined;
+    }
+
+    if (keyConfig.mode === 'shared') {
+      // 共享模式：从 SecretStorage 获取
+      if (!keyConfig.secretId) {
+        return undefined;
+      }
+      if (!this._secretService) {
+        // SecretService 未初始化，无法获取共享密钥
+        return undefined;
+      }
+      const value = this._secretService.getSecret(keyConfig.secretId);
+      return value ?? undefined;
+    } else {
+      // 本地模式：直接返回本地值
+      return keyConfig.localValue;
+    }
+  }
+
+  /**
+   * 获取供应商的 API 密钥（统一接口）
+   * 自动处理共享/本地存储模式
+   * @param providerId 供应商 ID
+   * @returns 密钥值，不可用返回 undefined
+   */
+  getApiKey(providerId: string): string | undefined {
+    const provider = this.getProvider(providerId);
+    if (!provider) {
+      return undefined;
+    }
+
+    // 如果有多密钥配置，使用轮询
+    if (provider.keyConfigs && provider.keyConfigs.length > 0) {
+      const index = provider.currentKeyIndex ?? 0;
+      const keyConfig = provider.keyConfigs[index];
+      const value = this.resolveKeyValue(keyConfig);
+      if (value) {
+        return value;
+      }
+      // 如果当前密钥不可用，尝试下一个
+      return this.findNextAvailableKey(provider);
+    }
+    
+    // 单密钥配置
+    return this.resolveKeyValue(provider.keyConfig);
+  }
+
+  /**
+   * 获取供应商的所有 API 密钥（统一接口）
+   * 用于多密钥轮询场景，自动处理共享/本地存储模式
+   * @param providerId 供应商 ID
+   * @returns 密钥值数组（仅包含可用的密钥）
+   */
+  getApiKeys(providerId: string): string[] {
+    const provider = this.getProvider(providerId);
+    if (!provider) {
+      return [];
+    }
+
+    const keys: string[] = [];
+
+    // 使用 keyConfigs 配置
+    if (provider.keyConfigs && provider.keyConfigs.length > 0) {
+      for (const keyConfig of provider.keyConfigs) {
+        const value = this.resolveKeyValue(keyConfig);
+        if (value) {
+          keys.push(value);
+        }
+      }
+      if (keys.length > 0) {
+        return keys;
+      }
+    }
+
+    // 使用主密钥配置
+    const value = this.resolveKeyValue(provider.keyConfig);
+    if (value) {
+      keys.push(value);
+    }
+
+    return keys;
+  }
+
+  /**
+   * 查找下一个可用的密钥
+   * 当当前密钥不可用时（如共享密钥被删除），自动跳过
+   * @param provider 供应商配置
+   * @returns 可用的密钥值，如果都不可用返回 undefined
+   */
+  private findNextAvailableKey(provider: Provider): string | undefined {
+    if (!provider.keyConfigs || provider.keyConfigs.length === 0) {
+      return undefined;
+    }
+
+    const startIndex = provider.currentKeyIndex ?? 0;
+    const totalKeys = provider.keyConfigs.length;
+
+    // 从当前索引开始，尝试找到一个可用的密钥
+    for (let i = 0; i < totalKeys; i++) {
+      const index = (startIndex + i) % totalKeys;
+      const keyConfig = provider.keyConfigs[index];
+      const value = this.resolveKeyValue(keyConfig);
+      if (value) {
+        // 更新当前索引
+        if (index !== startIndex) {
+          provider.currentKeyIndex = index;
+          this.saveSettings();
+        }
+        return value;
+      }
+    }
+
+    return undefined;
+  }
+
+  // ============================================================================
   // 密钥轮询
   // ============================================================================
 
   /**
    * 获取供应商的当前 API 密钥
    * 支持多密钥轮询模式
+   * @deprecated 使用 getApiKey() 替代
    */
   getCurrentApiKey(providerId: string): string | undefined {
-    const provider = this.getProvider(providerId);
-    if (!provider) return undefined;
-
-    // 如果有多密钥配置，使用轮询
-    if (provider.apiKeys && provider.apiKeys.length > 0) {
-      const index = provider.currentKeyIndex ?? 0;
-      return provider.apiKeys[index];
-    }
-
-    // 否则返回单个密钥
-    return provider.apiKey;
+    return this.getApiKey(providerId);
   }
 
   /**
    * 轮询到下一个密钥
    * 在请求失败（如限流）时调用
+   * 自动跳过不可用的共享密钥
    */
   rotateApiKey(providerId: string): string | undefined {
     const provider = this.getProvider(providerId);
     if (!provider) return undefined;
 
     // 只有多密钥时才轮询
-    if (!provider.apiKeys || provider.apiKeys.length <= 1) {
-      return provider.apiKey;
+    if (!provider.keyConfigs || provider.keyConfigs.length <= 1) {
+      return this.resolveKeyValue(provider.keyConfig);
     }
 
-    // 计算下一个索引
     const currentIndex = provider.currentKeyIndex ?? 0;
-    const nextIndex = (currentIndex + 1) % provider.apiKeys.length;
-    
-    // 更新索引
-    provider.currentKeyIndex = nextIndex;
-    this.saveSettings();
+    const totalKeys = provider.keyConfigs.length;
 
-    return provider.apiKeys[nextIndex];
+    // 从下一个索引开始，尝试找到一个可用的密钥
+    for (let i = 1; i <= totalKeys; i++) {
+      const nextIndex = (currentIndex + i) % totalKeys;
+      const keyConfig = provider.keyConfigs[nextIndex];
+      const value = this.resolveKeyValue(keyConfig);
+      if (value) {
+        // 更新当前索引
+        provider.currentKeyIndex = nextIndex;
+        this.saveSettings();
+        return value;
+      }
+    }
+
+    // 所有密钥都不可用
+    return undefined;
   }
 
   /**
@@ -518,11 +657,11 @@ export class ConfigManager {
     const provider = this.getProvider(providerId);
     if (!provider) return 0;
 
-    if (provider.apiKeys && provider.apiKeys.length > 0) {
-      return provider.apiKeys.length;
+    if (provider.keyConfigs && provider.keyConfigs.length > 0) {
+      return provider.keyConfigs.length;
     }
 
-    return provider.apiKey ? 1 : 0;
+    return provider.keyConfig ? 1 : 0;
   }
 
   // ============================================================================
@@ -554,6 +693,7 @@ export class ConfigManager {
   getSiliconFlowApiKey(): string | undefined {
     const provider = this.findSiliconFlowProvider();
     if (!provider) return undefined;
-    return this.getCurrentApiKey(provider.id);
+    return this.getApiKey(provider.id);
   }
 }
+

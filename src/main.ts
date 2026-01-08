@@ -406,7 +406,8 @@ export default class SmartWorkflowPlugin extends Plugin {
       this._voiceInputService = new VoiceInputService(
         this.app,
         this.settings.voice,
-        serverManager
+        serverManager,
+        this.configManager
       );
       
       // 注入依赖
@@ -1303,11 +1304,43 @@ export default class SmartWorkflowPlugin extends Plugin {
       defaultPromptTemplate: loaded.defaultPromptTemplate?.trim() || DEFAULT_SETTINGS.defaultPromptTemplate,
       basePromptTemplate: loaded.basePromptTemplate || DEFAULT_SETTINGS.basePromptTemplate,
       advancedPromptTemplate: loaded.advancedPromptTemplate || DEFAULT_SETTINGS.advancedPromptTemplate,
-      // 供应商配置：直接使用，确保 models 数组存在
-      providers: (loaded.providers || []).map(p => ({
-        ...p,
-        models: p.models || []
-      })),
+      // 供应商配置：迁移旧格式 apiKey -> keyConfig
+      providers: (loaded.providers || []).map(p => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const provider = p as any;
+        
+        // 迁移主密钥：如果有旧的 apiKey 字段但没有 keyConfig，进行迁移
+        let keyConfig = provider.keyConfig;
+        if (!keyConfig && provider.apiKey) {
+          keyConfig = {
+            mode: 'local' as const,
+            localValue: provider.apiKey
+          };
+        }
+        // 确保 keyConfig 有默认值
+        if (!keyConfig) {
+          keyConfig = { mode: 'local' as const, localValue: '' };
+        }
+        
+        // 迁移多密钥：如果有旧的 apiKeys 字段但没有 keyConfigs，进行迁移
+        let keyConfigs = provider.keyConfigs;
+        if (!keyConfigs && provider.apiKeys && Array.isArray(provider.apiKeys)) {
+          keyConfigs = provider.apiKeys.map((key: string) => ({
+            mode: 'local' as const,
+            localValue: key
+          }));
+        }
+        
+        return {
+          id: provider.id,
+          name: provider.name,
+          endpoint: provider.endpoint,
+          keyConfig,
+          keyConfigs,
+          currentKeyIndex: provider.currentKeyIndex,
+          models: provider.models || []
+        };
+      }),
       // 功能绑定：直接使用
       featureBindings: loaded.featureBindings || {},
       // 嵌套对象深度合并
@@ -1353,18 +1386,18 @@ export default class SmartWorkflowPlugin extends Plugin {
           ...loaded.writing?.actions
         }
       },
-      // 语音输入设置深度合并
+      // 语音输入设置深度合并（包含 ASR 密钥迁移）
       voice: {
         ...DEFAULT_SETTINGS.voice,
         ...loaded.voice,
-        primaryASR: {
+        primaryASR: this.migrateASRConfig({
           ...DEFAULT_SETTINGS.voice.primaryASR,
           ...loaded.voice?.primaryASR
-        },
-        backupASR: loaded.voice?.backupASR ? {
+        }),
+        backupASR: loaded.voice?.backupASR ? this.migrateASRConfig({
           ...DEFAULT_SETTINGS.voice.backupASR,
           ...loaded.voice.backupASR
-        } : DEFAULT_SETTINGS.voice.backupASR,
+        }) : DEFAULT_SETTINGS.voice.backupASR,
         llmPresets: loaded.voice?.llmPresets || DEFAULT_SETTINGS.voice.llmPresets,
         assistantConfig: {
           ...DEFAULT_SETTINGS.voice.assistantConfig,
@@ -1377,6 +1410,42 @@ export default class SmartWorkflowPlugin extends Plugin {
         ...loaded.serverConnection,
       }
     };
+  }
+
+  /**
+   * 迁移 ASR 配置中的旧密钥字段到新的 KeyConfig 格式
+   * @param config ASR 配置（可能包含旧字段）
+   * @returns 迁移后的 ASR 配置
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private migrateASRConfig(config: any): import('./settings/settings').VoiceASRProviderConfig {
+    const result = { ...config };
+    
+    // 迁移 DashScope API Key (Qwen)
+    if (!result.dashscopeKeyConfig && result.dashscope_api_key) {
+      result.dashscopeKeyConfig = {
+        mode: 'local' as const,
+        localValue: result.dashscope_api_key
+      };
+    }
+    
+    // 迁移 Doubao access_token
+    if (!result.doubaoKeyConfig && result.access_token) {
+      result.doubaoKeyConfig = {
+        mode: 'local' as const,
+        localValue: result.access_token
+      };
+    }
+    
+    // 迁移 SiliconFlow API Key (SenseVoice)
+    if (!result.siliconflowKeyConfig && result.siliconflow_api_key) {
+      result.siliconflowKeyConfig = {
+        mode: 'local' as const,
+        localValue: result.siliconflow_api_key
+      };
+    }
+    
+    return result;
   }
 
   /**
