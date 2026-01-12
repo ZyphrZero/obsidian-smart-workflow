@@ -181,6 +181,9 @@ export default class SmartWorkflowPlugin extends Plugin {
   private pressModekeyupHandler: ((e: KeyboardEvent) => void) | null = null;
   private currentVoiceCommandId: string | null = null;
 
+  // 底部分屏新增标签页拦截器
+  private newTabInterceptHandler: ((e: MouseEvent) => void) | null = null;
+
   /**
    * 获取统一服务器管理器（延迟初始化，仅桌面端）
    * 使用动态导入避免移动端加载 Node.js 模块
@@ -1018,6 +1021,11 @@ export default class SmartWorkflowPlugin extends Plugin {
       this.registerNewTabTerminalAction();
     }
 
+    // 注册底部分屏新增按钮拦截器（仅桌面端）
+    if (this.isTerminalEnabled()) {
+      this.registerBottomSplitNewTabInterceptor();
+    }
+
     // 初始化选中文字浮动工具栏（如果启用）
     if (this.settings.selectionToolbar.enabled) {
       // 触发延迟初始化（异步）
@@ -1692,6 +1700,12 @@ export default class SmartWorkflowPlugin extends Plugin {
         errorLog('关闭服务器失败:', error);
       }
     }
+
+    // 清理新增标签页拦截器
+    if (this.newTabInterceptHandler) {
+      document.removeEventListener('click', this.newTabInterceptHandler, true);
+      this.newTabInterceptHandler = null;
+    }
   }
 
   // ========================================================================
@@ -2264,6 +2278,109 @@ export default class SmartWorkflowPlugin extends Plugin {
       // 添加到操作列表
       actionsContainer.appendChild(terminalAction);
     });
+  }
+
+  /**
+   * 注册底部分屏区域的新增标签页按钮拦截器
+   * 当用户点击垂直分屏底部区域的"新增标签页"按钮时，直接创建终端标签页
+   */
+  private registerBottomSplitNewTabInterceptor(): void {
+    this.newTabInterceptHandler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+
+      // 检查点击目标是否在新增标签页按钮内（包括内部的 span 和 svg）
+      const newTabButton = target?.closest('.workspace-tab-header-new-tab');
+      if (!newTabButton) {
+        return;
+      }
+
+      // 找到按钮所在的 split 容器
+      const splitContainer = newTabButton.closest('.workspace-split, .workspace-tabs');
+      if (!splitContainer) return;
+
+      // 找到父级 split
+      const parentSplit = splitContainer.parentElement;
+      if (!parentSplit?.classList.contains('workspace-split')) return;
+
+      // 检查是否为水平分割线（即上下分布的分屏）
+      if (!parentSplit.classList.contains('mod-horizontal')) return;
+
+      // 找到所有兄弟 split
+      const siblingSplits = Array.from(parentSplit.children).filter(
+        (el: Element) =>
+          el.classList.contains('workspace-split') ||
+          el.classList.contains('workspace-tabs')
+      );
+
+      if (siblingSplits.length < 2) return;
+
+      // 检查是否为底部 split（索引为 1）
+      const splitIndex = siblingSplits.indexOf(splitContainer);
+      if (splitIndex !== 1) return;
+
+      // 拦截事件
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+
+      // 在底部创建终端
+      this.activateTerminalViewInBottomSplit(splitContainer as HTMLElement);
+    };
+
+    // 注册捕获阶段监听器（优先级最高）
+    document.addEventListener('click', this.newTabInterceptHandler, true);
+  }
+
+  /**
+   * 在底部分屏区域创建终端标签页
+   */
+  private async activateTerminalViewInBottomSplit(splitContainer: HTMLElement): Promise<void> {
+    const { workspace } = this.app;
+
+    // 收集该 split 容器中所有的 leaves
+    const allLeaves = [
+      ...workspace.getLeavesOfType('empty'),
+      ...workspace.getLeavesOfType('markdown'),
+      ...workspace.getLeavesOfType(TERMINAL_VIEW_TYPE),
+      ...workspace.getLeavesOfType(CHAT_VIEW_TYPE)
+    ];
+
+    // 找到属于这个 split 容器的所有 leaves
+    const leavesInSplit: WorkspaceLeaf[] = [];
+    for (const leaf of allLeaves) {
+      const leafEl = (leaf as any).containerEl as HTMLElement;
+      if (leafEl && splitContainer.contains(leafEl)) {
+        leavesInSplit.push(leaf);
+      }
+    }
+
+    let targetLeaf: WorkspaceLeaf | null = null;
+
+    if (leavesInSplit.length > 0) {
+      // 选择最后一个（最右侧）的 leaf，在它旁边创建新标签页
+      const lastLeaf = leavesInSplit[leavesInSplit.length - 1];
+      workspace.setActiveLeaf(lastLeaf, { focus: false });
+      targetLeaf = workspace.getLeaf('tab');
+    } else {
+      // 如果没找到，使用默认的 leaf 创建逻辑
+      targetLeaf = workspace.getLeaf('tab');
+    }
+
+    // 根据设置锁定新实例
+    if (this.settings.terminal.lockNewInstance) {
+      targetLeaf.setPinned(true);
+    }
+
+    // 设置为终端视图
+    await targetLeaf.setViewState({
+      type: TERMINAL_VIEW_TYPE,
+      active: this.settings.terminal.focusNewInstance,
+    });
+
+    // 如果需要聚焦，激活该 leaf
+    if (this.settings.terminal.focusNewInstance) {
+      workspace.setActiveLeaf(targetLeaf, { focus: true });
+    }
   }
 
   /**
