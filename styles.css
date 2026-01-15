@@ -424,9 +424,11 @@
 }
 /* 标题 */
 .settings-title {
-  margin: 0;
+  margin: 0 !important;
+  padding: 0;
   font-weight: 700;
   font-size: 1.5em;
+  line-height: 1;
 }
 /* 反馈链接 */
 .settings-feedback {
