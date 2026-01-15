@@ -1,6 +1,7 @@
 # Smart Workflow
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Release](https://img.shields.io/github/v/release/ZyphrZero/obsidian-smart-workflow)](https://github.com/ZyphrZero/obsidian-smart-workflow/releases)
 
 **Smart Workflow** is a powerful Obsidian plugin that enhances your knowledge management with AI-powered features, integrated terminal, and voice input.
 
