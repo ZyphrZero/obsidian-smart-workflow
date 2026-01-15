@@ -1,6 +1,6 @@
 {
   "name": "obsidian-smart-workflow",
-  "version": "1.3.3",
+  "version": "1.3.4",
   "description": "A smart workflow plugin for Obsidian with AI note naming, integrated terminal, voice input, translation, and writing assistant.",
   "main": "main.js",
   "packageManager": "pnpm@10.0.0",
