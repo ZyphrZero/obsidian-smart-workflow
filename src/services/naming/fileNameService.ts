@@ -9,6 +9,7 @@
 import { App, TFile } from 'obsidian';
 import { SmartWorkflowSettings, BASE_PROMPT_TEMPLATE, ModelConfig } from '../../settings/settings';
 import { ConfigManager } from '../config/configManager';
+import type { ISecretService } from '../secret';
 import { FileAnalyzer } from './fileAnalyzer';
 import { debugLog, debugWarn } from '../../utils/logger';
 import { t } from '../../i18n';
@@ -56,9 +57,10 @@ export class FileNameService {
   constructor(
     private app: App,
     private settings: SmartWorkflowSettings,
-    onSettingsChange?: () => Promise<void>
+    onSettingsChange?: () => Promise<void>,
+    secretService?: ISecretService
   ) {
-    this.configManager = new ConfigManager(settings, onSettingsChange);
+    this.configManager = new ConfigManager(settings, onSettingsChange, secretService);
     this.fileAnalyzer = new FileAnalyzer();
   }
 

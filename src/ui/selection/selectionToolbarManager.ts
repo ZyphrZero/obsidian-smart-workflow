@@ -22,6 +22,7 @@ import { debugLog } from '../../utils/logger';
 import { SmartWorkflowSettings } from '../../settings/settings';
 import { WritingActionExecutor, WritingActionContext } from '../writing/writingActionExecutor';
 import { TranslationService } from '../../services/translation';
+import type { ISecretService } from '../../services/secret';
 import { TranslationModal } from '../translation/translationModal';
 import { ServerManager } from '../../services/server/serverManager';
 
@@ -51,6 +52,9 @@ export class SelectionToolbarManager {
   // ServerManager 实例
   private serverManager: ServerManager | null = null;
   
+  // SecretService 实例
+  private secretService: ISecretService | null = null;
+  
   // 事件处理器引用
   private boundHandleKeyDown: (e: KeyboardEvent) => void;
   private boundHandleClick: (e: MouseEvent) => void;
@@ -64,12 +68,14 @@ export class SelectionToolbarManager {
     app: App, 
     settings?: SelectionToolbarSettings,
     pluginSettings?: SmartWorkflowSettings,
-    onSettingsChange?: () => Promise<void>
+    onSettingsChange?: () => Promise<void>,
+    secretService?: ISecretService
   ) {
     this.app = app;
     this.settings = settings || { ...DEFAULT_SELECTION_TOOLBAR_SETTINGS };
     this.pluginSettings = pluginSettings || null;
     this.onSettingsChange = onSettingsChange;
+    this.secretService = secretService || null;
     
     // 初始化子模块
     this.selectionService = new SelectionService(app, this.settings);
@@ -82,14 +88,18 @@ export class SelectionToolbarManager {
       this.writingActionExecutor = new WritingActionExecutor(
         app,
         this.pluginSettings,
-        onSettingsChange
+        onSettingsChange,
+        undefined,
+        secretService
       );
       
       // 初始化翻译服务
       this.translationService = new TranslationService(
         app,
         this.pluginSettings,
-        onSettingsChange
+        onSettingsChange,
+        undefined,
+        secretService
       );
     }
     
@@ -192,7 +202,9 @@ export class SelectionToolbarManager {
         this.writingActionExecutor = new WritingActionExecutor(
           this.app,
           pluginSettings,
-          this.onSettingsChange
+          this.onSettingsChange,
+          this.serverManager ?? undefined,
+          this.secretService ?? undefined
         );
       }
       
@@ -201,7 +213,9 @@ export class SelectionToolbarManager {
         this.translationService = new TranslationService(
           this.app,
           pluginSettings,
-          this.onSettingsChange
+          this.onSettingsChange,
+          this.serverManager ?? undefined,
+          this.secretService ?? undefined
         );
       }
     }

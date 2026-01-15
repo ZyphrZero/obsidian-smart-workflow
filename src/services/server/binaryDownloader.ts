@@ -58,6 +58,12 @@ export class BinaryDownloader {
   
   /** 下载加速源 */
   private downloadAcceleratorUrl: string;
+  
+  /** 已安装版本缓存（避免重复进程调用） */
+  private installedVersionCache: string | null | undefined = undefined;
+  
+  /** 版本缓存文件名 */
+  private readonly versionCacheFileName = '.smart-workflow-server.version.json';
 
   constructor(pluginDir: string, version: string, downloadAcceleratorUrl: string = '') {
     this.pluginDir = pluginDir;
@@ -99,9 +105,20 @@ export class BinaryDownloader {
     try {
       const binaryPath = this.getBinaryPath();
       if (!fs.existsSync(binaryPath)) {
+        this.installedVersionCache = null;
         return null;
       }
 
+      if (this.installedVersionCache !== undefined) {
+        return this.installedVersionCache;
+      }
+      
+      const cachedVersion = this.readCachedVersion(binaryPath);
+      if (cachedVersion) {
+        this.installedVersionCache = cachedVersion;
+        return cachedVersion;
+      }
+      
       const result = spawnSync(binaryPath, ['--version'], {
         encoding: 'utf-8',
         windowsHide: true,
@@ -110,20 +127,28 @@ export class BinaryDownloader {
 
       if (result.error || result.status !== 0) {
         debugWarn('[BinaryDownloader] 获取二进制版本失败:', result.error ?? result.stderr);
+        this.installedVersionCache = null;
         return null;
       }
 
       const rawVersion = (result.stdout || '').trim();
       if (!rawVersion) {
+        this.installedVersionCache = null;
         return null;
       }
 
       const version = rawVersion.startsWith('v') ? rawVersion.slice(1) : rawVersion;
-      return version || null;
+      const normalizedVersion = version || null;
+      this.installedVersionCache = normalizedVersion;
+      if (normalizedVersion) {
+        this.writeCachedVersion(binaryPath, normalizedVersion);
+      }
+      return normalizedVersion;
     } catch (error) {
       debugWarn('[BinaryDownloader] 获取二进制版本异常:', error);
     }
     
+    this.installedVersionCache = null;
     return null;
   }
 
@@ -233,6 +258,9 @@ export class BinaryDownloader {
         fs.chmodSync(binaryPath, 0o755);
       }
 
+      this.writeCachedVersion(binaryPath, this.version);
+      this.installedVersionCache = this.version;
+      
       notify({ stage: 'complete', percent: 100 });
       
       debugLog('[BinaryDownloader] 二进制文件下载完成:', binaryPath);
@@ -384,6 +412,60 @@ export class BinaryDownloader {
 
     const normalizedBase = base.endsWith('/') ? base : `${base}/`;
     return `${normalizedBase}${url}`;
+  }
+  
+  private getVersionCachePath(): string {
+    return path.join(this.pluginDir, 'binaries', this.versionCacheFileName);
+  }
+  
+  private readCachedVersion(binaryPath: string): string | null {
+    try {
+      const cachePath = this.getVersionCachePath();
+      if (!fs.existsSync(cachePath)) {
+        return null;
+      }
+      
+      const raw = fs.readFileSync(cachePath, 'utf8').trim();
+      if (!raw) {
+        return null;
+      }
+      
+      const payload = JSON.parse(raw) as { version?: string; size?: number; mtimeMs?: number };
+      if (!payload.version || payload.size === undefined || payload.mtimeMs === undefined) {
+        return null;
+      }
+      
+      const stats = fs.statSync(binaryPath);
+      if (stats.size !== payload.size) {
+        return null;
+      }
+      
+      if (Math.abs(stats.mtimeMs - payload.mtimeMs) > 1) {
+        return null;
+      }
+      
+      return payload.version;
+    } catch (error) {
+      debugWarn('[BinaryDownloader] 读取版本缓存失败:', error);
+      return null;
+    }
+  }
+  
+  private writeCachedVersion(binaryPath: string, version: string): void {
+    try {
+      const cachePath = this.getVersionCachePath();
+      const stats = fs.statSync(binaryPath);
+      const payload = {
+        version,
+        size: stats.size,
+        mtimeMs: stats.mtimeMs,
+      };
+      
+      fs.mkdirSync(path.dirname(cachePath), { recursive: true });
+      fs.writeFileSync(cachePath, JSON.stringify(payload));
+    } catch (error) {
+      debugWarn('[BinaryDownloader] 写入版本缓存失败:', error);
+    }
   }
 
   /**

@@ -11,6 +11,7 @@ import { TFile, App } from 'obsidian';
 import { SmartWorkflowSettings } from '../../settings/settings';
 import { AIClient } from '../ai/aiClient';
 import { ConfigManager } from '../config/configManager';
+import type { ISecretService } from '../secret';
 import { ServerManager } from '../server/serverManager';
 import { debugLog, errorLog } from '../../utils/logger';
 import { t } from '../../i18n';
@@ -43,11 +44,12 @@ export class TagService {
   constructor(
     app: App,
     settings: SmartWorkflowSettings,
-    serverManager: ServerManager | null = null
+    serverManager: ServerManager | null = null,
+    secretService?: ISecretService
   ) {
     this.app = app;
     this.settings = settings;
-    this.configManager = new ConfigManager(settings);
+    this.configManager = new ConfigManager(settings, undefined, secretService);
     this.serverManager = serverManager;
   }
 

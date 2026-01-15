@@ -6,6 +6,7 @@
 import { App, PluginSettingTab, setIcon } from 'obsidian';
 import type SmartWorkflowPlugin from '../main';
 import { ConfigManager } from '../services/config/configManager';
+import { SecretService } from '../services/secret';
 import { t } from '../i18n';
 
 // 从模块化文件导入
@@ -43,13 +44,16 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
   private voiceRenderer: VoiceSettingsRenderer;
   private taggingRenderer: TaggingSettingsRenderer;
   private autoArchiveRenderer: AutoArchiveSettingsRenderer;
+  private secretService: SecretService;
 
   constructor(app: App, plugin: SmartWorkflowPlugin) {
     super(app, plugin);
     this.plugin = plugin;
+    this.secretService = new SecretService(app);
     this.configManager = new ConfigManager(
       this.plugin.settings,
-      () => this.plugin.saveSettings()
+      () => this.plugin.saveSettings(),
+      this.secretService
     );
 
     // 初始化渲染器
@@ -70,7 +74,8 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
     // 刷新 ConfigManager 实例以确保使用最新设置
     this.configManager = new ConfigManager(
       this.plugin.settings,
-      () => this.plugin.saveSettings()
+      () => this.plugin.saveSettings(),
+      this.secretService
     );
 
     // 自动展开当前激活标签页所属的分组

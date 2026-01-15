@@ -25,6 +25,7 @@ import { TextInserter } from './services/voice/textInserter';
 import { LLMPostProcessor } from './services/voice/llmPostProcessor';
 import { AssistantProcessor } from './services/voice/assistantProcessor';
 import { ConfigManager } from './services/config/configManager';
+import { SecretService, type ISecretService } from './services/secret';
 import { HistoryManager } from './services/voice/historyManager';
 import { LLMProcessingError } from './services/voice/types';
 import { VoiceErrorHandler, isLLMProcessingError } from './services/voice/voiceErrorHandler';
@@ -162,6 +163,7 @@ export default class SmartWorkflowPlugin extends Plugin {
   private _llmPostProcessor: LLMPostProcessor | null = null;
   private _assistantProcessor: AssistantProcessor | null = null;
   private _configManager: ConfigManager | null = null;
+  private _secretService: ISecretService | null = null;
   private _historyManager: HistoryManager | null = null;
   private _voiceErrorHandler: VoiceErrorHandler | null = null;
 
@@ -306,7 +308,8 @@ export default class SmartWorkflowPlugin extends Plugin {
         this.app,
         this.settings.selectionToolbar,
         this.settings,
-        () => this.saveSettings()
+        () => this.saveSettings(),
+        this.secretService
       );
       // 仅桌面端设置 ServerManager 以启用 Rust 模式流式处理
       if (!Platform.isMobile) {
@@ -339,7 +342,7 @@ export default class SmartWorkflowPlugin extends Plugin {
   get tagService(): TagService {
     if (!this._tagService) {
       debugLog('[SmartWorkflowPlugin] Initializing Tag Service...');
-      this._tagService = new TagService(this.app, this.settings, this.serverManager);
+      this._tagService = new TagService(this.app, this.settings, this.serverManager, this.secretService);
       debugLog('[SmartWorkflowPlugin] Tag Service initialized');
     }
     return this._tagService;
@@ -351,7 +354,7 @@ export default class SmartWorkflowPlugin extends Plugin {
   get categoryService(): CategoryService {
     if (!this._categoryService) {
       debugLog('[SmartWorkflowPlugin] Initializing Category Service...');
-      this._categoryService = new CategoryService(this.app, this.settings, this.serverManager);
+      this._categoryService = new CategoryService(this.app, this.settings, this.serverManager, this.secretService);
       debugLog('[SmartWorkflowPlugin] Category Service initialized');
     }
     return this._categoryService;
@@ -388,12 +391,28 @@ export default class SmartWorkflowPlugin extends Plugin {
   }
 
   /**
+   * 获取密钥服务（延迟初始化）
+   */
+  get secretService(): ISecretService {
+    if (!this._secretService) {
+      debugLog('[SmartWorkflowPlugin] Initializing SecretService...');
+      this._secretService = new SecretService(this.app);
+      debugLog('[SmartWorkflowPlugin] SecretService initialized');
+    }
+    return this._secretService;
+  }
+
+  /**
    * 获取配置管理器（延迟初始化）
    */
   get configManager(): ConfigManager {
     if (!this._configManager) {
       debugLog('[SmartWorkflowPlugin] Initializing ConfigManager...');
-      this._configManager = new ConfigManager(this.settings, () => this.saveSettings());
+      this._configManager = new ConfigManager(
+        this.settings,
+        () => this.saveSettings(),
+        this.secretService
+      );
       debugLog('[SmartWorkflowPlugin] ConfigManager initialized');
     }
     return this._configManager;
@@ -539,12 +558,24 @@ export default class SmartWorkflowPlugin extends Plugin {
     // 初始化调试模式
     setDebugMode(this.settings.debugMode);
 
+    // 桌面端预先检查并更新服务器二进制（延迟执行，避免阻塞启动）
+    if (!Platform.isMobile) {
+      window.setTimeout(() => {
+        this.getServerManager()
+          .then(serverManager => serverManager.ensureBinaryUpdated())
+          .catch(error => {
+            debugLog('[SmartWorkflowPlugin] 服务器二进制检查跳过:', error);
+          });
+      }, 3000);
+    }
+
     // 初始化核心服务（AI 命名功能）
     debugLog('[SmartWorkflowPlugin] Initializing FileNameService...');
     this.fileNameService = new FileNameService(
       this.app,
       this.settings,
-      () => this.saveSettings()
+      () => this.saveSettings(),
+      this.secretService
     );
     debugLog('[SmartWorkflowPlugin] FileNameService initialized');
 

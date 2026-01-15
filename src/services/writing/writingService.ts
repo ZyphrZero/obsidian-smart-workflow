@@ -12,6 +12,7 @@ import {
   DEFAULT_POLISH_PROMPT_TEMPLATE
 } from '../../settings/settings';
 import { ConfigManager } from '../config/configManager';
+import type { ISecretService } from '../secret';
 import { debugLog } from '../../utils/logger';
 import { t } from '../../i18n';
 import { AIClient, AIError, AIErrorCode, NetworkError, TimeoutError } from '../ai';
@@ -52,10 +53,11 @@ export class WritingService {
     _app: App,
     settings: SmartWorkflowSettings,
     onSettingsChange?: () => Promise<void>,
-    serverManager?: ServerManager
+    serverManager?: ServerManager,
+    secretService?: ISecretService
   ) {
     this.settings = settings;
-    this.configManager = new ConfigManager(settings, onSettingsChange);
+    this.configManager = new ConfigManager(settings, onSettingsChange, secretService);
     this.serverManager = serverManager ?? null;
   }
 

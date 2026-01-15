@@ -96,6 +96,9 @@ export class ServerManager {
   
   /** WebSocket 连接 Promise */
   private wsConnectPromise: Promise<void> | null = null;
+
+  /** 二进制更新 Promise */
+  private binaryUpdatePromise: Promise<void> | null = null;
   
   /** 事件监听器 */
   private eventListeners: Map<keyof ServerEvents, Set<EventListener<keyof ServerEvents>>> = new Map();
@@ -135,6 +138,13 @@ export class ServerManager {
     // 启动服务器
     this.serverStartPromise = this.startServer();
     return this.serverStartPromise;
+  }
+
+  /**
+   * 确保二进制文件已更新（不启动服务器）
+   */
+  async ensureBinaryUpdated(): Promise<void> {
+    await this.ensureBinaryReady();
   }
 
   /**
@@ -338,45 +348,7 @@ export class ServerManager {
       
       const binaryPath = this.getBinaryPath();
       
-      // 检查二进制文件是否需要下载或更新
-      const needsDownload = !this.binaryDownloader.binaryExists();
-      const needsUpdate = this.binaryDownloader.needsUpdate();
-      
-      if (needsDownload || needsUpdate) {
-        const messageKey = needsUpdate ? 'notices.updatingBinary' : 'notices.downloadingBinary';
-        const defaultMessage = needsUpdate ? '正在更新服务器组件...' : '正在下载服务器组件...';
-        
-        debugLog(`[ServerManager] ${needsUpdate ? '二进制文件需要更新' : '二进制文件不存在'}，开始下载...`);
-        
-        const notice = new Notice(
-          t(messageKey) || defaultMessage,
-          0
-        );
-        
-        try {
-          await this.binaryDownloader.download((progress) => {
-            if (progress.stage === 'downloading') {
-              notice.setMessage(
-                `${t(messageKey) || defaultMessage} ${Math.round(progress.percent)}%`
-              );
-            } else if (progress.stage === 'verifying') {
-              notice.setMessage(t('notices.verifyingBinary') || '正在验证文件...');
-            }
-          });
-          
-          notice.hide();
-          const completeKey = needsUpdate ? 'notices.binaryUpdateComplete' : 'notices.binaryDownloadComplete';
-          const completeMessage = needsUpdate ? '服务器组件更新完成' : '服务器组件下载完成';
-          new Notice(t(completeKey) || completeMessage, 3000);
-          
-        } catch (downloadError) {
-          notice.hide();
-          throw new ServerManagerError(
-            ServerErrorCode.BINARY_NOT_FOUND,
-            `下载二进制文件失败: ${downloadError instanceof Error ? downloadError.message : String(downloadError)}`
-          );
-        }
-      }
+      await this.ensureBinaryReady();
       
       // 确保可执行权限 (Unix)
       await this.ensureExecutable(binaryPath);
@@ -438,6 +410,63 @@ export class ServerManager {
     const filename = `smart-workflow-server-${platform}-${arch}${ext}`;
     
     return path.join(this.pluginDir, 'binaries', filename);
+  }
+
+  private async ensureBinaryReady(): Promise<void> {
+    if (this.binaryUpdatePromise) {
+      return this.binaryUpdatePromise;
+    }
+
+    this.binaryUpdatePromise = this.performBinaryUpdate();
+
+    try {
+      await this.binaryUpdatePromise;
+    } finally {
+      this.binaryUpdatePromise = null;
+    }
+  }
+
+  private async performBinaryUpdate(): Promise<void> {
+    const needsDownload = !this.binaryDownloader.binaryExists();
+    const needsUpdate = this.binaryDownloader.needsUpdate();
+
+    if (!needsDownload && !needsUpdate) {
+      return;
+    }
+
+    const messageKey = needsUpdate ? 'notices.updatingBinary' : 'notices.downloadingBinary';
+    const defaultMessage = needsUpdate ? '正在更新服务器组件...' : '正在下载服务器组件...';
+
+    debugLog(`[ServerManager] ${needsUpdate ? '二进制文件需要更新' : '二进制文件不存在'}，开始下载...`);
+
+    const notice = new Notice(
+      t(messageKey) || defaultMessage,
+      0
+    );
+
+    try {
+      await this.binaryDownloader.download((progress) => {
+        if (progress.stage === 'downloading') {
+          notice.setMessage(
+            `${t(messageKey) || defaultMessage} ${Math.round(progress.percent)}%`
+          );
+        } else if (progress.stage === 'verifying') {
+          notice.setMessage(t('notices.verifyingBinary') || '正在验证文件...');
+        }
+      });
+
+      notice.hide();
+      const completeKey = needsUpdate ? 'notices.binaryUpdateComplete' : 'notices.binaryDownloadComplete';
+      const completeMessage = needsUpdate ? '服务器组件更新完成' : '服务器组件下载完成';
+      new Notice(t(completeKey) || completeMessage, 3000);
+
+    } catch (downloadError) {
+      notice.hide();
+      throw new ServerManagerError(
+        ServerErrorCode.BINARY_NOT_FOUND,
+        `下载二进制文件失败: ${downloadError instanceof Error ? downloadError.message : String(downloadError)}`
+      );
+    }
   }
 
   /**

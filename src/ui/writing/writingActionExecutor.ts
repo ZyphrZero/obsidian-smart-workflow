@@ -10,6 +10,7 @@ import { WritingApplyView, WRITING_APPLY_VIEW_TYPE, WritingApplyViewState } from
 import { debugLog } from '../../utils/logger';
 import { SelectionRange } from '../selection/types';
 import { ServerManager } from '../../services/server/serverManager';
+import type { ISecretService } from '../../services/secret';
 
 /**
  * 写作动作上下文
@@ -42,6 +43,7 @@ export class WritingActionExecutor {
   private writingService: WritingService;
   private onSettingsChange?: () => Promise<void>;
   private serverManager: ServerManager | null = null;
+  private secretService: ISecretService | null = null;
   
   // 当前活动的视图
   private currentView: WritingApplyView | null = null;
@@ -52,13 +54,15 @@ export class WritingActionExecutor {
     app: App,
     settings: SmartWorkflowSettings,
     onSettingsChange?: () => Promise<void>,
-    serverManager?: ServerManager
+    serverManager?: ServerManager,
+    secretService?: ISecretService
   ) {
     this.app = app;
     this.settings = settings;
     this.onSettingsChange = onSettingsChange;
     this.serverManager = serverManager ?? null;
-    this.writingService = new WritingService(app, settings, onSettingsChange, serverManager);
+    this.secretService = secretService ?? null;
+    this.writingService = new WritingService(app, settings, onSettingsChange, serverManager, secretService);
   }
 
   /**
@@ -123,7 +127,7 @@ export class WritingActionExecutor {
    */
   updateSettings(settings: SmartWorkflowSettings): void {
     this.settings = settings;
-    this.writingService = new WritingService(this.app, settings, this.onSettingsChange, this.serverManager ?? undefined);
+    this.writingService = new WritingService(this.app, settings, this.onSettingsChange, this.serverManager ?? undefined, this.secretService ?? undefined);
   }
 
   /**

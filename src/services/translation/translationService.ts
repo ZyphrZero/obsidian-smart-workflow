@@ -13,6 +13,7 @@
 import { App } from 'obsidian';
 import { SmartWorkflowSettings } from '../../settings/settings';
 import { ConfigManager } from '../config/configManager';
+import type { ISecretService } from '../secret';
 import { LanguageDetector } from './languageDetector';
 import { AIClient, AIError, AIErrorCode, NetworkError, TimeoutError } from '../ai';
 import { debugLog } from '../../utils/logger';
@@ -71,15 +72,17 @@ export class TranslationService {
    * @param settings 插件设置
    * @param onSettingsChange 设置变更回调
    * @param serverManager ServerManager 实例（可选，用于 Rust 模式流式处理和语言检测）
+   * @param secretService SecretService 实例（可选，用于共享密钥解析）
    */
   constructor(
     _app: App,
     settings: SmartWorkflowSettings,
     onSettingsChange?: () => Promise<void>,
-    serverManager?: ServerManager
+    serverManager?: ServerManager,
+    secretService?: ISecretService
   ) {
     this.settings = settings;
-    this.configManager = new ConfigManager(settings, onSettingsChange);
+    this.configManager = new ConfigManager(settings, onSettingsChange, secretService);
     this.serverManager = serverManager ?? null;
     
     // 初始化语言检测器
