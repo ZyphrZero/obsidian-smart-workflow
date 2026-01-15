@@ -3,8 +3,12 @@ name: Build Rust Server
 on:
   push:
     branches: [main, develop]
+    paths:
+      - 'rust-servers/**'
   pull_request:
     branches: [main, develop]
+    paths:
+      - 'rust-servers/**'
   workflow_dispatch:
 
 jobs:
