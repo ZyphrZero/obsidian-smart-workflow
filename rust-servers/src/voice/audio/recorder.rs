@@ -30,12 +30,19 @@ macro_rules! log_error {
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::Stream;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 use thiserror::Error;
 
 use super::{AudioData, utils};
 
 /// API 要求的目标采样率 (16kHz)
 pub const TARGET_SAMPLE_RATE: u32 = 16000;
+
+/// 音频级别发送间隔 (毫秒)，目标 ~30Hz
+const AUDIO_LEVEL_EMIT_INTERVAL_MS: u128 = 33;
+
+/// AGC 按块处理的样本数 (0.2 秒 @ 16kHz)
+const AGC_CHUNK_SAMPLES: usize = 3200;
 
 /// 录音模式
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -82,6 +89,7 @@ pub struct AudioRecorder {
     stream: Option<Stream>,
     level_callback: Arc<Mutex<Option<AudioLevelCallback>>>,
     smoothed_level: Arc<Mutex<f32>>,
+    last_emit_time: Arc<Mutex<Instant>>,
 }
 
 impl AudioRecorder {
@@ -95,6 +103,7 @@ impl AudioRecorder {
             stream: None,
             level_callback: Arc::new(Mutex::new(None)),
             smoothed_level: Arc::new(Mutex::new(0.0)),
+            last_emit_time: Arc::new(Mutex::new(Instant::now())),
         })
     }
 
@@ -120,6 +129,7 @@ impl AudioRecorder {
         *self.is_recording.lock().unwrap() = true;
         *self.recording_mode.lock().unwrap() = Some(mode);
         *self.smoothed_level.lock().unwrap() = 0.0;
+        *self.last_emit_time.lock().unwrap() = Instant::now();
 
         let host = cpal::default_host();
         let device = host
@@ -147,15 +157,14 @@ impl AudioRecorder {
         let is_recording = Arc::clone(&self.is_recording);
         let level_callback = Arc::clone(&self.level_callback);
         let smoothed_level = Arc::clone(&self.smoothed_level);
+        let last_emit_time = Arc::clone(&self.last_emit_time);
         let device_sample_rate = self.device_sample_rate;
         let channels = self.channels;
-        let callback_counter = Arc::new(Mutex::new(0u32));
 
         let err_fn = |err| log_error!("录音流错误: {}", err);
 
         let stream = match supported_config.sample_format() {
             cpal::SampleFormat::F32 => {
-                let callback_counter = Arc::clone(&callback_counter);
                 device
                     .build_input_stream(
                         &config,
@@ -166,7 +175,7 @@ impl AudioRecorder {
                                 &is_recording,
                                 &level_callback,
                                 &smoothed_level,
-                                &callback_counter,
+                                &last_emit_time,
                                 device_sample_rate,
                                 channels,
                             );
@@ -181,7 +190,6 @@ impl AudioRecorder {
                 let is_recording = Arc::clone(&is_recording);
                 let level_callback = Arc::clone(&level_callback);
                 let smoothed_level = Arc::clone(&smoothed_level);
-                let callback_counter = Arc::clone(&callback_counter);
 
                 device
                     .build_input_stream(
@@ -194,7 +202,7 @@ impl AudioRecorder {
                                 &is_recording,
                                 &level_callback,
                                 &smoothed_level,
-                                &callback_counter,
+                                &last_emit_time,
                                 device_sample_rate,
                                 channels,
                             );
@@ -209,7 +217,6 @@ impl AudioRecorder {
                 let is_recording = Arc::clone(&is_recording);
                 let level_callback = Arc::clone(&level_callback);
                 let smoothed_level = Arc::clone(&smoothed_level);
-                let callback_counter = Arc::clone(&callback_counter);
 
                 device
                     .build_input_stream(
@@ -222,7 +229,7 @@ impl AudioRecorder {
                                 &is_recording,
                                 &level_callback,
                                 &smoothed_level,
-                                &callback_counter,
+                                &last_emit_time,
                                 device_sample_rate,
                                 channels,
                             );
@@ -252,7 +259,7 @@ impl AudioRecorder {
         is_recording: &Arc<Mutex<bool>>,
         level_callback: &Arc<Mutex<Option<AudioLevelCallback>>>,
         smoothed_level: &Arc<Mutex<f32>>,
-        callback_counter: &Arc<Mutex<u32>>,
+        last_emit_time: &Arc<Mutex<Instant>>,
         _device_sample_rate: u32,
         _channels: u16,
     ) {
@@ -262,18 +269,17 @@ impl AudioRecorder {
 
         audio_data.lock().unwrap().extend_from_slice(data);
 
-        let mut counter = callback_counter.lock().unwrap();
-        *counter += 1;
-
-        if *counter % 2 == 0 {
-            let raw_level = utils::calculate_rms(data);
+        let mut last_emit = last_emit_time.lock().unwrap();
+        if last_emit.elapsed().as_millis() >= AUDIO_LEVEL_EMIT_INTERVAL_MS {
+            let level = utils::calculate_audio_level(data);
             let mut current_smoothed = smoothed_level.lock().unwrap();
-            *current_smoothed = utils::smooth_level(*current_smoothed, raw_level);
+            *current_smoothed = utils::smooth_level(*current_smoothed, level);
             let waveform = utils::generate_waveform(data, 9);
 
             if let Some(ref callback) = *level_callback.lock().unwrap() {
                 callback(*current_smoothed, waveform);
             }
+            *last_emit = Instant::now();
         }
     }
 
@@ -304,7 +310,7 @@ impl AudioRecorder {
         let mono_audio = to_mono(&raw_audio, self.channels);
         log_debug!("转单声道: {} -> {} 样本", original_len, mono_audio.len());
 
-        let resampled_audio = resample(&mono_audio, self.device_sample_rate, TARGET_SAMPLE_RATE);
+        let mut resampled_audio = resample(&mono_audio, self.device_sample_rate, TARGET_SAMPLE_RATE);
         log_debug!(
             "降采样: {}Hz -> {}Hz, {} -> {} 样本",
             self.device_sample_rate,
@@ -312,6 +318,11 @@ impl AudioRecorder {
             mono_audio.len(),
             resampled_audio.len()
         );
+
+        let mut current_gain = 1.0;
+        for chunk in resampled_audio.chunks_mut(AGC_CHUNK_SAMPLES) {
+            utils::apply_agc(chunk, &mut current_gain);
+        }
 
         let audio_data = AudioData::new(resampled_audio, TARGET_SAMPLE_RATE, 1);
         log_info!("录音完成，时长: {}ms", audio_data.duration_ms);

@@ -16,7 +16,7 @@ pub use http::SenseVoiceHttpEngine;
 pub use realtime::QwenRealtimeEngine;
 pub use realtime::DoubaoRealtimeEngine;
 pub use realtime_task::{RealtimeTranscriptionTask, PartialResultCallback, RealtimeTaskResult};
-pub use fallback::{FallbackStrategy, ParallelFallbackStrategy};
+pub use fallback::{FallbackStrategy, ParallelFallbackStrategy, RaceStrategy};
 
 // ============================================================================
 // 错误类型

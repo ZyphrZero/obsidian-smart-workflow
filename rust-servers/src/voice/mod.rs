@@ -14,7 +14,7 @@ use tokio::sync::{mpsc, oneshot, Mutex as TokioMutex};
 use tokio::task::JoinHandle;
 
 use audio::{AudioRecorder, RecordingMode as AudioRecordingMode, StreamingRecorder, AudioData};
-use asr::{ParallelFallbackStrategy, TranscriptionResult, ASRError, RealtimeTaskResult, RealtimeTranscriptionTask};
+use asr::{RaceStrategy, TranscriptionResult, ASRError, RealtimeTaskResult, RealtimeTranscriptionTask};
 use beep::BeepPlayer;
 use config::{ASRConfig, ASRMode};
 
@@ -200,18 +200,8 @@ impl VoiceHandler {
             return Err(RouterError::ModuleError("已在录音中".to_string()));
         }
         
-        // 更新状态
-        state.asr_config = Some(asr_config.clone());
-        state.is_recording = true;
-        state.recording_mode = Some(mode.clone());
-        state.recording_start_time = Some(Instant::now());
-        
-        // 根据配置设置音频反馈
-        state.beep_player.set_enabled(asr_config.enable_audio_feedback);
-        
         // 创建音频级别 channel
         let (audio_level_tx, mut audio_level_rx) = mpsc::unbounded_channel::<AudioLevelData>();
-        state.audio_level_tx = Some(audio_level_tx.clone());
         
         // 根据 ASR 模式选择录音器
         let is_realtime_mode = asr_config.primary.mode == ASRMode::Realtime;
@@ -269,6 +259,11 @@ impl VoiceHandler {
                 task.run_with_details().await
             });
             
+            state.asr_config = Some(asr_config.clone());
+            state.is_recording = true;
+            state.recording_mode = Some(mode.clone());
+            state.recording_start_time = Some(Instant::now());
+            state.audio_level_tx = Some(audio_level_tx.clone());
             state.streaming_recorder = Some(streaming_recorder);
             state.realtime_task = Some(task_handle);
             state.stop_signal = Some(stop_tx);
@@ -290,8 +285,16 @@ impl VoiceHandler {
             recorder.start(mode.clone().into())
                 .map_err(|e| RouterError::ModuleError(format!("启动录音失败: {}", e)))?;
             
+            state.asr_config = Some(asr_config.clone());
+            state.is_recording = true;
+            state.recording_mode = Some(mode.clone());
+            state.recording_start_time = Some(Instant::now());
+            state.audio_level_tx = Some(audio_level_tx.clone());
             state.recorder = Some(recorder);
         }
+        
+        // 根据配置设置音频反馈
+        state.beep_player.set_enabled(asr_config.enable_audio_feedback);
         
         // 播放开始提示音
         state.beep_player.play_start();
@@ -719,8 +722,8 @@ async fn perform_transcription(
     asr_config.validate()
         .map_err(|e| ASRError::ConfigError(e.to_string()))?;
     
-    // 创建并行兜底策略
-    let strategy = ParallelFallbackStrategy::from_config(asr_config.clone());
+    // 创建竞速策略
+    let strategy = RaceStrategy::from_config(asr_config.clone());
     
     log_info!(
         "使用 ASR 引擎: primary={}, fallback={:?}, enable_fallback={}",

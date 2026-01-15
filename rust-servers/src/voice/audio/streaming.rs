@@ -22,6 +22,7 @@ macro_rules! log_error {
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::Stream;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 use tokio::sync::mpsc;
 
 use super::recorder::{
@@ -36,6 +37,12 @@ pub const CHUNK_SAMPLES: usize = 3200;
 
 /// 音频块通道缓冲大小 (约 10 秒的音频)
 pub const CHUNK_CHANNEL_BUFFER: usize = 50;
+
+/// VAD 拖尾块数 (默认 3 块 = 0.6 秒)
+pub const VAD_HANGOVER_CHUNKS: usize = 3;
+
+/// 音频级别发送间隔 (毫秒)，目标 ~30Hz
+pub const AUDIO_LEVEL_EMIT_INTERVAL_MS: u128 = 33;
 
 /// 音频块数据 (PCM i16 格式)
 #[derive(Debug, Clone)]
@@ -59,6 +66,9 @@ pub struct StreamingRecorder {
     level_callback: Arc<Mutex<Option<StreamingLevelCallback>>>,
     smoothed_level: Arc<Mutex<f32>>,
     start_time: Arc<Mutex<Option<std::time::Instant>>>,
+    vad_hangover: Arc<Mutex<usize>>,
+    agc_gain: Arc<Mutex<f32>>,
+    last_emit_time: Arc<Mutex<Instant>>,
 }
 
 impl StreamingRecorder {
@@ -74,6 +84,9 @@ impl StreamingRecorder {
             level_callback: Arc::new(Mutex::new(None)),
             smoothed_level: Arc::new(Mutex::new(0.0)),
             start_time: Arc::new(Mutex::new(None)),
+            vad_hangover: Arc::new(Mutex::new(0)),
+            agc_gain: Arc::new(Mutex::new(1.0)),
+            last_emit_time: Arc::new(Mutex::new(Instant::now())),
         })
     }
 
@@ -103,6 +116,9 @@ impl StreamingRecorder {
         *self.recording_mode.lock().unwrap() = Some(mode);
         *self.smoothed_level.lock().unwrap() = 0.0;
         *self.start_time.lock().unwrap() = Some(std::time::Instant::now());
+        *self.vad_hangover.lock().unwrap() = 0;
+        *self.agc_gain.lock().unwrap() = 1.0;
+        *self.last_emit_time.lock().unwrap() = Instant::now();
 
         let (chunk_tx, chunk_rx) = mpsc::channel::<AudioChunkData>(CHUNK_CHANNEL_BUFFER);
         self.chunk_sender = Some(chunk_tx.clone());
@@ -133,19 +149,23 @@ impl StreamingRecorder {
         let level_callback = Arc::clone(&self.level_callback);
         let smoothed_level = Arc::clone(&self.smoothed_level);
         let start_time = Arc::clone(&self.start_time);
+        let vad_hangover = Arc::clone(&self.vad_hangover);
+        let agc_gain = Arc::clone(&self.agc_gain);
+        let last_emit_time = Arc::clone(&self.last_emit_time);
         let device_sample_rate = self.device_sample_rate;
         let channels = self.channels;
 
         let pending_samples: Arc<Mutex<Vec<f32>>> = Arc::new(Mutex::new(Vec::new()));
-        let callback_counter: Arc<Mutex<u32>> = Arc::new(Mutex::new(0));
 
         let err_fn = |err| log_error!("录音流错误: {}", err);
 
         let stream = match supported_config.sample_format() {
             cpal::SampleFormat::F32 => {
                 let pending = Arc::clone(&pending_samples);
-                let counter = Arc::clone(&callback_counter);
                 let chunk_tx = chunk_tx.clone();
+                let vad_hangover = Arc::clone(&vad_hangover);
+                let agc_gain = Arc::clone(&agc_gain);
+                let last_emit_time = Arc::clone(&last_emit_time);
 
                 device
                     .build_input_stream(
@@ -159,8 +179,10 @@ impl StreamingRecorder {
                                 &chunk_tx,
                                 &level_callback,
                                 &smoothed_level,
-                                &counter,
                                 &start_time,
+                                &vad_hangover,
+                                &agc_gain,
+                                &last_emit_time,
                                 device_sample_rate,
                                 channels,
                             );
@@ -176,9 +198,11 @@ impl StreamingRecorder {
                 let pending = Arc::clone(&pending_samples);
                 let level_callback = Arc::clone(&level_callback);
                 let smoothed_level = Arc::clone(&smoothed_level);
-                let counter = Arc::clone(&callback_counter);
                 let start_time = Arc::clone(&start_time);
                 let chunk_tx = chunk_tx.clone();
+                let vad_hangover = Arc::clone(&vad_hangover);
+                let agc_gain = Arc::clone(&agc_gain);
+                let last_emit_time = Arc::clone(&last_emit_time);
 
                 device
                     .build_input_stream(
@@ -193,8 +217,10 @@ impl StreamingRecorder {
                                 &chunk_tx,
                                 &level_callback,
                                 &smoothed_level,
-                                &counter,
                                 &start_time,
+                                &vad_hangover,
+                                &agc_gain,
+                                &last_emit_time,
                                 device_sample_rate,
                                 channels,
                             );
@@ -210,9 +236,11 @@ impl StreamingRecorder {
                 let pending = Arc::clone(&pending_samples);
                 let level_callback = Arc::clone(&level_callback);
                 let smoothed_level = Arc::clone(&smoothed_level);
-                let counter = Arc::clone(&callback_counter);
                 let start_time = Arc::clone(&start_time);
                 let chunk_tx = chunk_tx.clone();
+                let vad_hangover = Arc::clone(&vad_hangover);
+                let agc_gain = Arc::clone(&agc_gain);
+                let last_emit_time = Arc::clone(&last_emit_time);
 
                 device
                     .build_input_stream(
@@ -227,8 +255,10 @@ impl StreamingRecorder {
                                 &chunk_tx,
                                 &level_callback,
                                 &smoothed_level,
-                                &counter,
                                 &start_time,
+                                &vad_hangover,
+                                &agc_gain,
+                                &last_emit_time,
                                 device_sample_rate,
                                 channels,
                             );
@@ -265,8 +295,10 @@ impl StreamingRecorder {
         chunk_tx: &mpsc::Sender<AudioChunkData>,
         level_callback: &Arc<Mutex<Option<StreamingLevelCallback>>>,
         smoothed_level: &Arc<Mutex<f32>>,
-        callback_counter: &Arc<Mutex<u32>>,
         start_time: &Arc<Mutex<Option<std::time::Instant>>>,
+        vad_hangover: &Arc<Mutex<usize>>,
+        agc_gain: &Arc<Mutex<f32>>,
+        last_emit_time: &Arc<Mutex<Instant>>,
         device_sample_rate: u32,
         channels: u16,
     ) {
@@ -280,19 +312,18 @@ impl StreamingRecorder {
         let resampled = resample(&mono, device_sample_rate, TARGET_SAMPLE_RATE);
 
         {
-            let mut counter = callback_counter.lock().unwrap();
-            *counter += 1;
-
-            if *counter % 2 == 0 {
-                let raw_level = utils::calculate_rms(&resampled);
+            let mut last_emit = last_emit_time.lock().unwrap();
+            if last_emit.elapsed().as_millis() >= AUDIO_LEVEL_EMIT_INTERVAL_MS {
+                let level = utils::calculate_audio_level(&resampled);
                 let mut current_smoothed = smoothed_level.lock().unwrap();
-                *current_smoothed = utils::smooth_level(*current_smoothed, raw_level);
+                *current_smoothed = utils::smooth_level(*current_smoothed, level);
 
                 let waveform = utils::generate_waveform(&resampled, 9);
 
                 if let Some(ref callback) = *level_callback.lock().unwrap() {
                     callback(*current_smoothed, waveform);
                 }
+                *last_emit = Instant::now();
             }
         }
 
@@ -300,7 +331,28 @@ impl StreamingRecorder {
         pending.extend(resampled);
 
         while pending.len() >= CHUNK_SAMPLES {
-            let chunk_f32: Vec<f32> = pending.drain(..CHUNK_SAMPLES).collect();
+            let mut chunk_f32: Vec<f32> = pending.drain(..CHUNK_SAMPLES).collect();
+
+            let is_active = utils::is_voice_active(&chunk_f32);
+            let mut hangover = vad_hangover.lock().unwrap();
+
+            if is_active {
+                *hangover = VAD_HANGOVER_CHUNKS;
+            } else if *hangover > 0 {
+                *hangover -= 1;
+            }
+
+            if !is_active && *hangover == 0 {
+                let mut gain = agc_gain.lock().unwrap();
+                *gain = *gain * 0.5 + 0.5;
+                continue;
+            }
+            drop(hangover);
+
+            let mut gain = agc_gain.lock().unwrap();
+            utils::apply_agc(&mut chunk_f32, &mut gain);
+            drop(gain);
+
             let chunk_i16: Vec<i16> = chunk_f32
                 .iter()
                 .map(|&s| (s * i16::MAX as f32).clamp(i16::MIN as f32, i16::MAX as f32) as i16)
