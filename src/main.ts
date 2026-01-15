@@ -1,4 +1,4 @@
-import type { Menu, WorkspaceLeaf} from 'obsidian';
+import type { Menu, WorkspaceLeaf, WorkspaceLeaf as WL } from 'obsidian';
 import { Plugin, TFile, MarkdownView, Modal, Setting, Platform, normalizePath } from 'obsidian';
 import type { SmartWorkflowSettings} from './settings/settings';
 import { DEFAULT_SETTINGS } from './settings/settings';
@@ -2506,7 +2506,7 @@ export default class SmartWorkflowPlugin extends Plugin {
  * 终端视图包装器
  * 使用动态导入延迟加载终端模块，避免移动端加载 Node.js 依赖
  */
-import { ItemView, WorkspaceLeaf as WL } from 'obsidian';
+import { ItemView } from 'obsidian';
 
 class TerminalViewWrapper extends ItemView {
   private plugin: SmartWorkflowPlugin;

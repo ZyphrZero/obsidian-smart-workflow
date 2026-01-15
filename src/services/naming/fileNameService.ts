@@ -6,15 +6,17 @@
  * - 文件操作（读取内容、重命名、冲突处理）
  */
 
-import { App, TFile } from 'obsidian';
-import { SmartWorkflowSettings, BASE_PROMPT_TEMPLATE, ModelConfig } from '../../settings/settings';
+import type { App, TFile } from 'obsidian';
+import type { SmartWorkflowSettings, ModelConfig } from '../../settings/settings';
+import { BASE_PROMPT_TEMPLATE } from '../../settings/settings';
 import { ConfigManager } from '../config/configManager';
 import type { ISecretService } from '../secret';
 import { FileAnalyzer } from './fileAnalyzer';
 import { debugLog, debugWarn } from '../../utils/logger';
 import { t } from '../../i18n';
 import { AIClient } from '../ai';
-import { AIError, isAIError } from '../ai/errors';
+import type { AIError} from '../ai/errors';
+import { isAIError } from '../ai/errors';
 import { 
   inferContextLength, 
   estimateTokenCount, 

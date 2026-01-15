@@ -4,7 +4,7 @@
  * 提供与统一服务器通信的基础功能
  */
 
-import { ModuleType, ClientMessage, ServerMessage } from './types';
+import type { ModuleType, ClientMessage, ServerMessage } from './types';
 import { debugLog, errorLog } from '../../utils/logger';
 
 /**

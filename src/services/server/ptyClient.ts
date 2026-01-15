@@ -6,7 +6,7 @@
  */
 
 import { ModuleClient } from './moduleClient';
-import { PtyConfig, ServerMessage, SessionEventListeners } from './types';
+import type { PtyConfig, ServerMessage, SessionEventListeners } from './types';
 import { debugLog, errorLog } from '../../utils/logger';
 
 /**

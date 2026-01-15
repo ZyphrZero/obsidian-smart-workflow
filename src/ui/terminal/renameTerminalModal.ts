@@ -2,7 +2,8 @@
  * 终端重命名模态框
  */
 
-import { App, Modal, Setting } from 'obsidian';
+import type { App} from 'obsidian';
+import { Modal, Setting } from 'obsidian';
 import { t } from '../../i18n';
 
 export class RenameTerminalModal extends Modal {

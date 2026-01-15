@@ -10,8 +10,9 @@
  * 实现 ITextInserter 接口，供 VoiceInputService 使用
  */
 
-import { App, MarkdownView, Notice } from 'obsidian';
-import { ITextInserter } from './types';
+import type { App} from 'obsidian';
+import { MarkdownView, Notice } from 'obsidian';
+import type { ITextInserter } from './types';
 import { debugLog, errorLog } from '../../utils/logger';
 import { t } from '../../i18n';
 

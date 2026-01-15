@@ -5,7 +5,7 @@
 
 import { en } from './locales/en';
 import { zhCN } from './locales/zh-CN';
-import { TranslationKeys, SupportedLocale } from './types';
+import type { TranslationKeys, SupportedLocale } from './types';
 
 class I18nService {
   private currentLocale: SupportedLocale = 'en';

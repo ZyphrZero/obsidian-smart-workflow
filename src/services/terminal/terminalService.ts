@@ -9,13 +9,15 @@
 
  */
 
-import { App, Notice } from 'obsidian';
-import { TerminalSettings, getCurrentPlatformShell, getCurrentPlatformCustomShellPath } from '../../settings/settings';
-import { TerminalInstance } from './terminalInstance';
+import type { App} from 'obsidian';
+import { Notice } from 'obsidian';
+import type { TerminalSettings} from '../../settings/settings';
+import { getCurrentPlatformShell, getCurrentPlatformCustomShellPath } from '../../settings/settings';
+import type { TerminalInstance } from './terminalInstance';
 import { debugLog, debugWarn, errorLog } from '../../utils/logger';
 import { t } from '../../i18n';
-import { ServerManager } from '../server/serverManager';
-import { PtyClient } from '../server/ptyClient';
+import type { ServerManager } from '../server/serverManager';
+import type { PtyClient } from '../server/ptyClient';
 
 // 预加载 TerminalInstance 模块，避免首次创建终端时的动态 import 延迟
 let terminalInstanceModule: typeof import('./terminalInstance') | null = null;

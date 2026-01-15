@@ -3,13 +3,14 @@
  * 协调写作动作的执行流程，使用独立的 WritingApplyView 显示 diff
  */
 
-import { App, MarkdownView, Editor } from 'obsidian';
-import { SmartWorkflowSettings } from '../../settings/settings';
+import type { App, MarkdownView, Editor } from 'obsidian';
+import type { SmartWorkflowSettings } from '../../settings/settings';
 import { WritingService } from '../../services/writing/writingService';
-import { WritingApplyView, WRITING_APPLY_VIEW_TYPE, WritingApplyViewState } from './writingApplyView';
+import type { WritingApplyViewState } from './writingApplyView';
+import { WritingApplyView, WRITING_APPLY_VIEW_TYPE } from './writingApplyView';
 import { debugLog } from '../../utils/logger';
-import { SelectionRange } from '../selection/types';
-import { ServerManager } from '../../services/server/serverManager';
+import type { SelectionRange } from '../selection/types';
+import type { ServerManager } from '../../services/server/serverManager';
 import type { ISecretService } from '../../services/secret';
 
 /**

@@ -7,8 +7,9 @@
  * - 更新双向链接
  */
 
-import { TFile, TFolder, App } from 'obsidian';
-import { SmartWorkflowSettings } from '../../settings/settings';
+import type { App } from 'obsidian';
+import { TFile, TFolder } from 'obsidian';
+import type { SmartWorkflowSettings } from '../../settings/settings';
 import { debugLog, errorLog } from '../../utils/logger';
 import { t } from '../../i18n';
 

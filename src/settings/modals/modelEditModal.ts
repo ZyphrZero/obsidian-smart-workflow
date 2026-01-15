@@ -1,4 +1,5 @@
-import { App, Modal, Setting, Notice, setIcon } from 'obsidian';
+import type { App} from 'obsidian';
+import { Modal, Setting, Notice, setIcon } from 'obsidian';
 import type { ConfigManager } from '../../services/config/configManager';
 import type { ModelConfig, APIFormat, ReasoningEffort } from '../settings';
 import { inferContextLength, inferOutputTokenLimit } from '../../services/ai';

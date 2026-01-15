@@ -6,12 +6,13 @@
  */
 
 import { setIcon, setTooltip } from 'obsidian';
-import { 
+import type { 
   ToolbarAction, 
   ToolbarActionItem,
   SubmenuAction,
   ToolbarPosition, 
-  SelectionContext,
+  SelectionContext} from './types';
+import {
   ANIMATION_CONSTANTS,
   isSubmenuAction
 } from './types';

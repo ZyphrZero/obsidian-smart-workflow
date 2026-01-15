@@ -4,7 +4,8 @@
 
  */
 
-import { ToolbarPosition, ToolbarSize, ViewportSize, POSITION_CONSTANTS } from './types';
+import type { ToolbarPosition, ToolbarSize, ViewportSize} from './types';
+import { POSITION_CONSTANTS } from './types';
 
 /**
  * 位置管理器

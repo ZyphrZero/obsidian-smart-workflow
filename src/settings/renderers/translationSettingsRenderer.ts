@@ -4,8 +4,8 @@
  */
 
 import { Setting, setIcon } from 'obsidian';
-import type { RendererContext } from '../types';
-import { SUPPORTED_LANGUAGES, LanguageCode } from '../types';
+import type { RendererContext , LanguageCode } from '../types';
+import { SUPPORTED_LANGUAGES } from '../types';
 import { BaseSettingsRenderer } from './baseRenderer';
 import { t, i18n } from '../../i18n';
 

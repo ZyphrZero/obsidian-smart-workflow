@@ -1,4 +1,5 @@
-import { TFile, TFolder } from 'obsidian';
+import type { TFolder } from 'obsidian';
+import { TFile } from 'obsidian';
 import { debugLog } from '../../utils/logger';
 
 /**

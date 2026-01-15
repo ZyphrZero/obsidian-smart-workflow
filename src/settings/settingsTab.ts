@@ -3,7 +3,8 @@
  * 负责标签页导航和状态管理，委托渲染给各 Renderer
  */
 
-import { App, PluginSettingTab, setIcon } from 'obsidian';
+import type { App} from 'obsidian';
+import { PluginSettingTab, setIcon } from 'obsidian';
 import type SmartWorkflowPlugin from '../main';
 import { ConfigManager } from '../services/config/configManager';
 import { SecretService } from '../services/secret';

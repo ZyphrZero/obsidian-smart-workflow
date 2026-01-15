@@ -3,7 +3,8 @@
  * 通用的快捷键录入和显示组件
  */
 
-import { App, Setting, setIcon } from 'obsidian';
+import type { App} from 'obsidian';
+import { Setting, setIcon } from 'obsidian';
 import { t } from '../../i18n';
 
 export interface HotkeyInputOptions {

@@ -5,13 +5,15 @@
 
  */
 
-import { App, MarkdownView } from 'obsidian';
-import { 
+import type { App} from 'obsidian';
+import { MarkdownView } from 'obsidian';
+import type { 
   SelectionContext, 
   SelectionToolbarSettings, 
   ToolbarAction,
   ToolbarActionItem,
-  SubmenuAction,
+  SubmenuAction} from './types';
+import {
   DEFAULT_SELECTION_TOOLBAR_SETTINGS
 } from './types';
 import { SelectionService } from './selectionService';
@@ -19,12 +21,13 @@ import { ToolbarView } from './toolbarView';
 import { PositionManager } from './positionManager';
 import { ActionExecutor } from './actionExecutor';
 import { debugLog } from '../../utils/logger';
-import { SmartWorkflowSettings } from '../../settings/settings';
-import { WritingActionExecutor, WritingActionContext } from '../writing/writingActionExecutor';
+import type { SmartWorkflowSettings } from '../../settings/settings';
+import type { WritingActionContext } from '../writing/writingActionExecutor';
+import { WritingActionExecutor } from '../writing/writingActionExecutor';
 import { TranslationService } from '../../services/translation';
 import type { ISecretService } from '../../services/secret';
 import { TranslationModal } from '../translation/translationModal';
-import { ServerManager } from '../../services/server/serverManager';
+import type { ServerManager } from '../../services/server/serverManager';
 
 /**
  * 选中文字浮动工具栏管理器

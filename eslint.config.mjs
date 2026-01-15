@@ -31,6 +31,6 @@ export default [
     },
   },
   {
-    ignores: ['esbuild.config.mjs', 'scripts/**', 'main.js', 'node_modules/**'],
+    ignores: ['esbuild.config.mjs', 'eslint.config.mjs', 'scripts/**', 'main.js', 'node_modules/**', 'tests/**/*.js'],
   },
 ];

@@ -9,17 +9,18 @@
  * 
  */
 
-import {
+import type {
   DetectionResult,
   LanguageDetectorOptions,
-  LanguageCode,
+  LanguageCode} from '../../settings/types';
+import {
   SUPPORTED_LANGUAGES,
 } from '../../settings/types';
 import { AIClient } from '../ai';
-import { Provider, ModelConfig } from '../../settings/settings';
+import type { Provider, ModelConfig } from '../../settings/settings';
 import { debugLog } from '../../utils/logger';
-import { ServerManager } from '../server/serverManager';
-import { LanguageDetectionResult } from '../server/types';
+import type { ServerManager } from '../server/serverManager';
+import type { LanguageDetectionResult } from '../server/types';
 
 /**
  * 语言检测错误类
@@ -250,7 +251,7 @@ export class LanguageDetector {
 
     // 查找映射
     const lowerCode = rustCode.toLowerCase();
-    let mapped = rustLanguageMap[lowerCode];
+    const mapped = rustLanguageMap[lowerCode];
 
     // 如果是中文，根据 is_simplified 区分简繁体
     if (mapped === 'zh-CN' || lowerCode === 'zh' || lowerCode === 'cmn' || lowerCode === 'zho') {

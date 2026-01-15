@@ -6,11 +6,12 @@
  * - 自动生成标签 + 智能归档
  */
 
-import { TFile, App, Notice } from 'obsidian';
-import { SmartWorkflowSettings } from '../../settings/settings';
-import { TagService } from '../tagging/tagService';
-import { CategoryService } from '../categorizing/categoryService';
-import { ArchiveService } from '../archiving/archiveService';
+import type { TFile, App} from 'obsidian';
+import { Notice } from 'obsidian';
+import type { SmartWorkflowSettings } from '../../settings/settings';
+import type { TagService } from '../tagging/tagService';
+import type { CategoryService } from '../categorizing/categoryService';
+import type { ArchiveService } from '../archiving/archiveService';
 import { debugLog, errorLog } from '../../utils/logger';
 import { t } from '../../i18n';
 

@@ -11,24 +11,26 @@
  * 
  */
 
-import { App, MarkdownView } from 'obsidian';
+import type { App} from 'obsidian';
+import { MarkdownView } from 'obsidian';
 import { debugLog, errorLog } from '../../utils/logger';
 import { t } from '../../i18n';
-import { ServerManager } from '../server/serverManager';
-import { VoiceClient } from '../server/voiceClient';
-import { ConfigManager } from '../config/configManager';
-import {
+import type { ServerManager } from '../server/serverManager';
+import type { VoiceClient } from '../server/voiceClient';
+import type { ConfigManager } from '../config/configManager';
+import type {
   IVoiceInputService,
   VoiceInputMode,
   RecordingMode,
   ASRConfig,
   VoiceServiceEvents,
+  TranscriptionCompleteMessage} from './types';
+import {
   VoiceServerError,
   VoiceErrorCode,
-  TranscriptionCompleteMessage,
   LLMProcessingError,
 } from './types';
-import { VoiceSettings } from '../../settings/settings';
+import type { VoiceSettings } from '../../settings/settings';
 
 /**
  * 听写结果

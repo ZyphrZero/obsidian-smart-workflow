@@ -5,7 +5,7 @@
  */
 
 import { ModuleClient } from './moduleClient';
-import { VoiceEvents, ServerMessage, ASRConfig, RecordingMode } from './types';
+import type { VoiceEvents, ServerMessage, ASRConfig, RecordingMode } from './types';
 import { debugLog } from '../../utils/logger';
 
 /**

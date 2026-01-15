@@ -5,7 +5,7 @@
 
  */
 
-import {
+import type {
   RequestBuilderOptions,
   ChatCompletionsRequest,
   ResponsesAPIRequest,

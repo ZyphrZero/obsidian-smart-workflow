@@ -10,16 +10,17 @@
  * 
  */
 
-import { App } from 'obsidian';
-import { SmartWorkflowSettings } from '../../settings/settings';
+import type { App } from 'obsidian';
+import type { SmartWorkflowSettings } from '../../settings/settings';
 import { ConfigManager } from '../config/configManager';
 import type { ISecretService } from '../secret';
 import { LanguageDetector } from './languageDetector';
 import { AIClient, AIError, AIErrorCode, NetworkError, TimeoutError } from '../ai';
 import { debugLog } from '../../utils/logger';
 import { t } from '../../i18n';
-import { LanguageCode, SUPPORTED_LANGUAGES } from '../../settings/types';
-import { ServerManager } from '../server/serverManager';
+import type { LanguageCode} from '../../settings/types';
+import { SUPPORTED_LANGUAGES } from '../../settings/types';
+import type { ServerManager } from '../server/serverManager';
 
 // ============================================================================
 // 类型定义

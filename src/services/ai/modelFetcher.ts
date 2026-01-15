@@ -8,8 +8,9 @@
  * - 推断模型类型和上下文长度
  */
 
-import { requestUrl, RequestUrlResponse } from 'obsidian';
-import { Provider } from '../../settings/settings';
+import type { RequestUrlResponse } from 'obsidian';
+import { requestUrl } from 'obsidian';
+import type { Provider } from '../../settings/settings';
 import { EndpointNormalizer } from './endpointNormalizer';
 import { debugLog } from '../../utils/logger';
 import { t } from '../../i18n';

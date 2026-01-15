@@ -2,7 +2,7 @@
  * English language resource
  */
 
-import { TranslationKeys } from '../types';
+import type { TranslationKeys } from '../types';
 
 export const en: TranslationKeys = {
   common: {

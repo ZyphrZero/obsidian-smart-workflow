@@ -6,9 +6,10 @@
  * 
  */
 
-import { App } from 'obsidian';
+import type { App } from 'obsidian';
+import type {
+  SmartWorkflowSettings} from '../../settings/settings';
 import {
-  SmartWorkflowSettings,
   DEFAULT_POLISH_PROMPT_TEMPLATE
 } from '../../settings/settings';
 import { ConfigManager } from '../config/configManager';
@@ -17,7 +18,7 @@ import { debugLog } from '../../utils/logger';
 import { t } from '../../i18n';
 import { AIClient, AIError, AIErrorCode, NetworkError, TimeoutError } from '../ai';
 import { MULTI_SELECTION_SEPARATOR } from '../../ui/selection/types';
-import { ServerManager } from '../server/serverManager';
+import type { ServerManager } from '../server/serverManager';
 
 /**
  * 流式回调接口

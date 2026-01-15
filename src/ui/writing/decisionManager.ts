@@ -3,7 +3,7 @@
  * 负责跟踪用户对每个修改块的决策
  */
 
-import { BlockDecision } from './diffEngine';
+import type { BlockDecision } from './diffEngine';
 
 /**
  * 决策变更事件

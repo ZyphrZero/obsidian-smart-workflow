@@ -5,7 +5,7 @@
 
  */
 
-import { APIFormat } from '../../settings/settings';
+import type { APIFormat } from '../../settings/settings';
 
 /**
  * 端点规范化器类

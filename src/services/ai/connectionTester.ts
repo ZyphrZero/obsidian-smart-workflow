@@ -8,9 +8,10 @@
  * - 验证端点可达性
  */
 
-import { Provider, ModelConfig } from '../../settings/settings';
+import type { Provider, ModelConfig } from '../../settings/settings';
 import { AIClient } from './aiClient';
-import { isAIError, AIError } from './errors';
+import type { AIError } from './errors';
+import { isAIError } from './errors';
 import { debugLog } from '../../utils/logger';
 import { t } from '../../i18n';
 

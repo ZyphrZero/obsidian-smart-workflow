@@ -7,12 +7,13 @@
  * - 提供分类建议和置信度评分
  */
 
-import { TFile, TFolder, App } from 'obsidian';
-import { SmartWorkflowSettings } from '../../settings/settings';
+import type { App } from 'obsidian';
+import { TFile, TFolder } from 'obsidian';
+import type { SmartWorkflowSettings } from '../../settings/settings';
 import { AIClient } from '../ai/aiClient';
 import { ConfigManager } from '../config/configManager';
 import type { ISecretService } from '../secret';
-import { ServerManager } from '../server/serverManager';
+import type { ServerManager } from '../server/serverManager';
 import { debugLog, errorLog } from '../../utils/logger';
 import { t } from '../../i18n';
 
@@ -299,7 +300,7 @@ export class CategoryService {
     const folderTree = this.formatFolderTree(folderStructure);
 
     // 简单的模板替换
-    let prompt = template
+    const prompt = template
       .replace(/\{\{content\}\}/g, content)
       .replace(/\{\{filename\}\}/g, filename)
       .replace(/\{\{folderTree\}\}/g, folderTree)
@@ -345,7 +346,7 @@ export class CategoryService {
       const trimmed = aiResponse.trim();
 
       // 移除可能的 Markdown 代码块标记
-      let jsonStr = trimmed
+      const jsonStr = trimmed
         .replace(/^```json?\n?/i, '')
         .replace(/\n?```$/, '');
 

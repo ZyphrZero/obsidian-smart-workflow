@@ -11,15 +11,15 @@
 
 import { debugLog, errorLog } from '../../utils/logger';
 import { AIClient } from '../ai/aiClient';
-import { ConfigManager } from '../config/configManager';
-import {
+import type { ConfigManager } from '../config/configManager';
+import type {
   VoiceSettings,
   VoiceAssistantConfig,
   Provider,
   ModelConfig,
   SmartWorkflowSettings,
 } from '../../settings/settings';
-import { ILLMPostProcessor } from './voiceInputService';
+import type { ILLMPostProcessor } from './voiceInputService';
 
 /**
  * 助手模式类型

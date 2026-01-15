@@ -5,8 +5,8 @@
 
  */
 
-import { Provider, ModelConfig, APIFormat, ReasoningEffort } from '../../settings/settings';
-import { ServerManager } from '../server/serverManager';
+import type { Provider, ModelConfig, APIFormat, ReasoningEffort } from '../../settings/settings';
+import type { ServerManager } from '../server/serverManager';
 
 // ============================================================================
 // AIClient 配置类型

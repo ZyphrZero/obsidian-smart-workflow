@@ -1,4 +1,5 @@
-import { App, Modal, Setting, Notice, setIcon } from 'obsidian';
+import type { App} from 'obsidian';
+import { Modal, Setting, Notice, setIcon } from 'obsidian';
 import type { ConfigManager } from '../../services/config/configManager';
 import type { Provider, KeyConfig, SecretStorageMode } from '../settings';
 import { t } from '../../i18n';
@@ -115,6 +116,7 @@ function isSecretComponentAvailable(app: App): boolean {
 function createSecretComponent(app: App, containerEl: HTMLElement): any {
   try {
     // 尝试从 obsidian 模块动态获取 SecretComponent
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const obsidian = require('obsidian');
     if (obsidian.SecretComponent) {
       return new obsidian.SecretComponent(app, containerEl);
@@ -361,7 +363,7 @@ export class ProviderEditModal extends Modal {
           .onClick(() => {
             // 打开密钥管理模态窗口
             // 准备 keyConfigs 数组
-            let keysToEdit = [...formData.keyConfigs];
+            const keysToEdit = [...formData.keyConfigs];
             
             // 如果当前有单个密钥但没有多密钥列表，先初始化
             if (keysToEdit.length === 0) {

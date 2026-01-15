@@ -1,4 +1,5 @@
-import { App, Modal, Setting, Notice, setIcon } from 'obsidian';
+import type { App} from 'obsidian';
+import { Modal, Setting, Notice, setIcon } from 'obsidian';
 import { t } from '../../i18n';
 import type { KeyConfig, SecretStorageMode } from '../settings';
 import type { ISecretService } from '../../services/secret';
@@ -19,6 +20,7 @@ function isSecretComponentAvailable(app: App): boolean {
  */
 function createSecretComponent(app: App, containerEl: HTMLElement): any {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const obsidian = require('obsidian');
     if (obsidian.SecretComponent) {
       return new obsidian.SecretComponent(app, containerEl);

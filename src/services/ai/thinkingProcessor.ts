@@ -11,7 +11,7 @@
 
  */
 
-import { ThinkingPattern, ThinkingProcessResult } from './types';
+import type { ThinkingPattern, ThinkingProcessResult } from './types';
 
 /**
  * 思考标签模式常量

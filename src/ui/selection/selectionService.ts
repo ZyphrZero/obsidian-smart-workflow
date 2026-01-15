@@ -4,8 +4,10 @@
 
  */
 
-import { App, MarkdownView } from 'obsidian';
-import { SelectionContext, SelectionToolbarSettings, SelectionRange, MULTI_SELECTION_SEPARATOR, ANIMATION_CONSTANTS } from './types';
+import type { App} from 'obsidian';
+import { MarkdownView } from 'obsidian';
+import type { SelectionContext, SelectionToolbarSettings, SelectionRange} from './types';
+import { MULTI_SELECTION_SEPARATOR, ANIMATION_CONSTANTS } from './types';
 import { debugLog } from '../../utils/logger';
 
 /**

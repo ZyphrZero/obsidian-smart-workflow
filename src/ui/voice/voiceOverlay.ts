@@ -11,10 +11,11 @@
  * 
  */
 
-import { App, MarkdownView } from 'obsidian';
+import type { App} from 'obsidian';
+import { MarkdownView } from 'obsidian';
 import { t } from '../../i18n';
 import { debugLog } from '../../utils/logger';
-import {
+import type {
   IVoiceOverlay,
   OverlayState,
   OverlayPosition,

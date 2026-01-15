@@ -5,7 +5,7 @@
  */
 
 import { ModuleClient } from './moduleClient';
-import { LLMEvents, ServerMessage, StreamConfig } from './types';
+import type { LLMEvents, ServerMessage, StreamConfig } from './types';
 import { debugLog } from '../../utils/logger';
 
 /**

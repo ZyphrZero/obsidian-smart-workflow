@@ -5,7 +5,7 @@
  */
 
 import { ModuleClient } from './moduleClient';
-import { UtilsEvents, ServerMessage, LanguageDetectionResult } from './types';
+import type { UtilsEvents, ServerMessage, LanguageDetectionResult } from './types';
 import { debugLog } from '../../utils/logger';
 
 /**

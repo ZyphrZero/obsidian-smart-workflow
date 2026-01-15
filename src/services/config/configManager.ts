@@ -1,12 +1,13 @@
-import {
+import type {
   AIFeature,
   ModelConfig,
   Provider,
   FeatureBinding,
   ResolvedConfig,
   SmartWorkflowSettings,
-  DEFAULT_FEATURE_BINDINGS,
-  KeyConfig,
+  KeyConfig} from '../../settings/settings';
+import {
+  DEFAULT_FEATURE_BINDINGS
 } from '../../settings/settings';
 import type { ISecretService } from '../secret';
 

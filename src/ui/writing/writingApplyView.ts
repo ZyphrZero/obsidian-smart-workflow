@@ -3,13 +3,17 @@
  * 使用独立的 Obsidian View 显示 diff 对比，支持块级决策
  */
 
-import { ItemView, WorkspaceLeaf, MarkdownView, TFile, setTooltip, Editor } from 'obsidian';
+import type { WorkspaceLeaf, Editor } from 'obsidian';
+import { ItemView, MarkdownView, TFile, setTooltip } from 'obsidian';
 import { t } from '../../i18n';
-import { DiffEngine, DiffBlock, DiffResult, BlockDecision } from './diffEngine';
+import type { DiffBlock, DiffResult, BlockDecision } from './diffEngine';
+import { DiffEngine } from './diffEngine';
 import { DecisionManager } from './decisionManager';
-import { SelectionRange, MULTI_SELECTION_SEPARATOR } from '../selection/types';
+import type { SelectionRange} from '../selection/types';
+import { MULTI_SELECTION_SEPARATOR } from '../selection/types';
 import { StateEffect, StateField } from '@codemirror/state';
-import { Decoration, DecorationSet, EditorView } from '@codemirror/view';
+import type { DecorationSet} from '@codemirror/view';
+import { Decoration, EditorView } from '@codemirror/view';
 
 // ============================================================================
 // CodeMirror 6 选区高亮装饰器

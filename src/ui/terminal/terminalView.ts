@@ -1,6 +1,7 @@
-import { ItemView, WorkspaceLeaf, Notice, Menu } from 'obsidian';
-import { TerminalService } from '../../services/terminal/terminalService';
-import { TerminalInstance } from '../../services/terminal/terminalInstance';
+import type { WorkspaceLeaf, Menu } from 'obsidian';
+import { ItemView, Notice } from 'obsidian';
+import type { TerminalService } from '../../services/terminal/terminalService';
+import type { TerminalInstance } from '../../services/terminal/terminalInstance';
 import { errorLog } from '../../utils/logger';
 import { t } from '../../i18n';
 import { RenameTerminalModal } from './renameTerminalModal';

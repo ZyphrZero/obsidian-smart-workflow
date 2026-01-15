@@ -4,8 +4,9 @@
 
  */
 
-import { App, MarkdownView } from 'obsidian';
-import { SelectionContext } from './types';
+import type { App} from 'obsidian';
+import { MarkdownView } from 'obsidian';
+import type { SelectionContext } from './types';
 import { NoticeHelper } from '../noticeHelper';
 import { t } from '../../i18n';
 

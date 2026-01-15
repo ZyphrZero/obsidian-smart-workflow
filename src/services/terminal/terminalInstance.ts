@@ -8,14 +8,14 @@ import { platform } from 'os';
 import { exec } from 'child_process';
 import { debugLog, debugWarn, errorLog } from '../../utils/logger';
 import { t } from '../../i18n';
-import { ServerManager } from '../server/serverManager';
-import { PtyClient } from '../server/ptyClient';
+import type { ServerManager } from '../server/serverManager';
+import type { PtyClient } from '../server/ptyClient';
 
 // xterm.js CSS（静态导入，esbuild 会处理）
 import '@xterm/xterm/css/xterm.css';
 
 // electron 是外部模块，使用 require 导入
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { shell } = require('electron');
 
 // xterm.js 模块类型声明（动态导入）

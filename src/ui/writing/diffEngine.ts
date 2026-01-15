@@ -3,10 +3,11 @@
  * 使用 vscode-diff 库进行专业级行级 diff 计算
  */
 
-import {
-  linesDiffComputers,
+import type {
   ILinesDiffComputerOptions,
-  DetailedLineRangeMapping,
+  DetailedLineRangeMapping} from 'vscode-diff';
+import {
+  linesDiffComputers
 } from 'vscode-diff';
 
 /**

@@ -1,6 +1,7 @@
-import { App, Notice, ButtonComponent, TextAreaComponent, MarkdownRenderer, setIcon, Menu, EventRef, Component } from 'obsidian';
-import { ChatService } from '../../services/chat/chatService';
-import { VoiceInputService, DictationResult } from '../../services/voice/voiceInputService';
+import type { App, EventRef} from 'obsidian';
+import { Notice, ButtonComponent, TextAreaComponent, MarkdownRenderer, setIcon, Menu, Component } from 'obsidian';
+import type { ChatService } from '../../services/chat/chatService';
+import type { VoiceInputService, DictationResult } from '../../services/voice/voiceInputService';
 import { t } from '../../i18n';
 
 export const CHAT_VIEW_TYPE = 'smart-workflow-chat-view';

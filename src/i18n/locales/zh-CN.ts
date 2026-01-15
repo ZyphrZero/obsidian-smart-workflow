@@ -2,7 +2,7 @@
  * 中文语言资源
  */
 
-import { TranslationKeys } from '../types';
+import type { TranslationKeys } from '../types';
 
 export const zhCN: TranslationKeys = {
   common: {

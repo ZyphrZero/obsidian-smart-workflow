@@ -4,12 +4,14 @@
  * 
  */
 
-import { App, Modal, setIcon } from 'obsidian';
-import { TranslationService, TranslationOptions, TranslationStreamCallbacks } from '../../services/translation';
-import { LanguageCode, SUPPORTED_LANGUAGES } from '../../settings/types';
-import { SmartWorkflowSettings } from '../../settings/settings';
+import type { App} from 'obsidian';
+import { Modal, setIcon } from 'obsidian';
+import type { TranslationService, TranslationOptions, TranslationStreamCallbacks } from '../../services/translation';
+import type { LanguageCode} from '../../settings/types';
+import { SUPPORTED_LANGUAGES } from '../../settings/types';
+import type { SmartWorkflowSettings } from '../../settings/settings';
 import { t, i18n } from '../../i18n';
-import { SelectionContext } from '../selection/types';
+import type { SelectionContext } from '../selection/types';
 import { debugLog } from '../../utils/logger';
 
 /**

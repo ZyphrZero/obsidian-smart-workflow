@@ -9,18 +9,20 @@
  * 
  */
 
-import { spawn, ChildProcess } from 'child_process';
+import type { ChildProcess } from 'child_process';
+import { spawn } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 import { Notice } from 'obsidian';
 import { debugLog, debugWarn, errorLog } from '../../utils/logger';
 import { t } from '../../i18n';
-import { 
+import type { 
   ServerInfo, 
-  ServerEvents, 
+  ServerEvents,
+  ServerMessage} from './types';
+import { 
   ServerErrorCode, 
-  ServerManagerError,
-  ServerMessage,
+  ServerManagerError
 } from './types';
 import { PtyClient } from './ptyClient';
 import { VoiceClient } from './voiceClient';

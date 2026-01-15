@@ -1,7 +1,8 @@
-import { App, Events, Notice, TFile } from 'obsidian';
+import type { App} from 'obsidian';
+import { Events, Notice, TFile } from 'obsidian';
 import { AIClient } from '../ai/aiClient';
-import { SmartWorkflowSettings } from '../../settings/settings';
-import { ServerManager } from '../server/serverManager';
+import type { SmartWorkflowSettings } from '../../settings/settings';
+import type { ServerManager } from '../server/serverManager';
 import { t } from '../../i18n';
 
 export interface ChatMessage {

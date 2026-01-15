@@ -9,7 +9,8 @@
 
  */
 
-import { App, Modal, Setting, Notice } from 'obsidian';
+import type { App} from 'obsidian';
+import { Modal, Setting, Notice } from 'obsidian';
 import { t } from '../../i18n';
 import { debugLog, errorLog } from '../../utils/logger';
 import { 

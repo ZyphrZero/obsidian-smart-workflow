@@ -7,12 +7,12 @@
  * - 标签去重和规范化
  */
 
-import { TFile, App } from 'obsidian';
-import { SmartWorkflowSettings } from '../../settings/settings';
+import type { TFile, App } from 'obsidian';
+import type { SmartWorkflowSettings } from '../../settings/settings';
 import { AIClient } from '../ai/aiClient';
 import { ConfigManager } from '../config/configManager';
 import type { ISecretService } from '../secret';
-import { ServerManager } from '../server/serverManager';
+import type { ServerManager } from '../server/serverManager';
 import { debugLog, errorLog } from '../../utils/logger';
 import { t } from '../../i18n';
 
@@ -252,7 +252,7 @@ export class TagService {
       const trimmed = aiResponse.trim();
 
       // 移除可能的 Markdown 代码块标记
-      let jsonStr = trimmed
+      const jsonStr = trimmed
         .replace(/^```json?\n?/i, '')
         .replace(/\n?```$/,'');
 
@@ -273,7 +273,7 @@ export class TagService {
     // 尝试按逗号或换行分隔
     const tags = aiResponse
       .split(/[,\n]/)
-      .map(tag => this.normalizeTag(tag.replace(/^[#\-\*]\s*/, '')))
+      .map(tag => this.normalizeTag(tag.replace(/^[#\-*]\s*/, '')))
       .filter(tag => tag.length > 0)
       .slice(0, this.settings.tagging.maxTagCount);
 

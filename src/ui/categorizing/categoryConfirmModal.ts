@@ -4,8 +4,9 @@
  * 显示AI推荐的分类，允许用户选择、编辑或创建新分类
  */
 
-import { App, Modal, Setting } from 'obsidian';
-import { CategorySuggestion } from '../../services/categorizing';
+import type { App} from 'obsidian';
+import { Modal, Setting } from 'obsidian';
+import type { CategorySuggestion } from '../../services/categorizing';
 import { t } from '../../i18n';
 
 /**

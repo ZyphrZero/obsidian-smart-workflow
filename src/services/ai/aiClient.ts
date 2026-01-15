@@ -9,7 +9,7 @@
  * 
  */
 
-import {
+import type {
   AIClientOptions,
   AIRequestOptions,
   AIResponse,
@@ -28,8 +28,8 @@ import {
   StreamInterruptedError,
 } from './errors';
 import { t } from '../../i18n';
-import { ServerManager } from '../server/serverManager';
-import { ApiFormat } from '../server/types';
+import type { ServerManager } from '../server/serverManager';
+import type { ApiFormat } from '../server/types';
 import { debugLog, debugWarn, errorLog } from '../../utils/logger';
 
 /**

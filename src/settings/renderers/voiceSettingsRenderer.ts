@@ -3,7 +3,8 @@
  * 负责渲染语音输入功能的所有设置
  */
 
-import { Setting, Notice, setIcon, TextAreaComponent, App } from 'obsidian';
+import type { App } from 'obsidian';
+import { Setting, Notice, setIcon, TextAreaComponent } from 'obsidian';
 import type { RendererContext } from '../types';
 import { BaseSettingsRenderer } from './baseRenderer';
 import { createHotkeyInput } from '../components';
@@ -41,6 +42,7 @@ function isSecretComponentAvailable(app: App): boolean {
  */
 function createSecretComponent(app: App, containerEl: HTMLElement): any {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const obsidian = require('obsidian');
     if (obsidian.SecretComponent) {
       return new obsidian.SecretComponent(app, containerEl);

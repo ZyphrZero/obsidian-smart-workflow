@@ -2,7 +2,7 @@
  * 推断模型的类型和能力 + UI 标签渲染
  */
 
-import { ModelType, ModelAbility } from '../../settings/settings';
+import type { ModelType, ModelAbility } from '../../settings/settings';
 import { setIcon } from 'obsidian';
 import { t } from '../../i18n';
 

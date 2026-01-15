@@ -5,12 +5,14 @@
 
 import { Setting, Notice } from 'obsidian';
 import type { RendererContext } from '../types';
+import type { 
+  ShellType 
+} from '../settings';
 import { 
   getCurrentPlatformShell, 
   setCurrentPlatformShell, 
   getCurrentPlatformCustomShellPath, 
-  setCurrentPlatformCustomShellPath, 
-  ShellType 
+  setCurrentPlatformCustomShellPath 
 } from '../settings';
 import { BaseSettingsRenderer } from './baseRenderer';
 import { validateShellPath } from '../utils/settingsUtils';

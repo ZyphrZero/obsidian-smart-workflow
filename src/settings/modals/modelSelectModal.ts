@@ -1,4 +1,5 @@
-import { App, Modal, setIcon } from 'obsidian';
+import type { App} from 'obsidian';
+import { Modal, setIcon } from 'obsidian';
 import type { ModelType } from '../settings';
 import { inferModelInfo, createModelTagGroup } from '../../services/ai';
 import { t } from '../../i18n';
