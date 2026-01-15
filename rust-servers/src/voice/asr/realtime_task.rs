@@ -256,8 +256,8 @@ impl RealtimeTranscriptionTask {
         log_info!(
             "实时转录完成，耗时 {}ms，结果: {}",
             duration_ms,
-            if final_text.len() > 50 {
-                format!("{}...", &final_text[..50])
+            if final_text.chars().count() > 50 {
+                format!("{}...", final_text.chars().take(50).collect::<String>())
             } else {
                 final_text.clone()
             }
