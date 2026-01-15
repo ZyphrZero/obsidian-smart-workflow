@@ -448,7 +448,7 @@ export type VoiceOverlayPosition = 'cursor' | 'center' | 'top-right' | 'bottom';
 
 /**
  * ASR 供应商配置
- * 与 Rust 端 ASRProviderConfig 保持一致
+ * TypeScript 端使用 KeyConfig 统一管理密钥
  */
 export interface VoiceASRProviderConfig {
   /** 供应商类型 */
@@ -459,22 +459,16 @@ export interface VoiceASRProviderConfig {
   // Qwen 特有配置
   /** DashScope 密钥配置 (阿里云) */
   dashscopeKeyConfig?: KeyConfig;
-  /** @deprecated 使用 dashscopeKeyConfig 替代 */
-  dashscope_api_key?: string;
   
   // Doubao 特有配置
   /** 应用 ID (豆包) */
   app_id?: string;
   /** Doubao access_token 密钥配置 */
   doubaoKeyConfig?: KeyConfig;
-  /** @deprecated 使用 doubaoKeyConfig 替代 */
-  access_token?: string;
   
   // SenseVoice 特有配置
   /** SiliconFlow 密钥配置 (硅基流动) */
   siliconflowKeyConfig?: KeyConfig;
-  /** @deprecated 使用 siliconflowKeyConfig 替代 */
-  siliconflow_api_key?: string;
 }
 
 /**
@@ -491,22 +485,15 @@ export interface VoiceLLMPreset {
 
 /**
  * AI 助手配置
+ * 统一使用现有 AI 供应商配置
  */
 export interface VoiceAssistantConfig {
   /** 是否启用 AI 助手模式 */
   enabled: boolean;
-  /** 是否使用现有 AI 供应商 */
-  useExistingProvider: boolean;
-  /** 绑定的供应商 ID (当 useExistingProvider 为 true 时使用) */
+  /** 绑定的供应商 ID */
   providerId?: string;
-  /** 绑定的模型 ID (当 useExistingProvider 为 true 时使用) */
+  /** 绑定的模型 ID */
   modelId?: string;
-  /** 自定义 API 端点 (当 useExistingProvider 为 false 时使用) */
-  endpoint?: string;
-  /** 自定义模型名称 */
-  model?: string;
-  /** 自定义 API Key */
-  apiKey?: string;
   /** 问答模式系统提示词（无选中文本时使用） */
   qaSystemPrompt: string;
   /** 文本处理模式系统提示词（有选中文本时使用） */
@@ -539,18 +526,10 @@ export interface VoiceSettings {
   // LLM 后处理配置
   /** 是否启用 LLM 后处理 */
   enableLLMPostProcessing: boolean;
-  /** 是否使用现有 AI 供应商进行后处理 */
-  useExistingProviderForPostProcessing: boolean;
-  /** 绑定的供应商 ID (当 useExistingProviderForPostProcessing 为 true 时使用) */
+  /** 绑定的供应商 ID */
   postProcessingProviderId?: string;
-  /** 绑定的模型 ID (当 useExistingProviderForPostProcessing 为 true 时使用) */
+  /** 绑定的模型 ID */
   postProcessingModelId?: string;
-  /** 自定义 LLM 端点 */
-  llmEndpoint?: string;
-  /** 自定义 LLM 模型 */
-  llmModel?: string;
-  /** 自定义 LLM API Key */
-  llmApiKey?: string;
   /** LLM 预设列表 */
   llmPresets: VoiceLLMPreset[];
   /** 当前激活的预设 ID */
@@ -738,14 +717,12 @@ export const DEFAULT_VOICE_SETTINGS: VoiceSettings = {
   
   // LLM 后处理配置
   enableLLMPostProcessing: false,
-  useExistingProviderForPostProcessing: true,
   llmPresets: [...DEFAULT_VOICE_LLM_PRESETS],
   activeLLMPresetId: 'polishing',
   
   // AI 助手配置
   assistantConfig: {
     enabled: false,
-    useExistingProvider: true,
     qaSystemPrompt: DEFAULT_VOICE_ASSISTANT_QA_PROMPT,
     textProcessingSystemPrompt: DEFAULT_VOICE_ASSISTANT_TEXT_PROCESSING_PROMPT,
   },
@@ -763,9 +740,10 @@ export const DEFAULT_VOICE_SETTINGS: VoiceSettings = {
 
 /**
  * 标签生成配置接口
+ * 注意：可见性配置已移至 featureVisibility.tagging
  */
 export interface TaggingConfig {
-  /** 是否启用标签生成功能 */
+  /** 是否启用标签生成功能（已移至 featureVisibility.tagging.enabled） */
   enabled: boolean;
   /** 生成标签数量（推荐3-5个） */
   tagCount: number;
@@ -779,12 +757,6 @@ export interface TaggingConfig {
   preserveExistingTags: boolean;
   /** 是否自动应用（false 则需要用户确认） */
   autoApply: boolean;
-  /** 是否在命令面板中显示 */
-  showInCommandPalette: boolean;
-  /** 是否在编辑器右键菜单中显示 */
-  showInEditorMenu: boolean;
-  /** 是否在文件浏览器右键菜单中显示 */
-  showInFileMenu: boolean;
 }
 
 /**
@@ -820,6 +792,7 @@ export const DEFAULT_TAGGING_PROMPT_TEMPLATE = `# Role: 笔记标签生成专家
 
 /**
  * 默认标签生成设置
+ * 注意：可见性配置已移至 DEFAULT_FEATURE_VISIBILITY.tagging
  */
 export const DEFAULT_TAGGING_SETTINGS: TaggingConfig = {
   enabled: true,
@@ -829,9 +802,6 @@ export const DEFAULT_TAGGING_SETTINGS: TaggingConfig = {
   promptTemplate: DEFAULT_TAGGING_PROMPT_TEMPLATE,
   preserveExistingTags: true,
   autoApply: false,
-  showInCommandPalette: true,
-  showInEditorMenu: true,
-  showInFileMenu: true,
 };
 
 // ============================================================================
@@ -840,9 +810,10 @@ export const DEFAULT_TAGGING_SETTINGS: TaggingConfig = {
 
 /**
  * 归档配置接口
+ * 注意：可见性配置已移至 featureVisibility.archiving
  */
 export interface ArchivingConfig {
-  /** 是否启用自动归档功能 */
+  /** 是否启用自动归档功能（已移至 featureVisibility.archiving.enabled） */
   enabled: boolean;
   /** 归档基础文件夹路径（默认：03-归档区） */
   baseFolder: string;
@@ -858,12 +829,6 @@ export interface ArchivingConfig {
   confirmBeforeArchive: boolean;
   /** 分类匹配的 Prompt 模板 */
   promptTemplate: string;
-  /** 是否在命令面板中显示 */
-  showInCommandPalette: boolean;
-  /** 是否在编辑器右键菜单中显示 */
-  showInEditorMenu: boolean;
-  /** 是否在文件浏览器右键菜单中显示 */
-  showInFileMenu: boolean;
 }
 
 /**
@@ -936,6 +901,7 @@ export const DEFAULT_CATEGORIZING_PROMPT_TEMPLATE = `# Role: 笔记分类专家
 
 /**
  * 默认归档设置
+ * 注意：可见性配置已移至 DEFAULT_FEATURE_VISIBILITY.archiving
  */
 export const DEFAULT_ARCHIVING_SETTINGS: ArchivingConfig = {
   enabled: false,
@@ -946,9 +912,6 @@ export const DEFAULT_ARCHIVING_SETTINGS: ArchivingConfig = {
   updateLinks: true,
   confirmBeforeArchive: true,
   promptTemplate: DEFAULT_CATEGORIZING_PROMPT_TEMPLATE,
-  showInCommandPalette: true,
-  showInEditorMenu: true,
-  showInFileMenu: true,
 };
 
 // ============================================================================
@@ -957,9 +920,10 @@ export const DEFAULT_ARCHIVING_SETTINGS: ArchivingConfig = {
 
 /**
  * 自动归档配置接口
+ * 注意：可见性配置已移至 featureVisibility.autoArchive
  */
 export interface AutoArchiveSettings {
-  /** 是否启用自动归档功能 */
+  /** 是否启用自动归档功能（已移至 featureVisibility.autoArchive.enabled） */
   enabled: boolean;
   /** 是否自动生成标签 */
   generateTags: boolean;
@@ -967,46 +931,52 @@ export interface AutoArchiveSettings {
   performArchive: boolean;
   /** 排除的文件夹路径列表 */
   excludeFolders: string[];
-  /** 显示选项 */
-  showInCommandPalette: boolean;
-  showInEditorMenu: boolean;
-  showInFileMenu: boolean;
 }
 
 /**
  * 默认自动归档设置
+ * 注意：可见性配置已移至 DEFAULT_FEATURE_VISIBILITY.autoArchive
  */
 export const DEFAULT_AUTO_ARCHIVE_SETTINGS: AutoArchiveSettings = {
-  enabled: false,  // 默认关闭，需要用户手动开启
+  enabled: false, // 默认关闭，需要用户手动开启
   generateTags: true,
   performArchive: true,
   excludeFolders: [
     '03-归档区',
     '99-资源库',
   ],
-  showInCommandPalette: true,
-  showInEditorMenu: true,
-  showInFileMenu: true,
 };
 
 /**
+ * 功能可见性配置接口（从 visibility 模块导入）
+ * 定义功能在各 UI 位置的显示状态
+ */
+import type { VisibilityConfig } from '../services/visibility/types';
+
+// 重新导出 VisibilityConfig 以便其他模块使用
+export type { VisibilityConfig };
+
+/**
  * 功能显示设置接口
+ * 统一所有功能模块的可见性配置
  */
 export interface FeatureVisibilitySettings {
   // AI 文件名生成功能
-  aiNaming: {
-    showInCommandPalette: boolean;    // 命令面板
-    showInEditorMenu: boolean;        // 编辑器右键菜单
-    showInFileMenu: boolean;          // 文件浏览器右键菜单
-    showInRibbon: boolean;            // 侧边栏图标
-  };
-  // 终端功能
-  terminal: {
-    enabled: boolean;                 // 是否启用终端功能（移动端默认关闭）
-    showInCommandPalette: boolean;    // 命令面板
-    showInRibbon: boolean;            // 侧边栏图标
-    showInNewTab: boolean;            // 新标签页
-  };
+  aiNaming: VisibilityConfig;
+  // 终端功能（包含额外的 showInNewTab 和 showInStatusBar）
+  terminal: VisibilityConfig & { showInNewTab: boolean; showInStatusBar: boolean };
+  // 语音输入功能
+  voice: VisibilityConfig;
+  // 标签生成功能
+  tagging: VisibilityConfig;
+  // 智能归档功能
+  archiving: VisibilityConfig;
+  // 自动归档功能
+  autoArchive: VisibilityConfig;
+  // 写作助手功能
+  writing: VisibilityConfig;
+  // 翻译功能
+  translation: VisibilityConfig;
 }
 
 // ============================================================================
@@ -1022,6 +992,8 @@ export interface ServerConnectionSettings {
   maxReconnectAttempts: number;
   /** 重连间隔 (ms) */
   reconnectInterval: number;
+  /** 下载加速源 */
+  downloadAcceleratorUrl: string;
 }
 
 /**
@@ -1030,6 +1002,7 @@ export interface ServerConnectionSettings {
 export const DEFAULT_SERVER_CONNECTION_SETTINGS: ServerConnectionSettings = {
   maxReconnectAttempts: 5,
   reconnectInterval: 3000,
+  downloadAcceleratorUrl: 'https://ghfast.top/',
 };
 
 /**
@@ -1221,17 +1194,63 @@ export const DEFAULT_TERMINAL_SETTINGS: TerminalSettings = {
  */
 export const DEFAULT_FEATURE_VISIBILITY: FeatureVisibilitySettings = {
   aiNaming: {
+    enabled: true,
     showInCommandPalette: true,
     showInEditorMenu: true,
     showInFileMenu: true,
-    showInRibbon: true
+    showInRibbon: true,
   },
   terminal: {
-    enabled: true,  // 桌面端默认启用，移动端在 loadSettings 时会覆盖为 false
+    enabled: true, // 桌面端默认启用，移动端在 loadSettings 时会覆盖为 false
     showInCommandPalette: true,
+    showInEditorMenu: false,
+    showInFileMenu: false,
     showInRibbon: true,
-    showInNewTab: true
-  }
+    showInNewTab: true,
+    showInStatusBar: false,
+  },
+  voice: {
+    enabled: false, // 默认关闭，需要配置 ASR
+    showInCommandPalette: true,
+    showInEditorMenu: false,
+    showInFileMenu: false,
+    showInRibbon: false,
+  },
+  tagging: {
+    enabled: true,
+    showInCommandPalette: true,
+    showInEditorMenu: true,
+    showInFileMenu: true,
+    showInRibbon: false,
+  },
+  archiving: {
+    enabled: false, // 默认关闭，需要配置归档目录
+    showInCommandPalette: true,
+    showInEditorMenu: true,
+    showInFileMenu: true,
+    showInRibbon: false,
+  },
+  autoArchive: {
+    enabled: false,
+    showInCommandPalette: true,
+    showInEditorMenu: true,
+    showInFileMenu: true,
+    showInRibbon: false,
+  },
+  writing: {
+    enabled: true,
+    showInCommandPalette: true,
+    showInEditorMenu: false, // 通过选中工具栏访问
+    showInFileMenu: false,
+    showInRibbon: false,
+  },
+  translation: {
+    enabled: true,
+    showInCommandPalette: true,
+    showInEditorMenu: false, // 通过选中工具栏访问
+    showInFileMenu: false,
+    showInRibbon: false,
+  },
 };
 
 /**

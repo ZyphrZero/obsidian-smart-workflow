@@ -62,6 +62,8 @@ jobs:
 
       - name: Build
         working-directory: rust-servers
+        env:
+          SW_SERVER_VERSION: ${{ github.ref_name }}
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Prepare binary
@@ -120,54 +122,57 @@ jobs:
           pnpm i
           pnpm build
 
-      - name: Package
+      - name: Prepare release assets
         run: |
-          # 完整包（所有平台）
+          # BRAT 需要的三个核心文件（直接上传，不打包）
+          # main.js, manifest.json, styles.css 已在根目录
+          
+          # 设置二进制文件执行权限
+          chmod +x binaries/smart-workflow-server-darwin-* || true
+          chmod +x binaries/smart-workflow-server-linux-* || true
+          
+          # 创建完整包（所有平台，供手动安装）
           mkdir -p obsidian-smart-workflow/binaries
           cp main.js manifest.json styles.css obsidian-smart-workflow/
           cp binaries/smart-workflow-server-* obsidian-smart-workflow/binaries/
           chmod +x obsidian-smart-workflow/binaries/smart-workflow-server-darwin-* || true
           chmod +x obsidian-smart-workflow/binaries/smart-workflow-server-linux-* || true
           zip -r obsidian-smart-workflow.zip obsidian-smart-workflow
-          
-          # 各平台独立包
-          for platform in win32-x64 darwin-arm64 darwin-x64 linux-x64 linux-arm64; do
-            mkdir -p "obsidian-smart-workflow-${platform}/binaries"
-            cp main.js manifest.json styles.css "obsidian-smart-workflow-${platform}/"
-            
-            if [[ "$platform" == "win32-x64" ]]; then
-              cp "binaries/smart-workflow-server-${platform}.exe" "obsidian-smart-workflow-${platform}/binaries/"
-              cp "binaries/smart-workflow-server-${platform}.exe.sha256" "obsidian-smart-workflow-${platform}/binaries/"
-            else
-              cp "binaries/smart-workflow-server-${platform}" "obsidian-smart-workflow-${platform}/binaries/"
-              cp "binaries/smart-workflow-server-${platform}.sha256" "obsidian-smart-workflow-${platform}/binaries/"
-              chmod +x "obsidian-smart-workflow-${platform}/binaries/smart-workflow-server-${platform}"
-            fi
-            
-            zip -r "obsidian-smart-workflow-${platform}.zip" "obsidian-smart-workflow-${platform}"
-          done
 
       - name: Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
+            main.js
+            manifest.json
+            styles.css
             obsidian-smart-workflow.zip
-            obsidian-smart-workflow-win32-x64.zip
-            obsidian-smart-workflow-darwin-arm64.zip
-            obsidian-smart-workflow-darwin-x64.zip
-            obsidian-smart-workflow-linux-x64.zip
-            obsidian-smart-workflow-linux-arm64.zip
+            binaries/smart-workflow-server-win32-x64.exe
+            binaries/smart-workflow-server-win32-x64.exe.sha256
+            binaries/smart-workflow-server-darwin-arm64
+            binaries/smart-workflow-server-darwin-arm64.sha256
+            binaries/smart-workflow-server-darwin-x64
+            binaries/smart-workflow-server-darwin-x64.sha256
+            binaries/smart-workflow-server-linux-x64
+            binaries/smart-workflow-server-linux-x64.sha256
+            binaries/smart-workflow-server-linux-arm64
+            binaries/smart-workflow-server-linux-arm64.sha256
           body: |
             ## Installation
             
-            **Full package (all platforms):**
-            - `obsidian-smart-workflow.zip` - Extract to `.obsidian/plugins/`
+            ### BRAT (Recommended)
+            1. Install [BRAT](https://github.com/TfTHacker/obsidian42-brat) plugin
+            2. Add this repository: `ZyphrZero/obsidian-smart-workflow`
+            3. The plugin will auto-download the server binary on first use
             
-            **Platform-specific packages:**
-            - `obsidian-smart-workflow-win32-x64.zip` - Windows x64
-            - `obsidian-smart-workflow-darwin-arm64.zip` - macOS Apple Silicon
-            - `obsidian-smart-workflow-darwin-x64.zip` - macOS Intel
-            - `obsidian-smart-workflow-linux-x64.zip` - Linux x64
-            - `obsidian-smart-workflow-linux-arm64.zip` - Linux ARM64
+            ### Manual Installation
+            - `obsidian-smart-workflow.zip` - Full package with all platform binaries
+            
+            ### Server Binaries (Auto-downloaded by plugin)
+            - `smart-workflow-server-win32-x64.exe` - Windows x64
+            - `smart-workflow-server-darwin-arm64` - macOS Apple Silicon
+            - `smart-workflow-server-darwin-x64` - macOS Intel
+            - `smart-workflow-server-linux-x64` - Linux x64
+            - `smart-workflow-server-linux-arm64` - Linux ARM64
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

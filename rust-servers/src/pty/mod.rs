@@ -11,9 +11,11 @@ use crate::router::{ModuleHandler, ModuleMessage, ModuleType, RouterError, Serve
 use crate::server::WsSender;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 use tokio::sync::Mutex as TokioMutex;
 use tokio_tungstenite::tungstenite::Message;
 use futures_util::SinkExt;
+use uuid::Uuid;
 
 /// 日志宏
 macro_rules! log_info {
@@ -37,37 +39,66 @@ macro_rules! log_debug {
 }
 
 // ============================================================================
+// PTY 会话上下文
+// ============================================================================
+
+/// 单个 PTY 会话的上下文
+/// 
+/// 包含一个 PTY 会话所需的所有资源
+struct PtySessionContext {
+    /// PTY 会话
+    session: Arc<TokioMutex<PtySession>>,
+    /// PTY 读取器
+    reader: Arc<Mutex<PtyReader>>,
+    /// PTY 写入器
+    writer: Arc<Mutex<PtyWriter>>,
+    /// 读取任务句柄
+    read_task: Option<tokio::task::JoinHandle<()>>,
+    /// Shell 类型 (用于 Shell Integration)
+    shell_type: Option<String>,
+    /// 创建时间
+    created_at: Instant,
+}
+
+impl PtySessionContext {
+    /// 创建新的会话上下文
+    fn new(
+        session: Arc<TokioMutex<PtySession>>,
+        reader: Arc<Mutex<PtyReader>>,
+        writer: Arc<Mutex<PtyWriter>>,
+        shell_type: Option<String>,
+    ) -> Self {
+        Self {
+            session,
+            reader,
+            writer,
+            read_task: None,
+            shell_type,
+            created_at: Instant::now(),
+        }
+    }
+}
+
+// ============================================================================
 // PTY 处理器
 // ============================================================================
 
 /// PTY 模块处理器
 /// 
-/// 管理 PTY 会话的生命周期，处理终端相关的消息
+/// 管理多个 PTY 会话的生命周期，处理终端相关的消息
 pub struct PtyHandler {
-    /// 当前 PTY 会话 (每个连接一个会话)
-    session: TokioMutex<Option<Arc<TokioMutex<PtySession>>>>,
-    /// PTY 读取器
-    reader: TokioMutex<Option<Arc<Mutex<PtyReader>>>>,
-    /// PTY 写入器
-    writer: TokioMutex<Option<Arc<Mutex<PtyWriter>>>>,
+    /// 会话管理器: session_id → PtySessionContext
+    sessions: TokioMutex<HashMap<String, PtySessionContext>>,
     /// WebSocket 发送器 (用于发送 PTY 输出)
     ws_sender: TokioMutex<Option<WsSender>>,
-    /// 读取任务句柄
-    read_task: TokioMutex<Option<tokio::task::JoinHandle<()>>>,
-    /// Shell 类型 (用于 Shell Integration)
-    shell_type: TokioMutex<Option<String>>,
 }
 
 impl PtyHandler {
     /// 创建新的 PTY 处理器
     pub fn new() -> Self {
         Self {
-            session: TokioMutex::new(None),
-            reader: TokioMutex::new(None),
-            writer: TokioMutex::new(None),
+            sessions: TokioMutex::new(HashMap::new()),
             ws_sender: TokioMutex::new(None),
-            read_task: TokioMutex::new(None),
-            shell_type: TokioMutex::new(None),
         }
     }
     
@@ -85,7 +116,10 @@ impl PtyHandler {
         cwd: Option<String>,
         env: Option<HashMap<String, String>>,
     ) -> Result<Option<ServerResponse>, RouterError> {
-        log_info!("初始化 PTY 会话: shell_type={:?}, cwd={:?}", shell_type, cwd);
+        // 生成唯一的 session_id
+        let session_id = Uuid::new_v4().to_string();
+        
+        log_info!("初始化 PTY 会话: session_id={}, shell_type={:?}, cwd={:?}", session_id, shell_type, cwd);
         
         // 创建 PTY 会话
         let (pty_session, pty_reader, pty_writer) = PtySession::new(
@@ -97,66 +131,56 @@ impl PtyHandler {
             env.as_ref(),
         ).map_err(|e| RouterError::ModuleError(format!("创建 PTY 会话失败: {}", e)))?;
         
-        // 保存会话和读写器
+        // 创建会话上下文
         let pty_session = Arc::new(TokioMutex::new(pty_session));
         let pty_reader = Arc::new(Mutex::new(pty_reader));
         let pty_writer = Arc::new(Mutex::new(pty_writer));
         
-        {
-            let mut session = self.session.lock().await;
-            *session = Some(Arc::clone(&pty_session));
-        }
-        {
-            let mut reader = self.reader.lock().await;
-            *reader = Some(Arc::clone(&pty_reader));
-        }
-        {
-            let mut writer = self.writer.lock().await;
-            *writer = Some(Arc::clone(&pty_writer));
-        }
-        {
-            let mut st = self.shell_type.lock().await;
-            *st = shell_type.clone();
-        }
+        let mut context = PtySessionContext::new(
+            Arc::clone(&pty_session),
+            Arc::clone(&pty_reader),
+            Arc::clone(&pty_writer),
+            shell_type.clone(),
+        );
         
         // 启动 PTY 输出读取任务
-        self.start_read_task().await?;
+        let read_task = self.start_read_task(session_id.clone(), pty_reader, pty_writer, shell_type).await?;
+        context.read_task = Some(read_task);
         
-        log_info!("PTY 会话创建成功");
+        // 存储会话上下文
+        {
+            let mut sessions = self.sessions.lock().await;
+            sessions.insert(session_id.clone(), context);
+        }
         
-        // 返回成功响应
+        log_info!("PTY 会话创建成功: session_id={}", session_id);
+        
+        // 返回成功响应，包含 session_id
         Ok(Some(ServerResponse::new(
             ModuleType::Pty,
             "init_complete",
             serde_json::json!({
-                "success": true
+                "success": true,
+                "session_id": session_id
             }),
         )))
     }
     
     /// 启动 PTY 输出读取任务
-    async fn start_read_task(&self) -> Result<(), RouterError> {
-        let reader = {
-            let reader_guard = self.reader.lock().await;
-            reader_guard.clone()
-        };
-        
+    /// 
+    /// 返回任务句柄，由调用者负责存储
+    async fn start_read_task(
+        &self,
+        session_id: String,
+        reader: Arc<Mutex<PtyReader>>,
+        writer: Arc<Mutex<PtyWriter>>,
+        shell_type: Option<String>,
+    ) -> Result<tokio::task::JoinHandle<()>, RouterError> {
         let ws_sender = {
             let ws_sender_guard = self.ws_sender.lock().await;
             ws_sender_guard.clone()
         };
         
-        let writer = {
-            let writer_guard = self.writer.lock().await;
-            writer_guard.clone()
-        };
-        
-        let shell_type = {
-            let st = self.shell_type.lock().await;
-            st.clone()
-        };
-        
-        let reader = reader.ok_or_else(|| RouterError::ModuleError("PTY reader not initialized".to_string()))?;
         let ws_sender = ws_sender.ok_or_else(|| RouterError::ModuleError("WebSocket sender not set".to_string()))?;
         
         // 启动读取任务
@@ -177,13 +201,21 @@ impl PtyHandler {
                 
                 match result {
                     Ok(Ok((data, n))) if n > 0 => {
-                        log_debug!("读取 PTY 输出: {} 字节", n);
+                        log_debug!("读取 PTY 输出: session_id={}, {} 字节", session_id, n);
                         
-                        // 构建带 module 字段的响应
-                        // 对于二进制数据，我们直接发送，TypeScript 端会根据连接上下文处理
+                        // 构建带 session_id 前缀的二进制帧
+                        // 格式: [session_id_length: u8][session_id: bytes][data: bytes]
+                        let session_id_bytes = session_id.as_bytes();
+                        let session_id_len = session_id_bytes.len() as u8;
+                        
+                        let mut frame = Vec::with_capacity(1 + session_id_bytes.len() + n);
+                        frame.push(session_id_len);
+                        frame.extend_from_slice(session_id_bytes);
+                        frame.extend_from_slice(&data[..n]);
+                        
                         let mut sender = ws_sender.lock().await;
-                        if let Err(e) = sender.send(Message::Binary(data[..n].to_vec().into())).await {
-                            log_error!("发送 PTY 输出失败: {}", e);
+                        if let Err(e) = sender.send(Message::Binary(frame.into())).await {
+                            log_error!("发送 PTY 输出失败: session_id={}, {}", session_id, e);
                             break;
                         }
                         drop(sender);
@@ -193,126 +225,127 @@ impl PtyHandler {
                             first_output = false;
                             if let Some(ref st) = shell_type {
                                 if let Some(script) = get_shell_integration_script(st) {
-                                    if let Some(ref writer) = writer {
-                                        let mut w = writer.lock().unwrap();
-                                        if let Err(e) = w.write(script.as_bytes()) {
-                                            log_error!("发送 Shell Integration 脚本失败: {}", e);
-                                        } else {
-                                            log_debug!("Shell Integration 脚本已发送");
-                                        }
+                                    let mut w = writer.lock().unwrap();
+                                    if let Err(e) = w.write(script.as_bytes()) {
+                                        log_error!("发送 Shell Integration 脚本失败: session_id={}, {}", session_id, e);
+                                    } else {
+                                        log_debug!("Shell Integration 脚本已发送: session_id={}", session_id);
                                     }
                                 }
                             }
                         }
                     }
                     Ok(Ok(_)) => {
-                        // EOF
-                        log_info!("PTY 输出结束");
+                        // EOF - 进程退出
+                        log_info!("PTY 输出结束: session_id={}", session_id);
+                        
+                        // 发送 exit 事件
+                        let exit_response = ServerResponse::new(
+                            ModuleType::Pty,
+                            "exit",
+                            serde_json::json!({
+                                "session_id": session_id,
+                                "code": 0
+                            }),
+                        );
+                        let mut sender = ws_sender.lock().await;
+                        if let Err(e) = sender.send(Message::Text(exit_response.to_json().into())).await {
+                            log_error!("发送 exit 事件失败: session_id={}, {}", session_id, e);
+                        }
                         break;
                     }
                     Ok(Err(e)) => {
-                        log_error!("PTY 输出读取错误: {}", e);
+                        log_error!("PTY 输出读取错误: session_id={}, {}", session_id, e);
                         break;
                     }
                     Err(e) => {
-                        log_error!("PTY 读取任务错误: {}", e);
+                        log_error!("PTY 读取任务错误: session_id={}, {}", session_id, e);
                         break;
                     }
                 }
             }
         });
         
-        // 保存任务句柄
-        let mut read_task = self.read_task.lock().await;
-        *read_task = Some(task);
-        
-        Ok(())
+        Ok(task)
     }
     
     /// 处理 resize 消息 - 调整终端尺寸
-    async fn handle_resize(&self, cols: u16, rows: u16) -> Result<Option<ServerResponse>, RouterError> {
-        log_info!("调整终端尺寸: {}x{}", cols, rows);
+    async fn handle_resize(&self, session_id: &str, cols: u16, rows: u16) -> Result<Option<ServerResponse>, RouterError> {
+        log_info!("调整终端尺寸: session_id={}, {}x{}", session_id, cols, rows);
         
-        let session = {
-            let session_guard = self.session.lock().await;
-            session_guard.clone()
-        };
+        let sessions = self.sessions.lock().await;
+        let context = sessions.get(session_id)
+            .ok_or_else(|| RouterError::ModuleError(format!("SESSION_NOT_FOUND: {}", session_id)))?;
         
-        if let Some(session) = session {
-            let mut pty = session.lock().await;
-            pty.resize(cols, rows)
-                .map_err(|e| RouterError::ModuleError(format!("调整终端尺寸失败: {}", e)))?;
-        } else {
-            return Err(RouterError::ModuleError("PTY 会话未初始化".to_string()));
-        }
+        let mut pty = context.session.lock().await;
+        pty.resize(cols, rows)
+            .map_err(|e| RouterError::ModuleError(format!("调整终端尺寸失败: {}", e)))?;
         
         Ok(None) // resize 不需要响应
     }
     
-    /// 写入数据到 PTY
-    pub async fn write_data(&self, data: &[u8]) -> Result<(), RouterError> {
-        let writer = {
-            let writer_guard = self.writer.lock().await;
-            writer_guard.clone()
-        };
+    /// 写入数据到指定会话的 PTY
+    pub async fn write_data(&self, session_id: &str, data: &[u8]) -> Result<(), RouterError> {
+        let sessions = self.sessions.lock().await;
+        let context = sessions.get(session_id)
+            .ok_or_else(|| RouterError::ModuleError(format!("SESSION_NOT_FOUND: {}", session_id)))?;
         
-        if let Some(writer) = writer {
-            let mut w = writer.lock().unwrap();
-            w.write(data)
-                .map_err(|e| RouterError::ModuleError(format!("写入 PTY 失败: {}", e)))?;
+        let mut w = context.writer.lock().unwrap();
+        w.write(data)
+            .map_err(|e| RouterError::ModuleError(format!("写入 PTY 失败: {}", e)))?;
+        
+        Ok(())
+    }
+    
+    /// 销毁指定会话
+    pub async fn handle_destroy(&self, session_id: &str) -> Result<(), RouterError> {
+        log_info!("销毁 PTY 会话: session_id={}", session_id);
+        
+        let mut sessions = self.sessions.lock().await;
+        if let Some(mut context) = sessions.remove(session_id) {
+            // 终止 PTY 进程
+            if let Ok(mut session) = context.session.try_lock() {
+                let _ = session.kill();
+            }
+            
+            // 等待读取任务结束
+            if let Some(task) = context.read_task.take() {
+                let _ = task.await;
+            }
+            
+            log_info!("PTY 会话已销毁: session_id={}", session_id);
+            Ok(())
         } else {
-            return Err(RouterError::ModuleError("PTY writer 未初始化".to_string()));
+            Err(RouterError::ModuleError(format!("SESSION_NOT_FOUND: {}", session_id)))
         }
-        
-        Ok(())
     }
     
-    /// 终止 PTY 会话
-    pub async fn kill(&self) -> Result<(), RouterError> {
-        log_info!("终止 PTY 会话");
+    /// 清理所有会话 (连接关闭时调用)
+    pub async fn cleanup_all(&self) {
+        log_info!("清理所有 PTY 会话");
         
-        // 终止 PTY 进程
-        let session = {
-            let session_guard = self.session.lock().await;
-            session_guard.clone()
-        };
-        
-        if let Some(session) = session {
-            let mut pty = session.lock().await;
-            let _ = pty.kill();
+        let mut sessions = self.sessions.lock().await;
+        for (session_id, mut context) in sessions.drain() {
+            log_info!("清理会话: {}", session_id);
+            
+            // 终止 PTY 进程
+            if let Ok(mut session) = context.session.try_lock() {
+                let _ = session.kill();
+            }
+            
+            // 等待读取任务结束
+            if let Some(task) = context.read_task.take() {
+                let _ = task.await;
+            }
         }
         
-        // 等待读取任务结束
-        let task = {
-            let mut read_task = self.read_task.lock().await;
-            read_task.take()
-        };
-        
-        if let Some(task) = task {
-            let _ = task.await;
-        }
-        
-        // 清理状态
-        {
-            let mut session = self.session.lock().await;
-            *session = None;
-        }
-        {
-            let mut reader = self.reader.lock().await;
-            *reader = None;
-        }
-        {
-            let mut writer = self.writer.lock().await;
-            *writer = None;
-        }
-        
-        Ok(())
+        log_info!("所有 PTY 会话已清理");
     }
     
-    /// 检查会话是否已初始化
-    pub async fn is_initialized(&self) -> bool {
-        let session = self.session.lock().await;
-        session.is_some()
+    /// 检查是否有活跃会话
+    pub async fn has_sessions(&self) -> bool {
+        let sessions = self.sessions.lock().await;
+        !sessions.is_empty()
     }
 }
 
@@ -341,10 +374,26 @@ impl ModuleHandler for PtyHandler {
                 self.handle_init(shell_type, shell_args, cwd, env).await
             }
             "resize" => {
+                // resize 需要 session_id
+                let session_id: Option<String> = msg.get_field("session_id");
+                let session_id = session_id.ok_or_else(|| {
+                    RouterError::ModuleError("SESSION_ID_REQUIRED".to_string())
+                })?;
+                
                 let cols: u16 = msg.get_field("cols").unwrap_or(80);
                 let rows: u16 = msg.get_field("rows").unwrap_or(24);
                 
-                self.handle_resize(cols, rows).await
+                self.handle_resize(&session_id, cols, rows).await
+            }
+            "destroy" => {
+                // destroy 需要 session_id
+                let session_id: Option<String> = msg.get_field("session_id");
+                let session_id = session_id.ok_or_else(|| {
+                    RouterError::ModuleError("SESSION_ID_REQUIRED".to_string())
+                })?;
+                
+                self.handle_destroy(&session_id).await?;
+                Ok(None)
             }
             "env" => {
                 // env 命令在原实现中只是记录日志，实际环境变量在 init 时设置

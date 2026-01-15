@@ -27,18 +27,10 @@ import { ILLMPostProcessor } from './voiceInputService';
 export interface LLMPostProcessorConfig {
   /** 是否启用后处理 */
   enabled: boolean;
-  /** 是否使用现有 AI 供应商 */
-  useExistingProvider: boolean;
-  /** 供应商 ID（使用现有供应商时） */
+  /** 供应商 ID */
   providerId?: string;
-  /** 模型 ID（使用现有供应商时） */
+  /** 模型 ID */
   modelId?: string;
-  /** 自定义端点 */
-  endpoint?: string;
-  /** 自定义模型名称 */
-  model?: string;
-  /** 自定义 API Key */
-  apiKey?: string;
   /** 预设列表 */
   presets: VoiceLLMPreset[];
   /** 当前激活的预设 ID */
@@ -318,56 +310,22 @@ export class LLMPostProcessor implements ILLMPostProcessor {
    * 解析供应商和模型配置
    */
   private resolveProviderAndModel(): { provider: Provider; model: ModelConfig } {
-    // 如果使用现有供应商
-    if (this.voiceSettings.useExistingProviderForPostProcessing) {
-      const providerId = this.voiceSettings.postProcessingProviderId;
-      const modelId = this.voiceSettings.postProcessingModelId;
-      
-      if (!providerId || !modelId) {
-        throw new Error('请在设置中配置 LLM 后处理的供应商和模型');
-      }
-      
-      const provider = this.configManager.getProvider(providerId);
-      if (!provider) {
-        throw new Error('LLM 后处理配置的供应商已被删除，请重新选择');
-      }
-      
-      const model = provider.models.find(m => m.id === modelId);
-      if (!model) {
-        throw new Error('LLM 后处理配置的模型已被删除，请重新选择');
-      }
-      
-      return { provider, model };
+    const providerId = this.voiceSettings.postProcessingProviderId;
+    const modelId = this.voiceSettings.postProcessingModelId;
+    
+    if (!providerId || !modelId) {
+      throw new Error('请在设置中配置 LLM 后处理的供应商和模型');
     }
     
-    // 使用自定义配置
-    const endpoint = this.voiceSettings.llmEndpoint;
-    const modelName = this.voiceSettings.llmModel;
-    const apiKey = this.voiceSettings.llmApiKey;
-    
-    if (!endpoint || !modelName || !apiKey) {
-      throw new Error('未配置自定义 LLM 端点、模型或 API Key');
+    const provider = this.configManager.getProvider(providerId);
+    if (!provider) {
+      throw new Error('LLM 后处理配置的供应商已被删除，请重新选择');
     }
     
-    // 构建临时供应商和模型配置
-    const provider: Provider = {
-      id: 'voice-llm-custom',
-      name: 'Voice LLM Custom',
-      endpoint,
-      keyConfig: {
-        mode: 'local',
-        localValue: apiKey,
-      },
-      models: [],
-    };
-    
-    const model: ModelConfig = {
-      id: 'voice-llm-custom-model',
-      name: modelName,
-      displayName: modelName,
-      temperature: 0.7,
-      topP: 1,
-    };
+    const model = provider.models.find(m => m.id === modelId);
+    if (!model) {
+      throw new Error('LLM 后处理配置的模型已被删除，请重新选择');
+    }
     
     return { provider, model };
   }

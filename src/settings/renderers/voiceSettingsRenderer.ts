@@ -332,15 +332,11 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
       // 使用的模型 - 点击可选择
       let modelName = '-';
       let currentModelValue = '';
-      if (voiceSettings.useExistingProviderForPostProcessing) {
-        if (voiceSettings.postProcessingProviderId && voiceSettings.postProcessingModelId) {
-          const provider = this.context.configManager.getProvider(voiceSettings.postProcessingProviderId);
-          const model = provider?.models.find(m => m.id === voiceSettings.postProcessingModelId);
-          modelName = model?.displayName || model?.name || '-';
-          currentModelValue = `${voiceSettings.postProcessingProviderId}|${voiceSettings.postProcessingModelId}`;
-        }
-      } else {
-        modelName = voiceSettings.llmModel || '-';
+      if (voiceSettings.postProcessingProviderId && voiceSettings.postProcessingModelId) {
+        const provider = this.context.configManager.getProvider(voiceSettings.postProcessingProviderId);
+        const model = provider?.models.find(m => m.id === voiceSettings.postProcessingModelId);
+        modelName = model?.displayName || model?.name || '-';
+        currentModelValue = `${voiceSettings.postProcessingProviderId}|${voiceSettings.postProcessingModelId}`;
       }
       
       // 构建模型选项
@@ -361,7 +357,6 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
             const [providerId, modelId] = value.split('|');
             this.context.plugin.settings.voice.postProcessingProviderId = providerId;
             this.context.plugin.settings.voice.postProcessingModelId = modelId;
-            this.context.plugin.settings.voice.useExistingProviderForPostProcessing = true;
           }
           await this.saveSettings();
           this.refreshDisplay();
@@ -405,15 +400,11 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
       // 使用的模型 - 点击可选择
       let modelName = '-';
       let currentModelValue = '';
-      if (voiceSettings.assistantConfig.useExistingProvider) {
-        if (voiceSettings.assistantConfig.providerId && voiceSettings.assistantConfig.modelId) {
-          const provider = this.context.configManager.getProvider(voiceSettings.assistantConfig.providerId);
-          const model = provider?.models.find(m => m.id === voiceSettings.assistantConfig.modelId);
-          modelName = model?.displayName || model?.name || '-';
-          currentModelValue = `${voiceSettings.assistantConfig.providerId}|${voiceSettings.assistantConfig.modelId}`;
-        }
-      } else {
-        modelName = voiceSettings.assistantConfig.model || '-';
+      if (voiceSettings.assistantConfig.providerId && voiceSettings.assistantConfig.modelId) {
+        const provider = this.context.configManager.getProvider(voiceSettings.assistantConfig.providerId);
+        const model = provider?.models.find(m => m.id === voiceSettings.assistantConfig.modelId);
+        modelName = model?.displayName || model?.name || '-';
+        currentModelValue = `${voiceSettings.assistantConfig.providerId}|${voiceSettings.assistantConfig.modelId}`;
       }
       
       // 构建模型选项
@@ -434,7 +425,6 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
             const [providerId, modelId] = value.split('|');
             this.context.plugin.settings.voice.assistantConfig.providerId = providerId;
             this.context.plugin.settings.voice.assistantConfig.modelId = modelId;
-            this.context.plugin.settings.voice.assistantConfig.useExistingProvider = true;
           }
           await this.saveSettings();
           this.refreshDisplay();
@@ -1197,25 +1187,8 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
 
     // 仅在启用后处理时显示详细配置
     if (voiceSettings.enableLLMPostProcessing) {
-      // 使用现有供应商
-      new Setting(card)
-        .setName(t('voice.settings.useExistingProvider'))
-        .setDesc(t('voice.settings.useExistingProviderDesc'))
-        .addToggle(toggle => toggle
-          .setValue(voiceSettings.useExistingProviderForPostProcessing)
-          .onChange(async (value) => {
-            this.context.plugin.settings.voice.useExistingProviderForPostProcessing = value;
-            await this.saveSettings();
-            this.refreshDisplay();
-          }));
-
-      if (voiceSettings.useExistingProviderForPostProcessing) {
-        // 选择现有供应商和模型
-        this.renderProviderModelBinding(card, 'postProcessing');
-      } else {
-        // 自定义 LLM 配置
-        this.renderCustomLLMConfig(card, 'postProcessing');
-      }
+      // 选择供应商和模型
+      this.renderProviderModelBinding(card, 'postProcessing');
 
       // 预设管理
       this.renderPresetManagement(card);
@@ -1311,95 +1284,6 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
         await this.saveSettings();
       });
     });
-  }
-
-  /**
-   * 渲染自定义 LLM 配置
-   */
-  private renderCustomLLMConfig(
-    containerEl: HTMLElement,
-    type: 'postProcessing' | 'assistant'
-  ): void {
-    const voiceSettings = this.context.plugin.settings.voice;
-
-    const getConfig = () => {
-      if (type === 'postProcessing') {
-        return {
-          endpoint: voiceSettings.llmEndpoint,
-          model: voiceSettings.llmModel,
-          apiKey: voiceSettings.llmApiKey,
-        };
-      } else {
-        return {
-          endpoint: voiceSettings.assistantConfig.endpoint,
-          model: voiceSettings.assistantConfig.model,
-          apiKey: voiceSettings.assistantConfig.apiKey,
-        };
-      }
-    };
-
-    const updateConfig = async (updates: { endpoint?: string; model?: string; apiKey?: string }) => {
-      if (type === 'postProcessing') {
-        if (updates.endpoint !== undefined) {
-          this.context.plugin.settings.voice.llmEndpoint = updates.endpoint;
-        }
-        if (updates.model !== undefined) {
-          this.context.plugin.settings.voice.llmModel = updates.model;
-        }
-        if (updates.apiKey !== undefined) {
-          this.context.plugin.settings.voice.llmApiKey = updates.apiKey;
-        }
-      } else {
-        if (updates.endpoint !== undefined) {
-          this.context.plugin.settings.voice.assistantConfig.endpoint = updates.endpoint;
-        }
-        if (updates.model !== undefined) {
-          this.context.plugin.settings.voice.assistantConfig.model = updates.model;
-        }
-        if (updates.apiKey !== undefined) {
-          this.context.plugin.settings.voice.assistantConfig.apiKey = updates.apiKey;
-        }
-      }
-      await this.saveSettings();
-    };
-
-    const config = getConfig();
-
-    // API 端点
-    new Setting(containerEl)
-      .setName(t('voice.settings.llmEndpoint'))
-      .setDesc(t('voice.settings.llmEndpointDesc'))
-      .addText(text => text
-        .setPlaceholder('https://api.openai.com/v1')
-        .setValue(config.endpoint || '')
-        .onChange(async (value) => {
-          await updateConfig({ endpoint: value });
-        }));
-
-    // 模型名称
-    new Setting(containerEl)
-      .setName(t('voice.settings.llmModel'))
-      .setDesc(t('voice.settings.llmModelDesc'))
-      .addText(text => text
-        .setPlaceholder('gpt-4o-mini')
-        .setValue(config.model || '')
-        .onChange(async (value) => {
-          await updateConfig({ model: value });
-        }));
-
-    // API Key
-    new Setting(containerEl)
-      .setName(t('voice.settings.llmApiKey'))
-      .setDesc(t('voice.settings.llmApiKeyDesc'))
-      .addText(text => {
-        text
-          .setPlaceholder(t('voice.settings.apiKeyPlaceholder'))
-          .setValue(config.apiKey || '')
-          .onChange(async (value) => {
-            await updateConfig({ apiKey: value });
-          });
-        text.inputEl.type = 'password';
-      });
   }
 
   /**
@@ -1614,25 +1498,8 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
 
     // 仅在启用助手时显示详细配置
     if (assistantConfig.enabled) {
-      // 使用现有供应商
-      new Setting(card)
-        .setName(t('voice.settings.useExistingProviderForAssistant'))
-        .setDesc(t('voice.settings.useExistingProviderForAssistantDesc'))
-        .addToggle(toggle => toggle
-          .setValue(assistantConfig.useExistingProvider)
-          .onChange(async (value) => {
-            this.context.plugin.settings.voice.assistantConfig.useExistingProvider = value;
-            await this.saveSettings();
-            this.refreshDisplay();
-          }));
-
-      if (assistantConfig.useExistingProvider) {
-        // 选择现有供应商和模型
-        this.renderProviderModelBinding(card, 'assistant');
-      } else {
-        // 自定义 LLM 配置
-        this.renderCustomLLMConfig(card, 'assistant');
-      }
+      // 选择供应商和模型
+      this.renderProviderModelBinding(card, 'assistant');
 
       // Q&A 系统提示词
       new Setting(card)
@@ -1731,6 +1598,60 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
             await this.saveSettings();
           });
       });
+
+    // 可见性设置
+    this.renderVisibilitySettings(card);
+  }
+
+  // ============================================================================
+  // 可见性设置
+  // ============================================================================
+
+  /**
+   * 渲染可见性设置
+   */
+  private renderVisibilitySettings(containerEl: HTMLElement): void {
+    new Setting(containerEl)
+      .setName(t('voice.settings.visibility'))
+      .setHeading();
+
+    const visibilitySettings = this.context.plugin.settings.featureVisibility.voice;
+
+    // 命令面板
+    new Setting(containerEl)
+      .setName(t('voice.settings.commandPalette'))
+      .setDesc(t('voice.settings.commandPaletteDesc'))
+      .addToggle(toggle => toggle
+        .setValue(visibilitySettings.showInCommandPalette)
+        .onChange(async (value) => {
+          this.context.plugin.settings.featureVisibility.voice.showInCommandPalette = value;
+          await this.saveSettings();
+          this.context.plugin.updateFeatureVisibility();
+        }));
+
+    // 编辑器右键菜单
+    new Setting(containerEl)
+      .setName(t('voice.settings.editorMenu'))
+      .setDesc(t('voice.settings.editorMenuDesc'))
+      .addToggle(toggle => toggle
+        .setValue(visibilitySettings.showInEditorMenu)
+        .onChange(async (value) => {
+          this.context.plugin.settings.featureVisibility.voice.showInEditorMenu = value;
+          await this.saveSettings();
+          this.context.plugin.updateFeatureVisibility();
+        }));
+
+    // 文件浏览器右键菜单
+    new Setting(containerEl)
+      .setName(t('voice.settings.fileMenu'))
+      .setDesc(t('voice.settings.fileMenuDesc'))
+      .addToggle(toggle => toggle
+        .setValue(visibilitySettings.showInFileMenu)
+        .onChange(async (value) => {
+          this.context.plugin.settings.featureVisibility.voice.showInFileMenu = value;
+          await this.saveSettings();
+          this.context.plugin.updateFeatureVisibility();
+        }));
   }
 
   // ============================================================================

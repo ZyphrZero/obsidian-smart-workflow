@@ -73,6 +73,14 @@ export const zhCN: TranslationKeys = {
     serverStartFailed: '服务器启动失败',
     wsReconnectFailed: 'WebSocket 连接断开，已达到最大重试次数\n请重新加载插件',
     wsReconnectSuccess: 'WebSocket 重连成功',
+    // 二进制下载相关
+    downloadingBinary: '正在下载服务器组件...',
+    updatingBinary: '正在更新服务器组件...',
+    verifyingBinary: '正在验证文件...',
+    binaryDownloadComplete: '服务器组件下载完成',
+    binaryUpdateComplete: '服务器组件更新完成',
+    binaryNotAvailable: '当前平台没有可用的服务器组件',
+    checksumMismatch: '文件校验失败，请重试',
 
   // Chat
   chat: {
@@ -323,6 +331,8 @@ export const zhCN: TranslationKeys = {
       showInRibbonTerminalDesc: '在左侧边栏显示打开终端快捷图标',
       showInNewTab: '新标签页',
       showInNewTabDesc: '在新标签页中显示"打开终端"选项',
+      showInStatusBar: '状态栏',
+      showInStatusBarDesc: '在底部状态栏显示终端快捷入口',
       // 服务器连接设置
       serverConnection: '服务器连接',
       serverConnectionDesc: '配置 WebSocket 断线重连参数',
@@ -330,6 +340,8 @@ export const zhCN: TranslationKeys = {
       reconnectMaxAttemptsDesc: '连接断开后的最大重连尝试次数（1-20）',
       reconnectInterval: '重连间隔',
       reconnectIntervalDesc: '每次重连的等待时间（毫秒，1000-30000）',
+      downloadAccelerator: '下载加速源',
+      downloadAcceleratorDesc: '用于加速 GitHub Release 下载，留空则直连',
       resetToDefaults: '重置为默认值',
       resetToDefaultsDesc: '将所有服务器连接设置恢复为默认值',
     },
@@ -696,6 +708,14 @@ export const zhCN: TranslationKeys = {
       promptTemplate: '润色 Prompt 模板',
       promptTemplateDesc: '自定义发送给 AI 的润色提示。使用 {{content}} 表示选中的文本。',
       resetPrompt: '重置为默认',
+      // 可见性设置
+      visibility: '功能显示',
+      commandPalette: '命令面板',
+      commandPaletteDesc: '在命令面板中显示写作命令',
+      editorMenu: '编辑器右键菜单',
+      editorMenuDesc: '在编辑器右键菜单中显示写作选项',
+      fileMenu: '文件浏览器右键菜单',
+      fileMenuDesc: '在文件浏览器右键菜单中显示写作选项',
     },
     // 快捷键提示
     shortcuts: {
@@ -771,6 +791,14 @@ export const zhCN: TranslationKeys = {
       defaultTargetLanguageDesc: '翻译时默认使用的目标语言',
       showOriginalByDefault: '默认显示原文',
       showOriginalByDefaultDesc: '打开翻译窗口时默认显示原文内容',
+      // 可见性设置
+      visibility: '功能显示',
+      commandPalette: '命令面板',
+      commandPaletteDesc: '在命令面板中显示翻译命令',
+      editorMenu: '编辑器右键菜单',
+      editorMenuDesc: '在编辑器右键菜单中显示翻译选项',
+      fileMenu: '文件浏览器右键菜单',
+      fileMenuDesc: '在文件浏览器右键菜单中显示翻译选项',
     },
   },
 
@@ -1081,16 +1109,8 @@ export const zhCN: TranslationKeys = {
       llmPostProcessingDesc: '使用 LLM 对转录结果进行润色、翻译等处理',
       enableLLMPostProcessing: '启用 LLM 后处理',
       enableLLMPostProcessingDesc: '启用后，转录结果会先经过 LLM 处理再插入',
-      useExistingProvider: '使用现有 AI 供应商',
-      useExistingProviderDesc: '复用已配置的 AI 供应商进行后处理',
       selectProviderModel: '选择供应商/模型',
       selectProviderModelDesc: '选择用于后处理的 AI 供应商和模型',
-      llmEndpoint: 'LLM API 端点',
-      llmEndpointDesc: '自定义 LLM 的 API 端点地址',
-      llmModel: 'LLM 模型',
-      llmModelDesc: '自定义 LLM 的模型名称',
-      llmApiKey: 'LLM API Key',
-      llmApiKeyDesc: '自定义 LLM 的 API Key',
       
       // 预设管理
       presetManagement: '预设管理',
@@ -1110,8 +1130,6 @@ export const zhCN: TranslationKeys = {
       assistantConfigDesc: '配置语音 AI 助手的行为',
       enableAssistant: '启用 AI 助手',
       enableAssistantDesc: '启用后可使用语音命令处理选中文本或提问',
-      useExistingProviderForAssistant: '使用现有 AI 供应商',
-      useExistingProviderForAssistantDesc: '复用已配置的 AI 供应商作为助手',
       qaSystemPrompt: '问答模式系统提示词',
       qaSystemPromptDesc: '无选中文本时，AI 助手使用的系统提示词',
       resetQaPrompt: '重置问答提示词',
@@ -1162,6 +1180,14 @@ export const zhCN: TranslationKeys = {
       notEnabled: '请先在设置中启用语音输入功能',
       pressKey: '按下快捷键...',
       resetHotkey: '恢复默认',
+      // 可见性设置
+      visibility: '功能显示',
+      commandPalette: '命令面板',
+      commandPaletteDesc: '在命令面板中显示语音输入命令',
+      editorMenu: '编辑器右键菜单',
+      editorMenuDesc: '在编辑器右键菜单中显示语音输入选项',
+      fileMenu: '文件浏览器右键菜单',
+      fileMenuDesc: '在文件浏览器右键菜单中显示语音输入选项',
     },
     // 状态表盘
     dashboard: {

@@ -54,6 +54,9 @@ tokio-util = "0.7"
 # 语言检测
 whatlang = "0.18"
 
+# UUID 生成
+uuid = { version = "1.0", features = ["v4"] }
+
 # 共享的 release profile 配置
 [profile.release]
 opt-level = 3       # 优化速度而非大小

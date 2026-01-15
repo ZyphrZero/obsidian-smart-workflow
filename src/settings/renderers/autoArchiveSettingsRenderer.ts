@@ -156,15 +156,18 @@ export class AutoArchiveSettingsRenderer extends BaseSettingsRenderer {
       .setName(t('autoArchive.settings.visibility'))
       .setHeading();
 
+    const visibilitySettings = this.context.plugin.settings.featureVisibility.autoArchive;
+
     // 命令面板
     new Setting(card)
       .setName(t('autoArchive.settings.commandPalette'))
       .setDesc(t('autoArchive.settings.commandPaletteDesc'))
       .addToggle(toggle => toggle
-        .setValue(this.context.plugin.settings.autoArchive.showInCommandPalette ?? true)
+        .setValue(visibilitySettings.showInCommandPalette ?? true)
         .onChange(async (value) => {
-          this.context.plugin.settings.autoArchive.showInCommandPalette = value;
+          this.context.plugin.settings.featureVisibility.autoArchive.showInCommandPalette = value;
           await this.context.plugin.saveSettings();
+          this.context.plugin.updateFeatureVisibility();
         })
       );
 
@@ -173,10 +176,11 @@ export class AutoArchiveSettingsRenderer extends BaseSettingsRenderer {
       .setName(t('autoArchive.settings.editorMenu'))
       .setDesc(t('autoArchive.settings.editorMenuDesc'))
       .addToggle(toggle => toggle
-        .setValue(this.context.plugin.settings.autoArchive.showInEditorMenu ?? true)
+        .setValue(visibilitySettings.showInEditorMenu ?? true)
         .onChange(async (value) => {
-          this.context.plugin.settings.autoArchive.showInEditorMenu = value;
+          this.context.plugin.settings.featureVisibility.autoArchive.showInEditorMenu = value;
           await this.context.plugin.saveSettings();
+          this.context.plugin.updateFeatureVisibility();
         })
       );
 
@@ -185,10 +189,11 @@ export class AutoArchiveSettingsRenderer extends BaseSettingsRenderer {
       .setName(t('autoArchive.settings.fileMenu'))
       .setDesc(t('autoArchive.settings.fileMenuDesc'))
       .addToggle(toggle => toggle
-        .setValue(this.context.plugin.settings.autoArchive.showInFileMenu ?? true)
+        .setValue(visibilitySettings.showInFileMenu ?? true)
         .onChange(async (value) => {
-          this.context.plugin.settings.autoArchive.showInFileMenu = value;
+          this.context.plugin.settings.featureVisibility.autoArchive.showInFileMenu = value;
           await this.context.plugin.saveSettings();
+          this.context.plugin.updateFeatureVisibility();
         })
       );
   }

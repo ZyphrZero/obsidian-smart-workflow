@@ -131,11 +131,33 @@ async fn handle_connection(
                     }
                     Message::Binary(data) => {
                         // 二进制数据 - 写入 PTY
+                        // 格式: [session_id_length: u8][session_id: bytes][data: bytes]
                         log_debug!("收到二进制数据: {} 字节", data.len());
-                        if router.pty_handler().is_initialized().await {
-                            if let Err(e) = router.pty_handler().write_data(&data).await {
-                                log_error!("写入 PTY 失败: {}", e);
+                        
+                        if data.len() < 2 {
+                            log_error!("二进制数据格式错误: 数据太短");
+                            continue;
+                        }
+                        
+                        let session_id_len = data[0] as usize;
+                        if data.len() < 1 + session_id_len {
+                            log_error!("二进制数据格式错误: session_id 长度不足");
+                            continue;
+                        }
+                        
+                        let session_id = match std::str::from_utf8(&data[1..1 + session_id_len]) {
+                            Ok(s) => s,
+                            Err(e) => {
+                                log_error!("二进制数据格式错误: session_id 不是有效 UTF-8: {}", e);
+                                continue;
                             }
+                        };
+                        
+                        let pty_data = &data[1 + session_id_len..];
+                        log_debug!("写入 PTY: session_id={}, {} 字节", session_id, pty_data.len());
+                        
+                        if let Err(e) = router.pty_handler().write_data(session_id, pty_data).await {
+                            log_error!("写入 PTY 失败: session_id={}, {}", session_id, e);
                         }
                     }
                     Message::Close(_) => {
@@ -164,10 +186,8 @@ async fn handle_connection(
     
     log_info!("WebSocket 连接已关闭");
     
-    // 清理 PTY 会话
-    if router.pty_handler().is_initialized().await {
-        let _ = router.pty_handler().kill().await;
-    }
+    // 清理所有 PTY 会话
+    router.pty_handler().cleanup_all().await;
     
     // 清理 Voice 模块资源
     router.voice_handler().cleanup().await;
@@ -211,22 +231,13 @@ async fn handle_text_message(
             }
         }
         Err(e) => {
-            // 消息解析错误 - 可能是纯文本输入 (用于 PTY)
-            // 如果 PTY 已初始化，将文本写入 PTY
-            if router.pty_handler().is_initialized().await {
-                log_debug!("将文本作为 PTY 输入: {} 字节", text.len());
-                if let Err(write_err) = router.pty_handler().write_data(text.as_bytes()).await {
-                    log_error!("写入 PTY 失败: {}", write_err);
-                }
-            } else {
-                // PTY 未初始化，返回解析错误
-                log_error!("消息解析错误: {}", e);
-                
-                // 尝试从原始 JSON 中提取 module 字段用于错误响应
-                let module = extract_module_from_json(text);
-                let error_response = create_parse_error_response(module, &e);
-                send_response(ws_sender, &error_response).await?;
-            }
+            // 消息解析错误
+            log_error!("消息解析错误: {}", e);
+            
+            // 尝试从原始 JSON 中提取 module 字段用于错误响应
+            let module = extract_module_from_json(text);
+            let error_response = create_parse_error_response(module, &e);
+            send_response(ws_sender, &error_response).await?;
         }
     }
     

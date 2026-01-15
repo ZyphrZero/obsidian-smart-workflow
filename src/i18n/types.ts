@@ -87,6 +87,14 @@ export interface TranslationKeys {
     serverStartFailed: string;
     wsReconnectFailed: string;
     wsReconnectSuccess: string;
+    // 二进制下载相关
+    downloadingBinary: string;
+    updatingBinary: string;
+    verifyingBinary: string;
+    binaryDownloadComplete: string;
+    binaryUpdateComplete: string;
+    binaryNotAvailable: string;
+    checksumMismatch: string;
 
   // 聊天界面
   chat: {
@@ -342,6 +350,8 @@ export interface TranslationKeys {
       showInRibbonTerminalDesc: string;
       showInNewTab: string;
       showInNewTabDesc: string;
+      showInStatusBar: string;
+      showInStatusBarDesc: string;
       // 服务器连接设置
       serverConnection: string;
       serverConnectionDesc: string;
@@ -349,6 +359,8 @@ export interface TranslationKeys {
       reconnectMaxAttemptsDesc: string;
       reconnectInterval: string;
       reconnectIntervalDesc: string;
+      downloadAccelerator: string;
+      downloadAcceleratorDesc: string;
       resetToDefaults: string;
       resetToDefaultsDesc: string;
     };
@@ -734,6 +746,14 @@ export interface TranslationKeys {
       promptTemplate: string;
       promptTemplateDesc: string;
       resetPrompt: string;
+      // 可见性设置
+      visibility: string;
+      commandPalette: string;
+      commandPaletteDesc: string;
+      editorMenu: string;
+      editorMenuDesc: string;
+      fileMenu: string;
+      fileMenuDesc: string;
     };
     // 快捷键提示
     shortcuts: {
@@ -809,6 +829,14 @@ export interface TranslationKeys {
       defaultTargetLanguageDesc: string;
       showOriginalByDefault: string;
       showOriginalByDefaultDesc: string;
+      // 可见性设置
+      visibility: string;
+      commandPalette: string;
+      commandPaletteDesc: string;
+      editorMenu: string;
+      editorMenuDesc: string;
+      fileMenu: string;
+      fileMenuDesc: string;
     };
   };
 
@@ -1119,16 +1147,8 @@ export interface TranslationKeys {
       llmPostProcessingDesc: string;
       enableLLMPostProcessing: string;
       enableLLMPostProcessingDesc: string;
-      useExistingProvider: string;
-      useExistingProviderDesc: string;
       selectProviderModel: string;
       selectProviderModelDesc: string;
-      llmEndpoint: string;
-      llmEndpointDesc: string;
-      llmModel: string;
-      llmModelDesc: string;
-      llmApiKey: string;
-      llmApiKeyDesc: string;
       
       // 预设管理
       presetManagement: string;
@@ -1148,8 +1168,6 @@ export interface TranslationKeys {
       assistantConfigDesc: string;
       enableAssistant: string;
       enableAssistantDesc: string;
-      useExistingProviderForAssistant: string;
-      useExistingProviderForAssistantDesc: string;
       qaSystemPrompt: string;
       qaSystemPromptDesc: string;
       resetQaPrompt: string;
@@ -1200,6 +1218,14 @@ export interface TranslationKeys {
       notEnabled: string;
       pressKey: string;
       resetHotkey: string;
+      // 可见性设置
+      visibility: string;
+      commandPalette: string;
+      commandPaletteDesc: string;
+      editorMenu: string;
+      editorMenuDesc: string;
+      fileMenu: string;
+      fileMenuDesc: string;
     };
     // 状态表盘
     dashboard: {

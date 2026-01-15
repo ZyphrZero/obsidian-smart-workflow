@@ -76,6 +76,9 @@ export class TranslationSettingsRenderer extends BaseSettingsRenderer {
     // AI 供应商/模型绑定
     this.renderProviderBinding(contentEl);
 
+    // 可见性设置
+    this.renderVisibilitySettings(contentEl);
+
     // 翻译设置
     this.renderTranslationSettings(contentEl);
   }
@@ -174,6 +177,53 @@ export class TranslationSettingsRenderer extends BaseSettingsRenderer {
         model: displayName
       }));
     }
+  }
+
+  /**
+   * 渲染可见性设置
+   */
+  private renderVisibilitySettings(containerEl: HTMLElement): void {
+    new Setting(containerEl)
+      .setName(t('translation.settings.visibility'))
+      .setHeading();
+
+    const visibilitySettings = this.context.plugin.settings.featureVisibility.translation;
+
+    // 命令面板
+    new Setting(containerEl)
+      .setName(t('translation.settings.commandPalette'))
+      .setDesc(t('translation.settings.commandPaletteDesc'))
+      .addToggle(toggle => toggle
+        .setValue(visibilitySettings.showInCommandPalette)
+        .onChange(async (value) => {
+          this.context.plugin.settings.featureVisibility.translation.showInCommandPalette = value;
+          await this.saveSettings();
+          this.context.plugin.updateFeatureVisibility();
+        }));
+
+    // 编辑器右键菜单
+    new Setting(containerEl)
+      .setName(t('translation.settings.editorMenu'))
+      .setDesc(t('translation.settings.editorMenuDesc'))
+      .addToggle(toggle => toggle
+        .setValue(visibilitySettings.showInEditorMenu)
+        .onChange(async (value) => {
+          this.context.plugin.settings.featureVisibility.translation.showInEditorMenu = value;
+          await this.saveSettings();
+          this.context.plugin.updateFeatureVisibility();
+        }));
+
+    // 文件浏览器右键菜单
+    new Setting(containerEl)
+      .setName(t('translation.settings.fileMenu'))
+      .setDesc(t('translation.settings.fileMenuDesc'))
+      .addToggle(toggle => toggle
+        .setValue(visibilitySettings.showInFileMenu)
+        .onChange(async (value) => {
+          this.context.plugin.settings.featureVisibility.translation.showInFileMenu = value;
+          await this.saveSettings();
+          this.context.plugin.updateFeatureVisibility();
+        }));
   }
 
   /**

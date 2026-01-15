@@ -51,6 +51,23 @@ const REFERENCE_BINARY_SIZE = 5 * 1024 * 1024;
 // Project paths
 const RUST_DIR = path.join(__dirname, '..', 'rust-servers');
 const BINARIES_DIR = path.join(__dirname, '..', 'binaries');
+const MANIFEST_PATH = path.join(__dirname, '..', 'manifest.json');
+
+/**
+ * Get plugin version from manifest.json
+ */
+function getPluginVersion() {
+  try {
+    const content = fs.readFileSync(MANIFEST_PATH, 'utf8');
+    const manifest = JSON.parse(content);
+    if (typeof manifest.version === 'string' && manifest.version.trim()) {
+      return manifest.version.trim();
+    }
+  } catch (error) {
+    console.warn(`??  Failed to read manifest version: ${error.message}`);
+  }
+  return null;
+}
 
 /**
  * Get current platform identifier
@@ -110,6 +127,7 @@ function showHelp() {
 function buildServer(platformName, config, options) {
   const binaryName = `${SERVER_CONFIG.binaryPrefix}-${platformName}${config.ext}`;
   const outputPath = path.join(BINARIES_DIR, binaryName);
+  const pluginVersion = getPluginVersion();
   
   console.log(`📦 Building ${SERVER_CONFIG.displayName}...`);
   
@@ -140,7 +158,11 @@ function buildServer(platformName, config, options) {
       {
         cwd: RUST_DIR,
         stdio: 'inherit',
-        encoding: 'utf8'
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          ...(pluginVersion ? { SW_SERVER_VERSION: pluginVersion } : {}),
+        }
       }
     );
   } catch (error) {

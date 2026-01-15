@@ -41,6 +41,9 @@ import { CategoryConfirmModal } from './ui/categorizing/categoryConfirmModal';
 // 自动归档服务
 import { AutoArchiveService } from './services/automation/autoArchiveService';
 
+// 功能可见性管理器
+import { FeatureVisibilityManager } from './services/visibility';
+
 // 导入选择工具栏样式
 import './ui/selection/selectionToolbar.css';
 
@@ -172,12 +175,11 @@ export default class SmartWorkflowPlugin extends Plugin {
   // 自动归档服务（延迟初始化）
   private _autoArchiveService: AutoArchiveService | null = null;
 
-  // Ribbon 图标引用
-  private aiNamingRibbonIcon: HTMLElement | null = null;
-  private terminalRibbonIcon: HTMLElement | null = null;
-  private voiceInputRibbonIcon: HTMLElement | null = null;
+  // 功能可见性管理器
+  private _featureVisibilityManager: FeatureVisibilityManager | null = null;
 
-  // 按住模式相关
+  // 终端状态栏元素
+  private _terminalStatusBarItem: HTMLElement | null = null;  // 按住模式相关
   private pressModekeyupHandler: ((e: KeyboardEvent) => void) | null = null;
   private currentVoiceCommandId: string | null = null;
 
@@ -199,7 +201,13 @@ export default class SmartWorkflowPlugin extends Plugin {
       }
       
       const pluginDir = this.getPluginDir();
-      this._serverManager = new this._serverManagerModule.ServerManager(pluginDir);
+      const version = this.manifest.version;
+      const downloadAcceleratorUrl = this.settings.serverConnection?.downloadAcceleratorUrl ?? '';
+      this._serverManager = new this._serverManagerModule.ServerManager(
+        pluginDir,
+        version,
+        downloadAcceleratorUrl
+      );
       
       // 应用配置中的连接设置
       const { maxReconnectAttempts, reconnectInterval } = this.settings.serverConnection;
@@ -503,6 +511,18 @@ export default class SmartWorkflowPlugin extends Plugin {
     return this._voiceErrorHandler;
   }
 
+  /**
+   * 获取功能可见性管理器（延迟初始化）
+   */
+  get featureVisibilityManager(): FeatureVisibilityManager {
+    if (!this._featureVisibilityManager) {
+      debugLog('[SmartWorkflowPlugin] Initializing FeatureVisibilityManager...');
+      this._featureVisibilityManager = new FeatureVisibilityManager(this);
+      debugLog('[SmartWorkflowPlugin] FeatureVisibilityManager initialized');
+    }
+    return this._featureVisibilityManager;
+  }
+
 
   /**
    * 插件加载时调用
@@ -528,6 +548,9 @@ export default class SmartWorkflowPlugin extends Plugin {
     );
     debugLog('[SmartWorkflowPlugin] FileNameService initialized');
 
+    // 初始化功能可见性管理器并注册功能
+    this.registerFeatureVisibility();
+
     // 注册终端视图（仅桌面端，使用动态导入）
     if (this.isTerminalEnabled()) {
       // 预加载终端模块
@@ -545,94 +568,97 @@ export default class SmartWorkflowPlugin extends Plugin {
       (leaf: WorkspaceLeaf) => new WritingApplyView(leaf)
     );
 
-    // 添加侧边栏图标按钮 - AI 文件名生成
-    if (this.settings.featureVisibility.aiNaming.showInRibbon) {
-      this.aiNamingRibbonIcon = this.addRibbonIcon('sparkles', t('ribbon.aiFilenameTooltip'), async () => {
-        await this.handleGenerateCommand();
-      });
-    }
-
-    // 添加侧边栏图标按钮 - 打开终端（仅桌面端）
-    if (this.isTerminalEnabled() && this.settings.featureVisibility.terminal.showInRibbon) {
-      this.terminalRibbonIcon = this.addRibbonIcon('terminal-square', t('ribbon.terminalTooltip'), async () => {
-        await this.activateTerminalView();
-      });
-    }
-
-    // 添加命令面板命令 - AI 文件名生成
-    if (this.settings.featureVisibility.aiNaming.showInCommandPalette) {
-      this.addCommand({
-        id: 'generate-ai-filename',
-        name: t('commands.generateAiFilename'),
-        callback: async () => {
-          await this.handleGenerateCommand();
-        }
-      });
-    }
-
-    // 添加命令面板命令 - AI 标签生成
-    if (this.settings.tagging.enabled && this.settings.tagging.showInCommandPalette) {
-      this.addCommand({
-        id: 'generate-ai-tags',
-        name: t('tagging.commands.generateTags'),
-        checkCallback: (checking: boolean) => {
-          const file = this.app.workspace.getActiveFile();
-          if (file) {
-            if (!checking) {
-              this.handleGenerateTagsCommand(file);
-            }
-            return true;
-          }
+    // 添加命令面板命令 - AI 文件名生成（使用 checkCallback 实现动态可见性）
+    this.addCommand({
+      id: 'generate-ai-filename',
+      name: t('commands.generateAiFilename'),
+      checkCallback: (checking: boolean) => {
+        // 检查可见性配置
+        if (!this.featureVisibilityManager.isVisibleAt('aiNaming', 'showInCommandPalette')) {
           return false;
         }
-      });
-    }
+        if (!checking) {
+          this.handleGenerateCommand();
+        }
+        return true;
+      }
+    });
 
-    // 添加命令面板命令 - 智能归档
-    if (this.settings.archiving.enabled && this.settings.archiving.showInCommandPalette) {
-      this.addCommand({
-        id: 'smart-archive',
-        name: t('archiving.commands.archiveNote'),
-        checkCallback: (checking: boolean) => {
-          const file = this.app.workspace.getActiveFile();
-          if (file) {
-            if (!checking) {
-              this.handleSmartArchiveCommand(file);
-            }
-            return true;
-          }
+    // 添加命令面板命令 - AI 标签生成（使用 checkCallback 实现动态可见性）
+    this.addCommand({
+      id: 'generate-ai-tags',
+      name: t('tagging.commands.generateTags'),
+      checkCallback: (checking: boolean) => {
+        // 检查可见性配置
+        if (!this.featureVisibilityManager.isVisibleAt('tagging', 'showInCommandPalette')) {
           return false;
         }
-      });
-    }
-
-    // 添加命令 - 一键归档（标签+归档）
-    // 命令始终注册（只要功能启用），以便用户可以在 Obsidian 快捷键设置中配置
-    if (this.settings.autoArchive?.enabled) {
-      this.addCommand({
-        id: 'auto-archive',
-        name: t('autoArchive.commands.autoArchive'),
-        checkCallback: (checking: boolean) => {
-          const file = this.app.workspace.getActiveFile();
-          if (file && this.autoArchiveService.canProcess(file)) {
-            if (!checking) {
-              this.autoArchiveService.execute(file);
-            }
-            return true;
+        const file = this.app.workspace.getActiveFile();
+        if (file) {
+          if (!checking) {
+            this.handleGenerateTagsCommand(file);
           }
+          return true;
+        }
+        return false;
+      }
+    });
+
+    // 添加命令面板命令 - 智能归档（使用 checkCallback 实现动态可见性）
+    this.addCommand({
+      id: 'smart-archive',
+      name: t('archiving.commands.archiveNote'),
+      checkCallback: (checking: boolean) => {
+        // 检查可见性配置
+        if (!this.featureVisibilityManager.isVisibleAt('archiving', 'showInCommandPalette')) {
           return false;
         }
-      });
-    }
+        const file = this.app.workspace.getActiveFile();
+        if (file) {
+          if (!checking) {
+            this.handleSmartArchiveCommand(file);
+          }
+          return true;
+        }
+        return false;
+      }
+    });
 
-    // 添加打开终端命令（仅桌面端）
-    if (this.isTerminalEnabled() && this.settings.featureVisibility.terminal.showInCommandPalette) {
+    // 添加命令 - 一键归档（标签+归档，使用 checkCallback 实现动态可见性）
+    this.addCommand({
+      id: 'auto-archive',
+      name: t('autoArchive.commands.autoArchive'),
+      checkCallback: (checking: boolean) => {
+        // 检查可见性配置
+        if (!this.featureVisibilityManager.isVisibleAt('autoArchive', 'showInCommandPalette')) {
+          return false;
+        }
+        const file = this.app.workspace.getActiveFile();
+        if (file && this.autoArchiveService.canProcess(file)) {
+          if (!checking) {
+            this.autoArchiveService.execute(file);
+          }
+          return true;
+        }
+        return false;
+      }
+    });
+
+    // 添加打开终端命令（仅桌面端，使用 checkCallback 实现动态可见性）
+    if (!Platform.isMobile) {
       this.addCommand({
         id: 'open-terminal',
         name: t('commands.openTerminal'),
         hotkeys: [{ modifiers: ['Ctrl'], key: 'o' }],
-        callback: async () => {
-          await this.activateTerminalView();
+        checkCallback: (checking: boolean) => {
+          // 检查可见性配置
+          if (!this.featureVisibilityManager.isVisibleAt('terminal', 'showInCommandPalette')) {
+            return false;
+          }
+          if (!checking) {
+            this.activateTerminalView();
+          }
+          return true;
         }
       });
     }
@@ -804,64 +830,76 @@ export default class SmartWorkflowPlugin extends Plugin {
     }
 
     // ========================================================================
-    // 语音输入命令注册
-    // 注意：命令始终注册，不依赖 enabled 设置，这样用户可以先设置快捷键
+    // 语音输入命令注册（仅桌面端，使用 checkCallback 实现动态可见性）
     // ========================================================================
 
     // 语音听写命令
-    this.addCommand({
-      id: 'voice-dictation',
-      name: t('commands.voiceDictation'),
-      callback: async () => {
-        if (!this.settings.voice.enabled) {
-          NoticeHelper.warning(t('voice.settings.notEnabled'));
-          return;
-        }
-        // 如果已在录音中，则停止录音（支持 toggle 行为）
-        if (this._voiceInputService?.isRecording()) {
-          await this.finishVoiceRecording();
-          return;
-        }
-        await this.handleVoiceDictation();
-      }
-    });
-
-    // 语音助手命令
-    this.addCommand({
-      id: 'voice-assistant',
-      name: t('commands.voiceAssistant'),
-      callback: async () => {
-        if (!this.settings.voice.enabled) {
-          NoticeHelper.warning(t('voice.settings.notEnabled'));
-          return;
-        }
-        // 如果已在录音中，则停止录音（支持 toggle 行为）
-        if (this._voiceInputService?.isRecording()) {
-          await this.finishVoiceRecording();
-          return;
-        }
-        await this.handleVoiceAssistant();
-      }
-    });
-
-    // 取消录音命令
-    this.addCommand({
-      id: 'voice-cancel',
-      name: t('commands.voiceCancel'),
-      checkCallback: (checking: boolean) => {
-        // 只有在录音中时才显示此命令
-        if (this._voiceInputService?.isRecording()) {
+    if (!Platform.isMobile) {
+      this.addCommand({
+        id: 'voice-dictation',
+        name: t('commands.voiceDictation'),
+        checkCallback: (checking: boolean) => {
+          // 检查可见性配置
+          if (!this.featureVisibilityManager.isVisibleAt('voice', 'showInCommandPalette')) {
+            return false;
+          }
           if (!checking) {
-            this.cancelVoiceRecording();
+            // 如果已在录音中，则停止录音（支持 toggle 行为）
+            if (this._voiceInputService?.isRecording()) {
+              this.finishVoiceRecording();
+              return true;
+            }
+            this.handleVoiceDictation();
           }
           return true;
         }
-        return false;
-      }
-    });    // 添加编辑器右键菜单
-    if (this.settings.featureVisibility.aiNaming.showInEditorMenu) {
-      this.registerEvent(
-        this.app.workspace.on('editor-menu', (menu: Menu, _editor, _view) => {
+      });
+
+      // 语音助手命令
+      this.addCommand({
+        id: 'voice-assistant',
+        name: t('commands.voiceAssistant'),
+        checkCallback: (checking: boolean) => {
+          // 检查可见性配置
+          if (!this.featureVisibilityManager.isVisibleAt('voice', 'showInCommandPalette')) {
+            return false;
+          }
+          if (!checking) {
+            // 如果已在录音中，则停止录音（支持 toggle 行为）
+            if (this._voiceInputService?.isRecording()) {
+              this.finishVoiceRecording();
+              return true;
+            }
+            this.handleVoiceAssistant();
+          }
+          return true;
+        }
+      });
+
+      // 取消录音命令
+      this.addCommand({
+        id: 'voice-cancel',
+        name: t('commands.voiceCancel'),
+        checkCallback: (checking: boolean) => {
+          // 只有在录音中时才显示此命令
+          if (this._voiceInputService?.isRecording()) {
+            if (!checking) {
+              this.cancelVoiceRecording();
+            }
+            return true;
+          }
+          return false;
+        }
+      });
+    }
+
+    // 统一编辑器右键菜单注册 - 在回调中检查可见性
+    this.registerEvent(
+      this.app.workspace.on('editor-menu', (menu: Menu, _editor, _view) => {
+        const file = this.app.workspace.getActiveFile();
+
+        // AI 命名
+        if (this.featureVisibilityManager.isVisibleAt('aiNaming', 'showInEditorMenu')) {
           menu.addItem((item) => {
             item
               .setTitle(t('menu.generateAiFilename'))
@@ -870,138 +908,100 @@ export default class SmartWorkflowPlugin extends Plugin {
                 await this.handleGenerateCommand();
               });
           });
-        })
-      );
-    }
+        }
 
-    // 添加标签生成右键菜单
-    if (this.settings.tagging.enabled && this.settings.tagging.showInEditorMenu) {
-      this.registerEvent(
-        this.app.workspace.on('editor-menu', (menu: Menu, _editor, _view) => {
-          const file = this.app.workspace.getActiveFile();
-          if (file) {
-            menu.addItem((item) => {
-              item
-                .setTitle(t('tagging.commands.generateTags'))
-                .setIcon('tag')
-                .onClick(async () => {
-                  await this.handleGenerateTagsCommand(file);
-                });
-            });
-          }
-        })
-      );
-    }
+        // 标签生成
+        if (file && this.featureVisibilityManager.isVisibleAt('tagging', 'showInEditorMenu')) {
+          menu.addItem((item) => {
+            item
+              .setTitle(t('tagging.commands.generateTags'))
+              .setIcon('tag')
+              .onClick(async () => {
+                await this.handleGenerateTagsCommand(file);
+              });
+          });
+        }
 
-    // 添加智能归档右键菜单
-    if (this.settings.archiving.enabled && this.settings.archiving.showInEditorMenu) {
-      this.registerEvent(
-        this.app.workspace.on('editor-menu', (menu: Menu, _editor, _view) => {
-          const file = this.app.workspace.getActiveFile();
-          if (file && this.archiveService.canArchive(file)) {
-            menu.addItem((item) => {
-              item
-                .setTitle(t('archiving.commands.archiveNote'))
-                .setIcon('archive')
-                .onClick(async () => {
-                  await this.handleSmartArchiveCommand(file);
-                });
-            });
-          }
-        })
-      );
-    }
+        // 智能归档
+        if (file && this.featureVisibilityManager.isVisibleAt('archiving', 'showInEditorMenu') && this.archiveService.canArchive(file)) {
+          menu.addItem((item) => {
+            item
+              .setTitle(t('archiving.commands.archiveNote'))
+              .setIcon('archive')
+              .onClick(async () => {
+                await this.handleSmartArchiveCommand(file);
+              });
+          });
+        }
 
-    // 添加自动归档编辑器右键菜单
-    if (this.settings.autoArchive?.enabled && this.settings.autoArchive?.showInEditorMenu) {
-      this.registerEvent(
-        this.app.workspace.on('editor-menu', (menu: Menu, _editor, _view) => {
-          const file = this.app.workspace.getActiveFile();
-          if (file && this.autoArchiveService.canProcess(file)) {
-            menu.addItem((item) => {
-              item
-                .setTitle(t('autoArchive.commands.autoArchive'))
-                .setIcon('workflow')
-                .onClick(async () => {
-                  await this.autoArchiveService.execute(file);
-                });
-            });
-          }
-        })
-      );
-    }
+        // 自动归档
+        if (file && this.featureVisibilityManager.isVisibleAt('autoArchive', 'showInEditorMenu') && this.autoArchiveService.canProcess(file)) {
+          menu.addItem((item) => {
+            item
+              .setTitle(t('autoArchive.commands.autoArchive'))
+              .setIcon('workflow')
+              .onClick(async () => {
+                await this.autoArchiveService.execute(file);
+              });
+          });
+        }
+      })
+    );
 
-    // 添加文件浏览器右键菜单
-    if (this.settings.featureVisibility.aiNaming.showInFileMenu) {
-      this.registerEvent(
-        this.app.workspace.on('file-menu', (menu: Menu, file) => {
-          if (file instanceof TFile) {
-            menu.addItem((item) => {
-              item
-                .setTitle(t('menu.generateAiFilename'))
-                .setIcon('sparkles')
-                .onClick(async () => {
-                  await this.handleGenerateForFile(file);
-                });
-            });
-          }
-        })
-      );
-    }
+    // 统一文件浏览器右键菜单注册 - 在回调中检查可见性
+    this.registerEvent(
+      this.app.workspace.on('file-menu', (menu: Menu, file) => {
+        if (!(file instanceof TFile)) return;
 
-    // 添加标签生成文件浏览器右键菜单
-    if (this.settings.tagging.enabled && this.settings.tagging.showInFileMenu) {
-      this.registerEvent(
-        this.app.workspace.on('file-menu', (menu: Menu, file) => {
-          if (file instanceof TFile) {
-            menu.addItem((item) => {
-              item
-                .setTitle(t('tagging.commands.generateTags'))
-                .setIcon('tag')
-                .onClick(async () => {
-                  await this.handleGenerateTagsCommand(file);
-                });
-            });
-          }
-        })
-      );
-    }
+        // AI 命名
+        if (this.featureVisibilityManager.isVisibleAt('aiNaming', 'showInFileMenu')) {
+          menu.addItem((item) => {
+            item
+              .setTitle(t('menu.generateAiFilename'))
+              .setIcon('sparkles')
+              .onClick(async () => {
+                await this.handleGenerateForFile(file);
+              });
+          });
+        }
 
-    // 添加智能归档文件浏览器右键菜单
-    if (this.settings.archiving.enabled && this.settings.archiving.showInFileMenu) {
-      this.registerEvent(
-        this.app.workspace.on('file-menu', (menu: Menu, file) => {
-          if (file instanceof TFile && this.archiveService.canArchive(file)) {
-            menu.addItem((item) => {
-              item
-                .setTitle(t('archiving.commands.archiveNote'))
-                .setIcon('archive')
-                .onClick(async () => {
-                  await this.handleSmartArchiveCommand(file);
-                });
-            });
-          }
-        })
-      );
-    }
+        // 标签生成
+        if (this.featureVisibilityManager.isVisibleAt('tagging', 'showInFileMenu')) {
+          menu.addItem((item) => {
+            item
+              .setTitle(t('tagging.commands.generateTags'))
+              .setIcon('tag')
+              .onClick(async () => {
+                await this.handleGenerateTagsCommand(file);
+              });
+          });
+        }
 
-    // 添加自动归档文件浏览器右键菜单
-    if (this.settings.autoArchive?.enabled && this.settings.autoArchive?.showInFileMenu) {
-      this.registerEvent(
-        this.app.workspace.on('file-menu', (menu: Menu, file) => {
-          if (file instanceof TFile && this.autoArchiveService.canProcess(file)) {
-            menu.addItem((item) => {
-              item
-                .setTitle(t('autoArchive.commands.autoArchive'))
-                .setIcon('workflow')
-                .onClick(async () => {
-                  await this.autoArchiveService.execute(file);
-                });
-            });
-          }
-        })
-      );
-    }
+        // 智能归档
+        if (this.featureVisibilityManager.isVisibleAt('archiving', 'showInFileMenu') && this.archiveService.canArchive(file)) {
+          menu.addItem((item) => {
+            item
+              .setTitle(t('archiving.commands.archiveNote'))
+              .setIcon('archive')
+              .onClick(async () => {
+                await this.handleSmartArchiveCommand(file);
+              });
+          });
+        }
+
+        // 自动归档
+        if (this.featureVisibilityManager.isVisibleAt('autoArchive', 'showInFileMenu') && this.autoArchiveService.canProcess(file)) {
+          menu.addItem((item) => {
+            item
+              .setTitle(t('autoArchive.commands.autoArchive'))
+              .setIcon('workflow')
+              .onClick(async () => {
+                await this.autoArchiveService.execute(file);
+              });
+          });
+        }
+      })
+    );
 
     // 添加设置标签页
     this.addSettingTab(new SmartWorkflowSettingTab(this.app, this));
@@ -1016,6 +1016,11 @@ export default class SmartWorkflowPlugin extends Plugin {
     // 注册新标签页中的"打开终端"选项（仅桌面端）
     if (this.isTerminalEnabled() && this.settings.featureVisibility.terminal.showInNewTab) {
       this.registerNewTabTerminalAction();
+    }
+
+    // 初始化终端状态栏（仅桌面端）
+    if (this.isTerminalEnabled()) {
+      this.initTerminalStatusBar();
     }
 
     // 初始化选中文字浮动工具栏（如果启用）
@@ -1366,6 +1371,30 @@ export default class SmartWorkflowPlugin extends Plugin {
           ...loaded.featureVisibility?.terminal,
           // 移动端强制关闭终端功能
           enabled: Platform.isMobile ? false : (loaded.featureVisibility?.terminal?.enabled ?? DEFAULT_SETTINGS.featureVisibility.terminal.enabled)
+        },
+        voice: {
+          ...DEFAULT_SETTINGS.featureVisibility.voice,
+          ...loaded.featureVisibility?.voice
+        },
+        tagging: {
+          ...DEFAULT_SETTINGS.featureVisibility.tagging,
+          ...loaded.featureVisibility?.tagging
+        },
+        archiving: {
+          ...DEFAULT_SETTINGS.featureVisibility.archiving,
+          ...loaded.featureVisibility?.archiving
+        },
+        autoArchive: {
+          ...DEFAULT_SETTINGS.featureVisibility.autoArchive,
+          ...loaded.featureVisibility?.autoArchive
+        },
+        writing: {
+          ...DEFAULT_SETTINGS.featureVisibility.writing,
+          ...loaded.featureVisibility?.writing
+        },
+        translation: {
+          ...DEFAULT_SETTINGS.featureVisibility.translation,
+          ...loaded.featureVisibility?.translation
         }
       },
       selectionToolbar: {
@@ -1386,18 +1415,18 @@ export default class SmartWorkflowPlugin extends Plugin {
           ...loaded.writing?.actions
         }
       },
-      // 语音输入设置深度合并（包含 ASR 密钥迁移）
+      // 语音输入设置深度合并
       voice: {
         ...DEFAULT_SETTINGS.voice,
         ...loaded.voice,
-        primaryASR: this.migrateASRConfig({
+        primaryASR: {
           ...DEFAULT_SETTINGS.voice.primaryASR,
           ...loaded.voice?.primaryASR
-        }),
-        backupASR: loaded.voice?.backupASR ? this.migrateASRConfig({
+        },
+        backupASR: loaded.voice?.backupASR ? {
           ...DEFAULT_SETTINGS.voice.backupASR,
           ...loaded.voice.backupASR
-        }) : DEFAULT_SETTINGS.voice.backupASR,
+        } : DEFAULT_SETTINGS.voice.backupASR,
         llmPresets: loaded.voice?.llmPresets || DEFAULT_SETTINGS.voice.llmPresets,
         assistantConfig: {
           ...DEFAULT_SETTINGS.voice.assistantConfig,
@@ -1410,42 +1439,6 @@ export default class SmartWorkflowPlugin extends Plugin {
         ...loaded.serverConnection,
       }
     };
-  }
-
-  /**
-   * 迁移 ASR 配置中的旧密钥字段到新的 KeyConfig 格式
-   * @param config ASR 配置（可能包含旧字段）
-   * @returns 迁移后的 ASR 配置
-   */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private migrateASRConfig(config: any): import('./settings/settings').VoiceASRProviderConfig {
-    const result = { ...config };
-    
-    // 迁移 DashScope API Key (Qwen)
-    if (!result.dashscopeKeyConfig && result.dashscope_api_key) {
-      result.dashscopeKeyConfig = {
-        mode: 'local' as const,
-        localValue: result.dashscope_api_key
-      };
-    }
-    
-    // 迁移 Doubao access_token
-    if (!result.doubaoKeyConfig && result.access_token) {
-      result.doubaoKeyConfig = {
-        mode: 'local' as const,
-        localValue: result.access_token
-      };
-    }
-    
-    // 迁移 SiliconFlow API Key (SenseVoice)
-    if (!result.siliconflowKeyConfig && result.siliconflow_api_key) {
-      result.siliconflowKeyConfig = {
-        mode: 'local' as const,
-        localValue: result.siliconflow_api_key
-      };
-    }
-    
-    return result;
   }
 
   /**
@@ -1523,6 +1516,11 @@ export default class SmartWorkflowPlugin extends Plugin {
     // 更新调试模式
     setDebugMode(this.settings.debugMode);
     
+    // 更新功能可见性（Ribbon 图标的动态添加/移除）
+    if (this._featureVisibilityManager) {
+      this._featureVisibilityManager.updateAllVisibility();
+    }
+    
     // 更新终端服务的设置（仅当已初始化时）
     if (this._terminalService) {
       this._terminalService.updateSettings(this.settings.terminal);
@@ -1597,36 +1595,87 @@ export default class SmartWorkflowPlugin extends Plugin {
   }
 
   /**
+   * 注册功能可见性配置
+   * 在 onload 中调用，设置所有功能的 Ribbon 图标管理
+   */
+  private registerFeatureVisibility(): void {
+    // AI 命名功能
+    this.featureVisibilityManager.registerFeature({
+      id: 'aiNaming',
+      getVisibility: () => this.settings.featureVisibility.aiNaming,
+      ribbon: {
+        icon: 'sparkles',
+        tooltip: t('ribbon.aiFilenameTooltip'),
+        callback: () => this.handleGenerateCommand(),
+      },
+    });
+
+    // 终端功能（仅桌面端）
+    if (!Platform.isMobile) {
+      this.featureVisibilityManager.registerFeature({
+        id: 'terminal',
+        getVisibility: () => this.settings.featureVisibility.terminal,
+        ribbon: {
+          icon: 'terminal-square',
+          tooltip: t('ribbon.terminalTooltip'),
+          callback: () => this.activateTerminalView(),
+        },
+        onVisibilityChange: () => {
+          // 当终端可见性设置变更时，更新新标签页中的终端按钮
+          this.injectTerminalButtonToEmptyViews();
+          // 更新状态栏显示
+          this.updateTerminalStatusBar();
+        },
+      });
+    }
+
+    // 标签生成功能
+    this.featureVisibilityManager.registerFeature({
+      id: 'tagging',
+      getVisibility: () => this.settings.featureVisibility.tagging,
+    });
+
+    // 智能归档功能
+    this.featureVisibilityManager.registerFeature({
+      id: 'archiving',
+      getVisibility: () => this.settings.featureVisibility.archiving,
+    });
+
+    // 自动归档功能
+    this.featureVisibilityManager.registerFeature({
+      id: 'autoArchive',
+      getVisibility: () => this.settings.featureVisibility.autoArchive,
+    });
+
+    // 语音输入功能（仅桌面端）
+    if (!Platform.isMobile) {
+      this.featureVisibilityManager.registerFeature({
+        id: 'voice',
+        getVisibility: () => this.settings.featureVisibility.voice,
+      });
+    }
+
+    // 写作助手功能
+    this.featureVisibilityManager.registerFeature({
+      id: 'writing',
+      getVisibility: () => this.settings.featureVisibility.writing,
+    });
+
+    // 翻译功能
+    this.featureVisibilityManager.registerFeature({
+      id: 'translation',
+      getVisibility: () => this.settings.featureVisibility.translation,
+    });
+  }
+
+  /**
    * 更新功能显示设置
    * 供设置面板调用，实现 Ribbon 图标的实时显示/隐藏
    */
   updateFeatureVisibility(): void {
-    // 更新 AI 文件名生成 Ribbon 图标
-    if (this.settings.featureVisibility.aiNaming.showInRibbon) {
-      if (!this.aiNamingRibbonIcon) {
-        this.aiNamingRibbonIcon = this.addRibbonIcon('sparkles', t('ribbon.aiFilenameTooltip'), async () => {
-          await this.handleGenerateCommand();
-        });
-      }
-    } else {
-      if (this.aiNamingRibbonIcon) {
-        this.aiNamingRibbonIcon.remove();
-        this.aiNamingRibbonIcon = null;
-      }
-    }
-
-    // 更新终端 Ribbon 图标（仅桌面端）
-    if (this.isTerminalEnabled() && this.settings.featureVisibility.terminal.showInRibbon) {
-      if (!this.terminalRibbonIcon) {
-        this.terminalRibbonIcon = this.addRibbonIcon('terminal-square', t('ribbon.terminalTooltip'), async () => {
-          await this.activateTerminalView();
-        });
-      }
-    } else {
-      if (this.terminalRibbonIcon) {
-        this.terminalRibbonIcon.remove();
-        this.terminalRibbonIcon = null;
-      }
+    // 使用 FeatureVisibilityManager 统一更新所有功能的可见性
+    if (this._featureVisibilityManager) {
+      this._featureVisibilityManager.updateAllVisibility();
     }
   }
 
@@ -1635,6 +1684,15 @@ export default class SmartWorkflowPlugin extends Plugin {
    */
   async onunload() {
     debugLog(t('plugin.unloadingMessage'));
+
+    // 销毁功能可见性管理器（仅当已初始化时）
+    if (this._featureVisibilityManager) {
+      try {
+        this._featureVisibilityManager.destroy();
+      } catch (error) {
+        errorLog('销毁功能可见性管理器失败:', error);
+      }
+    }
 
     // 销毁选中文字浮动工具栏（仅当已初始化时）
     if (this._selectionToolbarManager) {
@@ -2237,13 +2295,27 @@ export default class SmartWorkflowPlugin extends Plugin {
 
   /**
    * 向所有空标签页注入"打开终端"按钮
+   * 根据 showInNewTab 设置决定是否注入或移除按钮
    */
   private injectTerminalButtonToEmptyViews(): void {
+    const shouldShow = this.settings.featureVisibility.terminal.enabled && 
+                       this.settings.featureVisibility.terminal.showInNewTab;
+    
     const emptyViews = document.querySelectorAll('.empty-state');
     
     emptyViews.forEach((emptyView) => {
+      const existingButton = emptyView.querySelector('.smart-workflow-terminal-action');
+      
+      if (!shouldShow) {
+        // 如果不应该显示，移除已存在的按钮
+        if (existingButton) {
+          existingButton.remove();
+        }
+        return;
+      }
+      
       // 检查是否已经注入过
-      if (emptyView.querySelector('.smart-workflow-terminal-action')) {
+      if (existingButton) {
         return;
       }
 
@@ -2264,6 +2336,52 @@ export default class SmartWorkflowPlugin extends Plugin {
       // 添加到操作列表
       actionsContainer.appendChild(terminalAction);
     });
+  }
+
+  /**
+   * 移除所有空标签页中的终端按钮
+   */
+  private removeTerminalButtonsFromEmptyViews(): void {
+    const buttons = document.querySelectorAll('.smart-workflow-terminal-action');
+    buttons.forEach((button) => button.remove());
+  }
+
+  /**
+   * 初始化终端状态栏
+   * 创建状态栏元素并根据设置决定是否显示
+   */
+  private initTerminalStatusBar(): void {
+    // 创建状态栏元素
+    this._terminalStatusBarItem = this.addStatusBarItem();
+    this._terminalStatusBarItem.addClass('smart-workflow-terminal-status-bar');
+    this._terminalStatusBarItem.setText('>_');
+    this._terminalStatusBarItem.setAttr('aria-label', t('ribbon.terminalTooltip'));
+    this._terminalStatusBarItem.style.cursor = 'pointer';
+    
+    // 添加点击事件
+    this._terminalStatusBarItem.addEventListener('click', () => {
+      this.activateTerminalView();
+    });
+    
+    // 根据设置决定是否显示
+    this.updateTerminalStatusBar();
+  }
+
+  /**
+   * 更新终端状态栏显示状态
+   * 根据 showInStatusBar 设置决定是否显示
+   */
+  private updateTerminalStatusBar(): void {
+    if (!this._terminalStatusBarItem) return;
+    
+    const shouldShow = this.settings.featureVisibility.terminal.enabled && 
+                       this.settings.featureVisibility.terminal.showInStatusBar;
+    
+    if (shouldShow) {
+      this._terminalStatusBarItem.style.display = '';
+    } else {
+      this._terminalStatusBarItem.style.display = 'none';
+    }
   }
 
   /**

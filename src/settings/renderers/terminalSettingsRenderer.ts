@@ -643,5 +643,16 @@ export class TerminalSettingsRenderer extends BaseSettingsRenderer {
           await this.saveSettings();
           this.context.plugin.updateFeatureVisibility();
         }));
+
+    new Setting(visibilityCard)
+      .setName(t('settingsDetails.advanced.showInStatusBar'))
+      .setDesc(t('settingsDetails.advanced.showInStatusBarDesc'))
+      .addToggle(toggle => toggle
+        .setValue(this.context.plugin.settings.featureVisibility.terminal.showInStatusBar)
+        .onChange(async (value) => {
+          this.context.plugin.settings.featureVisibility.terminal.showInStatusBar = value;
+          await this.saveSettings();
+          this.context.plugin.updateFeatureVisibility();
+        }));
   }
 }

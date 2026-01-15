@@ -106,6 +106,9 @@ export class TerminalInstance {
   private ptyClient: PtyClient | null = null;
   private serverManager: ServerManager | null = null;
   
+  // 会话 ID (多会话支持)
+  private sessionId: string | null = null;
+  
   // 事件取消函数
   private outputUnsubscribe: (() => void) | null = null;
   private exitUnsubscribe: (() => void) | null = null;
@@ -275,11 +278,8 @@ export class TerminalInstance {
       // 获取 PtyClient
       this.ptyClient = serverManager.pty();
       
-      // 设置事件处理器
-      this.setupPtyClientHandlers();
-      
-      // 初始化 PTY 会话
-      this.ptyClient.init({
+      // 初始化 PTY 会话并获取 session_id
+      this.sessionId = await this.ptyClient.init({
         shell_type: this.shellType === 'default' ? undefined : this.shellType,
         shell_args: this.options.shellArgs,
         cwd: this.options.cwd,
@@ -288,6 +288,11 @@ export class TerminalInstance {
           ...this.options.env
         }
       });
+      
+      debugLog('[Terminal] 获取到 session_id:', this.sessionId);
+      
+      // 设置会话级别的事件处理器
+      this.setupPtyClientHandlers();
       
       this.setupXtermHandlers();
       this.isInitialized = true;
@@ -304,26 +309,26 @@ export class TerminalInstance {
   }
 
   /**
-   * 设置 PtyClient 事件处理器
+   * 设置 PtyClient 事件处理器 (会话级别)
    */
   private setupPtyClientHandlers(): void {
-    if (!this.ptyClient) return;
+    if (!this.ptyClient || !this.sessionId) return;
     
-    // 处理输出数据
-    this.outputUnsubscribe = this.ptyClient.onOutput((data: Uint8Array) => {
+    // 处理输出数据 (会话级别)
+    this.outputUnsubscribe = this.ptyClient.onSessionOutput(this.sessionId, (data: Uint8Array) => {
       const text = new TextDecoder().decode(data);
       this.extractCwdFromOutput(text);
       this.xterm.write(data);
     });
     
-    // 处理退出事件
-    this.exitUnsubscribe = this.ptyClient.onExit((code: number) => {
+    // 处理退出事件 (会话级别)
+    this.exitUnsubscribe = this.ptyClient.onSessionExit(this.sessionId, (code: number) => {
       debugLog('[Terminal] PTY 会话退出, code:', code);
       this.xterm.write(`\r\n\x1b[33m[会话已结束, 退出码: ${code}]\x1b[0m\r\n`);
     });
     
-    // 处理错误事件
-    this.errorUnsubscribe = this.ptyClient.onError((code: string, message: string) => {
+    // 处理错误事件 (会话级别)
+    this.errorUnsubscribe = this.ptyClient.onSessionError(this.sessionId, (code: string, message: string) => {
       errorLog('[Terminal] PTY 错误:', code, message);
       this.xterm.write(`\r\n\x1b[1;31m[错误] ${message}\x1b[0m\r\n`);
     });
@@ -332,15 +337,15 @@ export class TerminalInstance {
   private setupXtermHandlers(): void {
     // 处理用户输入
     this.xterm.onData((data) => {
-      if (this.ptyClient) {
-        this.ptyClient.write(data);
+      if (this.ptyClient && this.sessionId) {
+        this.ptyClient.write(this.sessionId, data);
       }
     });
     
     this.xterm.onBinary((data) => {
-      if (this.ptyClient) {
+      if (this.ptyClient && this.sessionId) {
         const binaryData = Uint8Array.from(atob(data), c => c.charCodeAt(0));
-        this.ptyClient.writeBinary(binaryData);
+        this.ptyClient.writeBinary(this.sessionId, binaryData);
       }
     });
     
@@ -379,8 +384,8 @@ export class TerminalInstance {
       if (event.ctrlKey && event.key === 'v') {
         event.preventDefault();
         navigator.clipboard.readText().then(text => {
-          if (text && this.ptyClient) {
-            this.ptyClient.write(text);
+          if (text && this.ptyClient && this.sessionId) {
+            this.ptyClient.write(this.sessionId, text);
           }
         }).catch(error => {
           errorLog('[Terminal] Paste failed:', error);
@@ -397,8 +402,8 @@ export class TerminalInstance {
    * 发送调整大小消息
    */
   private sendResize(cols: number, rows: number): void {
-    if (this.ptyClient) {
-      this.ptyClient.resize(cols, rows);
+    if (this.ptyClient && this.sessionId) {
+      this.ptyClient.resize(this.sessionId, cols, rows);
     }
   }
 
@@ -436,6 +441,11 @@ export class TerminalInstance {
     this.exitUnsubscribe = null;
     this.errorUnsubscribe = null;
 
+    // 销毁 PTY 会话
+    if (this.ptyClient && this.sessionId) {
+      this.ptyClient.destroySession(this.sessionId);
+    }
+
     this.detach();
 
     if (this.renderer) {
@@ -443,9 +453,10 @@ export class TerminalInstance {
       this.renderer = null;
     }
 
-    // 清理 PtyClient 引用（不销毁，因为它是共享的）
+    // 清理引用
     this.ptyClient = null;
     this.serverManager = null;
+    this.sessionId = null;
 
     try { this.xterm.dispose(); } catch { /* ignore */ }
   }
@@ -635,8 +646,8 @@ export class TerminalInstance {
       async () => {
         try {
           const text = await navigator.clipboard.readText();
-          if (text && this.ptyClient) {
-            this.ptyClient.write(text);
+          if (text && this.ptyClient && this.sessionId) {
+            this.ptyClient.write(this.sessionId, text);
           }
         } catch (error) {
           errorLog('[Terminal] Paste failed:', error);
@@ -1186,8 +1197,8 @@ export class TerminalInstance {
    * 写入数据到终端
    */
   write(data: string): void {
-    if (this.ptyClient) {
-      this.ptyClient.write(data);
+    if (this.ptyClient && this.sessionId) {
+      this.ptyClient.write(this.sessionId, data);
     }
   }
 
@@ -1427,15 +1438,15 @@ export class TerminalInstance {
    */
   private clearScreen(): void {
     // 先发送 Ctrl+C 中断当前输入
-    if (this.ptyClient) {
-      this.ptyClient.write('\x03');
+    if (this.ptyClient && this.sessionId) {
+      this.ptyClient.write(this.sessionId, '\x03');
     }
     
     // 等待一小段时间让中断生效,然后发送清屏命令
     setTimeout(() => {
       const clearCommand = platform() === 'win32' ? 'cls\r' : 'clear\r';
-      if (this.ptyClient) {
-        this.ptyClient.write(clearCommand);
+      if (this.ptyClient && this.sessionId) {
+        this.ptyClient.write(this.sessionId, clearCommand);
       }
       debugLog('[Terminal] Screen cleared');
     }, 50);
@@ -1447,16 +1458,16 @@ export class TerminalInstance {
    */
   clearBuffer(): void {
     // 先发送 Ctrl+C 中断当前输入
-    if (this.ptyClient) {
-      this.ptyClient.write('\x03');
+    if (this.ptyClient && this.sessionId) {
+      this.ptyClient.write(this.sessionId, '\x03');
     }
     
     // 等待一小段时间让中断生效
     setTimeout(() => {
       // 发送清屏命令到 shell
       const clearCommand = platform() === 'win32' ? 'cls\r' : 'clear\r';
-      if (this.ptyClient) {
-        this.ptyClient.write(clearCommand);
+      if (this.ptyClient && this.sessionId) {
+        this.ptyClient.write(this.sessionId, clearCommand);
       }
       
       // 清除 xterm.js 的滚动缓冲区和状态

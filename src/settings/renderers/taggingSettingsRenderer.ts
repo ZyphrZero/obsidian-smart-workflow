@@ -105,34 +105,39 @@ export class TaggingSettingsRenderer extends BaseSettingsRenderer {
       .setName(t('tagging.settings.visibility'))
       .setHeading();
 
+    const visibilitySettings = this.context.plugin.settings.featureVisibility.tagging;
+
     new Setting(taggingCard)
       .setName(t('tagging.settings.commandPalette'))
       .setDesc(t('tagging.settings.commandPaletteDesc'))
       .addToggle(toggle => toggle
-        .setValue(settings.showInCommandPalette)
+        .setValue(visibilitySettings.showInCommandPalette)
         .onChange(async (value) => {
-          settings.showInCommandPalette = value;
+          this.context.plugin.settings.featureVisibility.tagging.showInCommandPalette = value;
           await this.saveSettings();
+          this.context.plugin.updateFeatureVisibility();
         }));
 
     new Setting(taggingCard)
       .setName(t('tagging.settings.editorMenu'))
       .setDesc(t('tagging.settings.editorMenuDesc'))
       .addToggle(toggle => toggle
-        .setValue(settings.showInEditorMenu)
+        .setValue(visibilitySettings.showInEditorMenu)
         .onChange(async (value) => {
-          settings.showInEditorMenu = value;
+          this.context.plugin.settings.featureVisibility.tagging.showInEditorMenu = value;
           await this.saveSettings();
+          this.context.plugin.updateFeatureVisibility();
         }));
 
     new Setting(taggingCard)
       .setName(t('tagging.settings.fileMenu'))
       .setDesc(t('tagging.settings.fileMenuDesc'))
       .addToggle(toggle => toggle
-        .setValue(settings.showInFileMenu)
+        .setValue(visibilitySettings.showInFileMenu)
         .onChange(async (value) => {
-          settings.showInFileMenu = value;
+          this.context.plugin.settings.featureVisibility.tagging.showInFileMenu = value;
           await this.saveSettings();
+          this.context.plugin.updateFeatureVisibility();
         }));
 
     // Prompt 模板
@@ -366,34 +371,39 @@ export class TaggingSettingsRenderer extends BaseSettingsRenderer {
       .setName(t('archiving.settings.visibility'))
       .setHeading();
 
+    const archivingVisibilitySettings = this.context.plugin.settings.featureVisibility.archiving;
+
     new Setting(archivingCard)
       .setName(t('archiving.settings.commandPalette'))
       .setDesc(t('archiving.settings.commandPaletteDesc'))
       .addToggle(toggle => toggle
-        .setValue(settings.showInCommandPalette)
+        .setValue(archivingVisibilitySettings.showInCommandPalette)
         .onChange(async (value) => {
-          settings.showInCommandPalette = value;
+          this.context.plugin.settings.featureVisibility.archiving.showInCommandPalette = value;
           await this.saveSettings();
+          this.context.plugin.updateFeatureVisibility();
         }));
 
     new Setting(archivingCard)
       .setName(t('archiving.settings.editorMenu'))
       .setDesc(t('archiving.settings.editorMenuDesc'))
       .addToggle(toggle => toggle
-        .setValue(settings.showInEditorMenu)
+        .setValue(archivingVisibilitySettings.showInEditorMenu)
         .onChange(async (value) => {
-          settings.showInEditorMenu = value;
+          this.context.plugin.settings.featureVisibility.archiving.showInEditorMenu = value;
           await this.saveSettings();
+          this.context.plugin.updateFeatureVisibility();
         }));
 
     new Setting(archivingCard)
       .setName(t('archiving.settings.fileMenu'))
       .setDesc(t('archiving.settings.fileMenuDesc'))
       .addToggle(toggle => toggle
-        .setValue(settings.showInFileMenu)
+        .setValue(archivingVisibilitySettings.showInFileMenu)
         .onChange(async (value) => {
-          settings.showInFileMenu = value;
+          this.context.plugin.settings.featureVisibility.archiving.showInFileMenu = value;
           await this.saveSettings();
+          this.context.plugin.updateFeatureVisibility();
         }));
 
     // Prompt 模板

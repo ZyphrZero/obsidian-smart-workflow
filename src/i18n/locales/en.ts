@@ -73,6 +73,14 @@ export const en: TranslationKeys = {
     serverStartFailed: 'Server failed to start',
     wsReconnectFailed: 'WebSocket connection lost, max retry attempts reached\nPlease reload the plugin',
     wsReconnectSuccess: 'WebSocket reconnected successfully',
+    // Binary download
+    downloadingBinary: 'Downloading server component...',
+    updatingBinary: 'Updating server component...',
+    verifyingBinary: 'Verifying file...',
+    binaryDownloadComplete: 'Server component downloaded',
+    binaryUpdateComplete: 'Server component updated',
+    binaryNotAvailable: 'No server component available for this platform',
+    checksumMismatch: 'File verification failed, please retry',
 
   // Chat
   chat: {
@@ -323,6 +331,8 @@ export const en: TranslationKeys = {
       showInRibbonTerminalDesc: 'Show open terminal shortcut icon in left sidebar',
       showInNewTab: 'New Tab Page',
       showInNewTabDesc: 'Show "Open Terminal" option in new tab page',
+      showInStatusBar: 'Status Bar',
+      showInStatusBarDesc: 'Show terminal shortcut in bottom status bar',
       // Server connection settings
       serverConnection: 'Server Connection',
       serverConnectionDesc: 'Configure WebSocket reconnection parameters',
@@ -330,6 +340,8 @@ export const en: TranslationKeys = {
       reconnectMaxAttemptsDesc: 'Maximum number of reconnection attempts after disconnection (1-20)',
       reconnectInterval: 'Reconnect Interval',
       reconnectIntervalDesc: 'Wait time between reconnection attempts (ms, 1000-30000)',
+      downloadAccelerator: 'Download Accelerator',
+      downloadAcceleratorDesc: 'Accelerate GitHub Release downloads; leave empty for direct access',
       resetToDefaults: 'Reset to Defaults',
       resetToDefaultsDesc: 'Reset all server connection settings to default values',
     },
@@ -696,6 +708,14 @@ export const en: TranslationKeys = {
       promptTemplate: 'Polish Prompt Template',
       promptTemplateDesc: 'Customize the prompt sent to AI for polishing. Use {{content}} for selected text.',
       resetPrompt: 'Reset to Default',
+      // Visibility settings
+      visibility: 'Visibility Settings',
+      commandPalette: 'Command Palette',
+      commandPaletteDesc: 'Show writing commands in command palette',
+      editorMenu: 'Editor Context Menu',
+      editorMenuDesc: 'Show writing options in editor context menu',
+      fileMenu: 'File Browser Context Menu',
+      fileMenuDesc: 'Show writing options in file browser context menu',
     },
     // Keyboard shortcut hints
     shortcuts: {
@@ -771,6 +791,14 @@ export const en: TranslationKeys = {
       defaultTargetLanguageDesc: 'Default target language for translation',
       showOriginalByDefault: 'Show Original by Default',
       showOriginalByDefaultDesc: 'Show original text by default when opening translation modal',
+      // Visibility settings
+      visibility: 'Visibility Settings',
+      commandPalette: 'Command Palette',
+      commandPaletteDesc: 'Show translation commands in command palette',
+      editorMenu: 'Editor Context Menu',
+      editorMenuDesc: 'Show translation options in editor context menu',
+      fileMenu: 'File Browser Context Menu',
+      fileMenuDesc: 'Show translation options in file browser context menu',
     },
   },
 
@@ -1081,16 +1109,8 @@ export const en: TranslationKeys = {
       llmPostProcessingDesc: 'Use LLM to polish, translate, or process transcription results',
       enableLLMPostProcessing: 'Enable LLM Post-Processing',
       enableLLMPostProcessingDesc: 'When enabled, transcription results will be processed by LLM before insertion',
-      useExistingProvider: 'Use Existing AI Provider',
-      useExistingProviderDesc: 'Reuse configured AI provider for post-processing',
       selectProviderModel: 'Select Provider/Model',
       selectProviderModelDesc: 'Select AI provider and model for post-processing',
-      llmEndpoint: 'LLM API Endpoint',
-      llmEndpointDesc: 'Custom LLM API endpoint URL',
-      llmModel: 'LLM Model',
-      llmModelDesc: 'Custom LLM model name',
-      llmApiKey: 'LLM API Key',
-      llmApiKeyDesc: 'Custom LLM API Key',
       
       // Preset management
       presetManagement: 'Preset Management',
@@ -1110,8 +1130,6 @@ export const en: TranslationKeys = {
       assistantConfigDesc: 'Configure voice AI assistant behavior',
       enableAssistant: 'Enable AI Assistant',
       enableAssistantDesc: 'Enable voice commands to process selected text or ask questions',
-      useExistingProviderForAssistant: 'Use Existing AI Provider',
-      useExistingProviderForAssistantDesc: 'Reuse configured AI provider as assistant',
       qaSystemPrompt: 'Q&A Mode System Prompt',
       qaSystemPromptDesc: 'System prompt used when no text is selected',
       resetQaPrompt: 'Reset Q&A Prompt',
@@ -1162,6 +1180,14 @@ export const en: TranslationKeys = {
       notEnabled: 'Please enable voice input in settings first',
       pressKey: 'Press a key...',
       resetHotkey: 'Reset to default',
+      // Visibility settings
+      visibility: 'Visibility Settings',
+      commandPalette: 'Command Palette',
+      commandPaletteDesc: 'Show voice input commands in command palette',
+      editorMenu: 'Editor Context Menu',
+      editorMenuDesc: 'Show voice input options in editor context menu',
+      fileMenu: 'File Browser Context Menu',
+      fileMenuDesc: 'Show voice input options in file browser context menu',
     },
     // Status dashboard
     dashboard: {

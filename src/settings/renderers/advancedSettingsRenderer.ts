@@ -98,6 +98,18 @@ export class AdvancedSettingsRenderer extends BaseSettingsRenderer {
             await this.saveSettings();
           }
         }));
+
+    // 下载加速源
+    new Setting(connectionCard)
+      .setName(t('settingsDetails.advanced.downloadAccelerator'))
+      .setDesc(t('settingsDetails.advanced.downloadAcceleratorDesc'))
+      .addText(text => text
+        .setPlaceholder('https://ghfast.top/')
+        .setValue(settings.serverConnection.downloadAcceleratorUrl || '')
+        .onChange(async (value) => {
+          settings.serverConnection.downloadAcceleratorUrl = value.trim();
+          await this.saveSettings();
+        }));
     
     // 重置按钮
     new Setting(connectionCard)

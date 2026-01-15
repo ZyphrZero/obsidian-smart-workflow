@@ -349,56 +349,22 @@ ${selectedText}
    * 解析供应商和模型配置
    */
   private resolveProviderAndModel(): { provider: Provider; model: ModelConfig } {
-    // 如果使用现有供应商
-    if (this.assistantConfig.useExistingProvider) {
-      const providerId = this.assistantConfig.providerId;
-      const modelId = this.assistantConfig.modelId;
-      
-      if (!providerId || !modelId) {
-        throw new Error('请在设置中配置 AI 助手的供应商和模型');
-      }
-      
-      const provider = this.configManager.getProvider(providerId);
-      if (!provider) {
-        throw new Error('AI 助手配置的供应商已被删除，请重新选择');
-      }
-      
-      const model = provider.models.find(m => m.id === modelId);
-      if (!model) {
-        throw new Error('AI 助手配置的模型已被删除，请重新选择');
-      }
-      
-      return { provider, model };
+    const providerId = this.assistantConfig.providerId;
+    const modelId = this.assistantConfig.modelId;
+    
+    if (!providerId || !modelId) {
+      throw new Error('请在设置中配置 AI 助手的供应商和模型');
     }
     
-    // 使用自定义配置
-    const endpoint = this.assistantConfig.endpoint;
-    const modelName = this.assistantConfig.model;
-    const apiKey = this.assistantConfig.apiKey;
-    
-    if (!endpoint || !modelName || !apiKey) {
-      throw new Error('未配置自定义 AI 助手端点、模型或 API Key');
+    const provider = this.configManager.getProvider(providerId);
+    if (!provider) {
+      throw new Error('AI 助手配置的供应商已被删除，请重新选择');
     }
     
-    // 构建临时供应商和模型配置
-    const provider: Provider = {
-      id: 'voice-assistant-custom',
-      name: 'Voice Assistant Custom',
-      endpoint,
-      keyConfig: {
-        mode: 'local',
-        localValue: apiKey,
-      },
-      models: [],
-    };
-    
-    const model: ModelConfig = {
-      id: 'voice-assistant-custom-model',
-      name: modelName,
-      displayName: modelName,
-      temperature: 0.7,
-      topP: 1,
-    };
+    const model = provider.models.find(m => m.id === modelId);
+    if (!model) {
+      throw new Error('AI 助手配置的模型已被删除，请重新选择');
+    }
     
     return { provider, model };
   }

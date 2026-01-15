@@ -26,6 +26,7 @@ import { PtyClient } from './ptyClient';
 import { VoiceClient } from './voiceClient';
 import { LLMClient } from './llmClient';
 import { UtilsClient } from './utilsClient';
+import { BinaryDownloader, DownloadProgress } from './binaryDownloader';
 
 /**
  * 事件监听器类型
@@ -50,6 +51,12 @@ interface ReconnectConfig {
 export class ServerManager {
   /** 插件目录 */
   private pluginDir: string;
+  
+  /** 插件版本 */
+  private version: string;
+  
+  /** 二进制下载器 */
+  private binaryDownloader: BinaryDownloader;
   
   /** 服务器进程 */
   private process: ChildProcess | null = null;
@@ -99,8 +106,10 @@ export class ServerManager {
   private _llmClient: LLMClient | null = null;
   private _utilsClient: UtilsClient | null = null;
 
-  constructor(pluginDir: string) {
+  constructor(pluginDir: string, version: string = '0.0.0', downloadAcceleratorUrl: string = '') {
     this.pluginDir = pluginDir;
+    this.version = version;
+    this.binaryDownloader = new BinaryDownloader(pluginDir, version, downloadAcceleratorUrl);
   }
 
   // ============================================================================
@@ -329,11 +338,44 @@ export class ServerManager {
       
       const binaryPath = this.getBinaryPath();
       
-      if (!fs.existsSync(binaryPath)) {
-        throw new ServerManagerError(
-          ServerErrorCode.BINARY_NOT_FOUND,
-          `二进制文件未找到: ${binaryPath}`
+      // 检查二进制文件是否需要下载或更新
+      const needsDownload = !this.binaryDownloader.binaryExists();
+      const needsUpdate = this.binaryDownloader.needsUpdate();
+      
+      if (needsDownload || needsUpdate) {
+        const messageKey = needsUpdate ? 'notices.updatingBinary' : 'notices.downloadingBinary';
+        const defaultMessage = needsUpdate ? '正在更新服务器组件...' : '正在下载服务器组件...';
+        
+        debugLog(`[ServerManager] ${needsUpdate ? '二进制文件需要更新' : '二进制文件不存在'}，开始下载...`);
+        
+        const notice = new Notice(
+          t(messageKey) || defaultMessage,
+          0
         );
+        
+        try {
+          await this.binaryDownloader.download((progress) => {
+            if (progress.stage === 'downloading') {
+              notice.setMessage(
+                `${t(messageKey) || defaultMessage} ${Math.round(progress.percent)}%`
+              );
+            } else if (progress.stage === 'verifying') {
+              notice.setMessage(t('notices.verifyingBinary') || '正在验证文件...');
+            }
+          });
+          
+          notice.hide();
+          const completeKey = needsUpdate ? 'notices.binaryUpdateComplete' : 'notices.binaryDownloadComplete';
+          const completeMessage = needsUpdate ? '服务器组件更新完成' : '服务器组件下载完成';
+          new Notice(t(completeKey) || completeMessage, 3000);
+          
+        } catch (downloadError) {
+          notice.hide();
+          throw new ServerManagerError(
+            ServerErrorCode.BINARY_NOT_FOUND,
+            `下载二进制文件失败: ${downloadError instanceof Error ? downloadError.message : String(downloadError)}`
+          );
+        }
       }
       
       // 确保可执行权限 (Unix)

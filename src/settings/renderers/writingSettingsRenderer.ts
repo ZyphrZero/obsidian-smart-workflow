@@ -1,7 +1,6 @@
 /**
  * 写作设置渲染器
  * 负责渲染写作功能（润色、缩写、扩写等）的设置
-
  */
 
 import { Setting, setIcon } from 'obsidian';
@@ -76,6 +75,9 @@ export class WritingSettingsRenderer extends BaseSettingsRenderer {
 
     // AI 供应商/模型绑定
     this.renderProviderBinding(contentEl);
+
+    // 可见性设置
+    this.renderVisibilitySettings(contentEl);
 
     // Prompt 模板设置
     this.renderPromptTemplate(contentEl);
@@ -180,8 +182,54 @@ export class WritingSettingsRenderer extends BaseSettingsRenderer {
   }
 
   /**
-   * 渲染 Prompt 模板设置
+   * 渲染可见性设置
+   */
+  private renderVisibilitySettings(containerEl: HTMLElement): void {
+    new Setting(containerEl)
+      .setName(t('writing.settings.visibility'))
+      .setHeading();
 
+    const visibilitySettings = this.context.plugin.settings.featureVisibility.writing;
+
+    // 命令面板
+    new Setting(containerEl)
+      .setName(t('writing.settings.commandPalette'))
+      .setDesc(t('writing.settings.commandPaletteDesc'))
+      .addToggle(toggle => toggle
+        .setValue(visibilitySettings.showInCommandPalette)
+        .onChange(async (value) => {
+          this.context.plugin.settings.featureVisibility.writing.showInCommandPalette = value;
+          await this.saveSettings();
+          this.context.plugin.updateFeatureVisibility();
+        }));
+
+    // 编辑器右键菜单
+    new Setting(containerEl)
+      .setName(t('writing.settings.editorMenu'))
+      .setDesc(t('writing.settings.editorMenuDesc'))
+      .addToggle(toggle => toggle
+        .setValue(visibilitySettings.showInEditorMenu)
+        .onChange(async (value) => {
+          this.context.plugin.settings.featureVisibility.writing.showInEditorMenu = value;
+          await this.saveSettings();
+          this.context.plugin.updateFeatureVisibility();
+        }));
+
+    // 文件浏览器右键菜单
+    new Setting(containerEl)
+      .setName(t('writing.settings.fileMenu'))
+      .setDesc(t('writing.settings.fileMenuDesc'))
+      .addToggle(toggle => toggle
+        .setValue(visibilitySettings.showInFileMenu)
+        .onChange(async (value) => {
+          this.context.plugin.settings.featureVisibility.writing.showInFileMenu = value;
+          await this.saveSettings();
+          this.context.plugin.updateFeatureVisibility();
+        }));
+  }
+
+  /**
+   * 渲染 Prompt 模板设置
    */
   private renderPromptTemplate(containerEl: HTMLElement): void {
     // Prompt 模板标题

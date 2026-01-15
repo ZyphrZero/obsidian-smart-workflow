@@ -138,15 +138,25 @@ export interface PtyConfig {
 }
 
 /**
- * PTY 事件映射
+ * PTY 初始化响应
  */
-export interface PtyEvents {
-  /** 输出数据 */
-  'output': (data: Uint8Array) => void;
-  /** 会话退出 */
-  'exit': (code: number) => void;
-  /** 错误 */
-  'error': (code: string, message: string) => void;
+export interface PtyInitResponse {
+  /** 会话 ID */
+  session_id: string;
+  /** 是否成功 */
+  success: boolean;
+}
+
+/**
+ * 会话级别事件监听器
+ */
+export interface SessionEventListeners {
+  /** 输出数据处理器 */
+  output: Set<(data: Uint8Array) => void>;
+  /** 退出处理器 */
+  exit: Set<(code: number) => void>;
+  /** 错误处理器 */
+  error: Set<(code: string, message: string) => void>;
 }
 
 // ============================================================================

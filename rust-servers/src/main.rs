@@ -13,6 +13,11 @@ pub mod utils;
 use server::{Server, ServerConfig};
 use std::env;
 
+const SERVER_VERSION: &str = match option_env!("SW_SERVER_VERSION") {
+    Some(version) => version,
+    None => env!("CARGO_PKG_VERSION"),
+};
+
 /// 日志宏
 macro_rules! log_info {
     ($($arg:tt)*) => {
@@ -50,6 +55,11 @@ fn parse_args() -> u16 {
                 eprintln!("Options:");
                 eprintln!("  -p, --port <PORT>  监听端口 (0 表示随机端口) [默认: 0]");
                 eprintln!("  -h, --help         显示帮助信息");
+                eprintln!("  -V, --version      显示版本信息");
+                std::process::exit(0);
+            }
+            "-V" | "--version" => {
+                println!("{}", SERVER_VERSION);
                 std::process::exit(0);
             }
             _ => {}
