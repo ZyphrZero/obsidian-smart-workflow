@@ -67,10 +67,23 @@ export class AdvancedSettingsRenderer extends BaseSettingsRenderer {
       .setDesc(t('settingsDetails.advanced.serverConnectionDesc'))
       .setHeading();
 
+    // 使用条件区域渲染设置内容，便于重置时刷新
+    this.toggleConditionalSection(
+      connectionCard,
+      'server-connection-settings',
+      true,
+      (el) => this.renderServerConnectionContent(el)
+    );
+  }
+
+  /**
+   * 渲染服务器连接设置内容
+   */
+  private renderServerConnectionContent(containerEl: HTMLElement): void {
     const settings = this.context.plugin.settings;
 
     // 最大重连次数
-    new Setting(connectionCard)
+    new Setting(containerEl)
       .setName(t('settingsDetails.advanced.reconnectMaxAttempts'))
       .setDesc(t('settingsDetails.advanced.reconnectMaxAttemptsDesc'))
       .addText(text => text
@@ -85,7 +98,7 @@ export class AdvancedSettingsRenderer extends BaseSettingsRenderer {
         }));
 
     // 重连间隔
-    new Setting(connectionCard)
+    new Setting(containerEl)
       .setName(t('settingsDetails.advanced.reconnectInterval'))
       .setDesc(t('settingsDetails.advanced.reconnectIntervalDesc'))
       .addText(text => text
@@ -100,7 +113,7 @@ export class AdvancedSettingsRenderer extends BaseSettingsRenderer {
         }));
 
     // 下载加速源
-    new Setting(connectionCard)
+    new Setting(containerEl)
       .setName(t('settingsDetails.advanced.downloadAccelerator'))
       .setDesc(t('settingsDetails.advanced.downloadAcceleratorDesc'))
       .addText(text => text
@@ -112,7 +125,7 @@ export class AdvancedSettingsRenderer extends BaseSettingsRenderer {
         }));
     
     // 重置按钮
-    new Setting(connectionCard)
+    new Setting(containerEl)
       .setName(t('settingsDetails.advanced.resetToDefaults'))
       .setDesc(t('settingsDetails.advanced.resetToDefaultsDesc'))
       .addButton(button => button
@@ -120,7 +133,12 @@ export class AdvancedSettingsRenderer extends BaseSettingsRenderer {
         .onClick(async () => {
           this.context.plugin.settings.serverConnection = { ...DEFAULT_SERVER_CONNECTION_SETTINGS };
           await this.saveSettings();
-          this.context.refreshDisplay();
+          // 移除并重新渲染设置内容
+          const parentCard = containerEl.parentElement;
+          if (parentCard) {
+            this.toggleConditionalSection(parentCard, 'server-connection-settings', false, () => {});
+            this.toggleConditionalSection(parentCard, 'server-connection-settings', true, (el) => this.renderServerConnectionContent(el));
+          }
         }));
   }
 }

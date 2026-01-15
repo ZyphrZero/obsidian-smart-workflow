@@ -57,6 +57,9 @@ export class ServerManager {
   /** 插件版本 */
   private version: string;
   
+  /** 调试模式 */
+  private debugMode: boolean;
+  
   /** 二进制下载器 */
   private binaryDownloader: BinaryDownloader;
   
@@ -111,9 +114,15 @@ export class ServerManager {
   private _llmClient: LLMClient | null = null;
   private _utilsClient: UtilsClient | null = null;
 
-  constructor(pluginDir: string, version: string = '0.0.0', downloadAcceleratorUrl: string = '') {
+  constructor(
+    pluginDir: string,
+    version: string = '0.0.0',
+    downloadAcceleratorUrl: string = '',
+    debugMode: boolean = false
+  ) {
     this.pluginDir = pluginDir;
     this.version = version;
+    this.debugMode = debugMode;
     this.binaryDownloader = new BinaryDownloader(pluginDir, version, downloadAcceleratorUrl);
   }
 
@@ -146,6 +155,10 @@ export class ServerManager {
    * 确保二进制文件已更新（不启动服务器）
    */
   async ensureBinaryUpdated(): Promise<void> {
+    if (this.debugMode) {
+      debugLog('[ServerManager] 调试模式已开启，跳过二进制版本检查与下载');
+      return;
+    }
     await this.ensureBinaryReady();
   }
 
@@ -415,6 +428,17 @@ export class ServerManager {
   }
 
   private async ensureBinaryReady(): Promise<void> {
+    if (this.debugMode) {
+      const binaryPath = this.getBinaryPath();
+      if (!fs.existsSync(binaryPath)) {
+        throw new ServerManagerError(
+          ServerErrorCode.BINARY_NOT_FOUND,
+          '调试模式已开启，未进行版本检查与下载，请确保服务器二进制已存在'
+        );
+      }
+      return;
+    }
+    
     if (this.binaryUpdatePromise) {
       return this.binaryUpdatePromise;
     }
@@ -949,5 +973,10 @@ export class ServerManager {
       Object.assign(this.reconnectConfig, config);
       debugLog('[ServerManager] 更新重连配置:', this.reconnectConfig);
     }
+  }
+  
+  updateDebugMode(debugMode: boolean): void {
+    this.debugMode = debugMode;
+    debugLog('[ServerManager] 更新调试模式:', this.debugMode);
   }
 }

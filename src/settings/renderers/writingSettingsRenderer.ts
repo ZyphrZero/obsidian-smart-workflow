@@ -57,30 +57,53 @@ export class WritingSettingsRenderer extends BaseSettingsRenderer {
 
     // 点击切换展开状态
     headerEl.addEventListener('click', () => {
-      if (isExpanded) {
-        this.context.expandedSections.delete('writing-feature-expanded');
-      } else {
+      const newExpanded = !isExpanded;
+      if (newExpanded) {
         this.context.expandedSections.add('writing-feature-expanded');
+      } else {
+        this.context.expandedSections.delete('writing-feature-expanded');
       }
-      this.refreshDisplay();
+      
+      // 更新图标
+      chevronEl.empty();
+      setIcon(chevronEl, newExpanded ? 'chevron-down' : 'chevron-right');
+      
+      // 更新标题下边距
+      headerEl.setCssProps({
+        'margin-bottom': newExpanded ? '20px' : '0'
+      });
+      
+      // 使用 toggleConditionalSection 局部更新内容区域
+      this.toggleConditionalSection(
+        writingCard,
+        'writing-content',
+        newExpanded,
+        (el) => this.renderWritingContent(el),
+        headerEl
+      );
     });
 
-    // 如果未展开，不渲染内容
-    if (!isExpanded) {
-      return;
+    // 如果展开，渲染内容
+    if (isExpanded) {
+      const contentEl = writingCard.createDiv({ cls: 'conditional-section-writing-content feature-content' });
+      this.renderWritingContent(contentEl);
     }
+  }
 
-    // 内容容器
-    const contentEl = writingCard.createDiv({ cls: 'feature-content' });
-
+  /**
+   * 渲染写作设置内容（供 toggleConditionalSection 使用）
+   */
+  private renderWritingContent(containerEl: HTMLElement): void {
+    containerEl.addClass('feature-content');
+    
     // AI 供应商/模型绑定
-    this.renderProviderBinding(contentEl);
+    this.renderProviderBinding(containerEl);
 
     // 可见性设置
-    this.renderVisibilitySettings(contentEl);
+    this.renderVisibilitySettings(containerEl);
 
     // Prompt 模板设置
-    this.renderPromptTemplate(contentEl);
+    this.renderPromptTemplate(containerEl);
   }
 
   /**
@@ -157,14 +180,17 @@ export class WritingSettingsRenderer extends BaseSettingsRenderer {
           };
         }
         await this.saveSettings();
-        this.refreshDisplay();
       });
     });
 
+    // 绑定状态容器（用于局部更新）
+    const statusContainerId = 'writing-binding-status';
+    const statusContainer = containerEl.createDiv({ cls: `conditional-section-${statusContainerId}` });
+    
     // 显示当前绑定状态
     if (currentProvider && currentModel) {
       const displayName = currentModel.displayName || currentModel.name;
-      const statusEl = containerEl.createDiv({ cls: 'feature-binding-status' });
+      const statusEl = statusContainer.createDiv({ cls: 'feature-binding-status' });
       statusEl.setCssProps({
         'font-size': '0.85em',
         color: 'var(--text-muted)',
@@ -242,9 +268,13 @@ export class WritingSettingsRenderer extends BaseSettingsRenderer {
     promptDesc.setCssProps({ 'margin-bottom': '12px' });
     promptDesc.appendText(t('writing.settings.promptTemplateDesc'));
 
+    // 保存 textarea 引用用于重置
+    let textareaEl: HTMLTextAreaElement | null = null;
+
     // Prompt 模板编辑器
     new Setting(containerEl)
       .addTextArea(text => {
+        textareaEl = text.inputEl;
         text
           .setValue(this.context.plugin.settings.writing.polishPromptTemplate)
           .onChange(async (value) => {
@@ -272,7 +302,10 @@ export class WritingSettingsRenderer extends BaseSettingsRenderer {
             this.context.plugin.settings.featureBindings.writing.promptTemplate = DEFAULT_POLISH_PROMPT_TEMPLATE;
           }
           await this.saveSettings();
-          this.refreshDisplay();
+          // 局部更新 textarea 值，避免全量刷新
+          if (textareaEl) {
+            textareaEl.value = DEFAULT_POLISH_PROMPT_TEMPLATE;
+          }
         }));
   }
 }

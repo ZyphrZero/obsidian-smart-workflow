@@ -47,7 +47,7 @@ export class TaggingSettingsRenderer extends BaseSettingsRenderer {
     const settings = this.context.plugin.settings.tagging;
 
     // 启用标签生成
-    new Setting(taggingCard)
+    const enableSetting = new Setting(taggingCard)
       .setName(t('tagging.settings.enabled'))
       .setDesc(t('tagging.settings.enabledDesc'))
       .addToggle(toggle => toggle
@@ -55,18 +55,34 @@ export class TaggingSettingsRenderer extends BaseSettingsRenderer {
         .onChange(async (value) => {
           settings.enabled = value;
           await this.saveSettings();
-          this.refreshDisplay();
+          // 使用 toggleConditionalSection 局部更新配置区域
+          this.toggleConditionalSection(
+            taggingCard,
+            'tagging-config',
+            value,
+            (el) => this.renderTaggingConfig(el),
+            enableSetting.settingEl
+          );
         }));
 
-    if (!settings.enabled) {
-      return; // 如果未启用，不显示其他选项
+    if (settings.enabled) {
+      // 创建条件区域容器
+      const configSection = taggingCard.createDiv({ cls: 'conditional-section-tagging-config' });
+      this.renderTaggingConfig(configSection);
     }
+  }
 
+  /**
+   * 渲染标签生成配置（供 toggleConditionalSection 使用）
+   */
+  private renderTaggingConfig(containerEl: HTMLElement): void {
+    const settings = this.context.plugin.settings.tagging;
+    
     // AI 模型配置（放在启用开关之后）
-    this.renderTaggingModelBinding(taggingCard);
+    this.renderTaggingModelBinding(containerEl);
 
     // 标签数量
-    new Setting(taggingCard)
+    new Setting(containerEl)
       .setName(t('tagging.settings.tagCount'))
       .setDesc(t('tagging.settings.tagCountDesc'))
       .addSlider(slider => slider
@@ -79,7 +95,7 @@ export class TaggingSettingsRenderer extends BaseSettingsRenderer {
         }));
 
     // 保留现有标签
-    new Setting(taggingCard)
+    new Setting(containerEl)
       .setName(t('tagging.settings.preserveExisting'))
       .setDesc(t('tagging.settings.preserveExistingDesc'))
       .addToggle(toggle => toggle
@@ -90,7 +106,7 @@ export class TaggingSettingsRenderer extends BaseSettingsRenderer {
         }));
 
     // 自动应用
-    new Setting(taggingCard)
+    new Setting(containerEl)
       .setName(t('tagging.settings.autoApply'))
       .setDesc(t('tagging.settings.autoApplyDesc'))
       .addToggle(toggle => toggle
@@ -101,13 +117,13 @@ export class TaggingSettingsRenderer extends BaseSettingsRenderer {
         }));
 
     // 显示设置
-    new Setting(taggingCard)
+    new Setting(containerEl)
       .setName(t('tagging.settings.visibility'))
       .setHeading();
 
     const visibilitySettings = this.context.plugin.settings.featureVisibility.tagging;
 
-    new Setting(taggingCard)
+    new Setting(containerEl)
       .setName(t('tagging.settings.commandPalette'))
       .setDesc(t('tagging.settings.commandPaletteDesc'))
       .addToggle(toggle => toggle
@@ -118,7 +134,7 @@ export class TaggingSettingsRenderer extends BaseSettingsRenderer {
           this.context.plugin.updateFeatureVisibility();
         }));
 
-    new Setting(taggingCard)
+    new Setting(containerEl)
       .setName(t('tagging.settings.editorMenu'))
       .setDesc(t('tagging.settings.editorMenuDesc'))
       .addToggle(toggle => toggle
@@ -129,7 +145,7 @@ export class TaggingSettingsRenderer extends BaseSettingsRenderer {
           this.context.plugin.updateFeatureVisibility();
         }));
 
-    new Setting(taggingCard)
+    new Setting(containerEl)
       .setName(t('tagging.settings.fileMenu'))
       .setDesc(t('tagging.settings.fileMenuDesc'))
       .addToggle(toggle => toggle
@@ -140,11 +156,15 @@ export class TaggingSettingsRenderer extends BaseSettingsRenderer {
           this.context.plugin.updateFeatureVisibility();
         }));
 
+    // 保存 textarea 引用用于重置
+    let textareaEl: HTMLTextAreaElement | null = null;
+
     // Prompt 模板
-    new Setting(taggingCard)
+    new Setting(containerEl)
       .setName(t('tagging.settings.promptTemplate'))
       .setDesc(t('tagging.settings.promptTemplateDesc'))
       .addTextArea(text => {
+        textareaEl = text.inputEl;
         text
           .setValue(settings.promptTemplate)
           .onChange(async (value) => {
@@ -158,7 +178,7 @@ export class TaggingSettingsRenderer extends BaseSettingsRenderer {
       });
 
     // 重置按钮
-    new Setting(taggingCard)
+    new Setting(containerEl)
       .setName(t('tagging.settings.resetToDefault'))
       .setDesc(t('tagging.settings.resetToDefaultDesc'))
       .addButton(button => button
@@ -166,7 +186,10 @@ export class TaggingSettingsRenderer extends BaseSettingsRenderer {
         .onClick(async () => {
           this.context.plugin.settings.tagging = { ...DEFAULT_TAGGING_SETTINGS };
           await this.saveSettings();
-          this.refreshDisplay();
+          // 局部更新 textarea 值，避免全量刷新
+          if (textareaEl) {
+            textareaEl.value = DEFAULT_TAGGING_SETTINGS.promptTemplate;
+          }
         }));
   }
 
@@ -228,14 +251,17 @@ export class TaggingSettingsRenderer extends BaseSettingsRenderer {
           };
         }
         await this.saveSettings();
-        this.refreshDisplay();
       });
     });
 
+    // 绑定状态容器（用于局部更新）
+    const statusContainerId = 'tagging-binding-status';
+    const statusContainer = containerEl.createDiv({ cls: `conditional-section-${statusContainerId}` });
+    
     // 显示绑定状态
     if (currentProvider && currentModel) {
       const displayName = currentModel.displayName || currentModel.name;
-      const statusEl = containerEl.createDiv({ cls: 'feature-binding-status' });
+      const statusEl = statusContainer.createDiv({ cls: 'feature-binding-status' });
       statusEl.setCssProps({
         'font-size': '0.85em',
         color: 'var(--text-muted)',
@@ -247,7 +273,7 @@ export class TaggingSettingsRenderer extends BaseSettingsRenderer {
       });
       statusEl.setText(t('tagging.settings.currentBinding', { provider: currentProvider.name, model: displayName }));
     } else {
-      const warningEl = containerEl.createDiv({ cls: 'feature-binding-warning' });
+      const warningEl = statusContainer.createDiv({ cls: 'feature-binding-warning' });
       warningEl.setCssProps({
         'font-size': '0.85em',
         color: 'var(--text-error)',
@@ -279,7 +305,7 @@ export class TaggingSettingsRenderer extends BaseSettingsRenderer {
     const settings = this.context.plugin.settings.archiving;
 
     // 启用归档
-    new Setting(archivingCard)
+    const enableSetting = new Setting(archivingCard)
       .setName(t('archiving.settings.enabled'))
       .setDesc(t('archiving.settings.enabledDesc'))
       .addToggle(toggle => toggle
@@ -287,18 +313,34 @@ export class TaggingSettingsRenderer extends BaseSettingsRenderer {
         .onChange(async (value) => {
           settings.enabled = value;
           await this.saveSettings();
-          this.refreshDisplay();
+          // 使用 toggleConditionalSection 局部更新配置区域
+          this.toggleConditionalSection(
+            archivingCard,
+            'archiving-config',
+            value,
+            (el) => this.renderArchivingConfig(el),
+            enableSetting.settingEl
+          );
         }));
 
-    if (!settings.enabled) {
-      return;
+    if (settings.enabled) {
+      // 创建条件区域容器
+      const configSection = archivingCard.createDiv({ cls: 'conditional-section-archiving-config' });
+      this.renderArchivingConfig(configSection);
     }
+  }
 
+  /**
+   * 渲染归档配置（供 toggleConditionalSection 使用）
+   */
+  private renderArchivingConfig(containerEl: HTMLElement): void {
+    const settings = this.context.plugin.settings.archiving;
+    
     // AI 模型配置（放在启用开关之后）
-    this.renderArchivingModelBinding(archivingCard);
+    this.renderArchivingModelBinding(containerEl);
 
     // 归档基础文件夹
-    new Setting(archivingCard)
+    new Setting(containerEl)
       .setName(t('archiving.settings.baseFolder'))
       .setDesc(t('archiving.settings.baseFolderDesc'))
       .addText(text => text
@@ -310,7 +352,7 @@ export class TaggingSettingsRenderer extends BaseSettingsRenderer {
         }));
 
     // 最小置信度
-    new Setting(archivingCard)
+    new Setting(containerEl)
       .setName(t('archiving.settings.minConfidence'))
       .setDesc(t('archiving.settings.minConfidenceDesc'))
       .addSlider(slider => slider
@@ -323,7 +365,7 @@ export class TaggingSettingsRenderer extends BaseSettingsRenderer {
         }));
 
     // 允许创建新分类
-    new Setting(archivingCard)
+    new Setting(containerEl)
       .setName(t('archiving.settings.createNewCategories'))
       .setDesc(t('archiving.settings.createNewCategoriesDesc'))
       .addToggle(toggle => toggle
@@ -334,7 +376,7 @@ export class TaggingSettingsRenderer extends BaseSettingsRenderer {
         }));
 
     // 归档前确认
-    new Setting(archivingCard)
+    new Setting(containerEl)
       .setName(t('archiving.settings.confirmBeforeArchive'))
       .setDesc(t('archiving.settings.confirmBeforeArchiveDesc'))
       .addToggle(toggle => toggle
@@ -345,7 +387,7 @@ export class TaggingSettingsRenderer extends BaseSettingsRenderer {
         }));
 
     // 同时移动附件
-    new Setting(archivingCard)
+    new Setting(containerEl)
       .setName(t('archiving.settings.moveAttachments'))
       .setDesc(t('archiving.settings.moveAttachmentsDesc'))
       .addToggle(toggle => toggle
@@ -356,7 +398,7 @@ export class TaggingSettingsRenderer extends BaseSettingsRenderer {
         }));
 
     // 自动更新链接
-    new Setting(archivingCard)
+    new Setting(containerEl)
       .setName(t('archiving.settings.updateLinks'))
       .setDesc(t('archiving.settings.updateLinksDesc'))
       .addToggle(toggle => toggle
@@ -367,13 +409,13 @@ export class TaggingSettingsRenderer extends BaseSettingsRenderer {
         }));
 
     // 界面显示设置
-    new Setting(archivingCard)
+    new Setting(containerEl)
       .setName(t('archiving.settings.visibility'))
       .setHeading();
 
     const archivingVisibilitySettings = this.context.plugin.settings.featureVisibility.archiving;
 
-    new Setting(archivingCard)
+    new Setting(containerEl)
       .setName(t('archiving.settings.commandPalette'))
       .setDesc(t('archiving.settings.commandPaletteDesc'))
       .addToggle(toggle => toggle
@@ -384,7 +426,7 @@ export class TaggingSettingsRenderer extends BaseSettingsRenderer {
           this.context.plugin.updateFeatureVisibility();
         }));
 
-    new Setting(archivingCard)
+    new Setting(containerEl)
       .setName(t('archiving.settings.editorMenu'))
       .setDesc(t('archiving.settings.editorMenuDesc'))
       .addToggle(toggle => toggle
@@ -395,7 +437,7 @@ export class TaggingSettingsRenderer extends BaseSettingsRenderer {
           this.context.plugin.updateFeatureVisibility();
         }));
 
-    new Setting(archivingCard)
+    new Setting(containerEl)
       .setName(t('archiving.settings.fileMenu'))
       .setDesc(t('archiving.settings.fileMenuDesc'))
       .addToggle(toggle => toggle
@@ -406,11 +448,15 @@ export class TaggingSettingsRenderer extends BaseSettingsRenderer {
           this.context.plugin.updateFeatureVisibility();
         }));
 
+    // 保存 textarea 引用用于重置
+    let textareaEl: HTMLTextAreaElement | null = null;
+
     // Prompt 模板
-    new Setting(archivingCard)
+    new Setting(containerEl)
       .setName(t('archiving.settings.promptTemplate'))
       .setDesc(t('archiving.settings.promptTemplateDesc'))
       .addTextArea(text => {
+        textareaEl = text.inputEl;
         text
           .setValue(settings.promptTemplate)
           .onChange(async (value) => {
@@ -424,7 +470,7 @@ export class TaggingSettingsRenderer extends BaseSettingsRenderer {
       });
 
     // 重置按钮
-    new Setting(archivingCard)
+    new Setting(containerEl)
       .setName(t('archiving.settings.resetToDefault'))
       .setDesc(t('archiving.settings.resetToDefaultDesc'))
       .addButton(button => button
@@ -432,7 +478,10 @@ export class TaggingSettingsRenderer extends BaseSettingsRenderer {
         .onClick(async () => {
           this.context.plugin.settings.archiving = { ...DEFAULT_ARCHIVING_SETTINGS };
           await this.saveSettings();
-          this.refreshDisplay();
+          // 局部更新 textarea 值，避免全量刷新
+          if (textareaEl) {
+            textareaEl.value = DEFAULT_ARCHIVING_SETTINGS.promptTemplate;
+          }
         }));
   }
 
@@ -491,13 +540,16 @@ export class TaggingSettingsRenderer extends BaseSettingsRenderer {
           };
         }
         await this.saveSettings();
-        this.refreshDisplay();
       });
     });
 
+    // 绑定状态容器（用于局部更新）
+    const statusContainerId = 'archiving-binding-status';
+    const statusContainer = containerEl.createDiv({ cls: `conditional-section-${statusContainerId}` });
+
     if (currentProvider && currentModel) {
       const displayName = currentModel.displayName || currentModel.name;
-      const statusEl = containerEl.createDiv({ cls: 'feature-binding-status' });
+      const statusEl = statusContainer.createDiv({ cls: 'feature-binding-status' });
       statusEl.setCssProps({
         'font-size': '0.85em',
         color: 'var(--text-muted)',
@@ -509,7 +561,7 @@ export class TaggingSettingsRenderer extends BaseSettingsRenderer {
       });
       statusEl.setText(t('archiving.settings.currentBinding', { provider: currentProvider.name, model: displayName }));
     } else {
-      const warningEl = containerEl.createDiv({ cls: 'feature-binding-warning' });
+      const warningEl = statusContainer.createDiv({ cls: 'feature-binding-warning' });
       warningEl.setCssProps({
         'font-size': '0.85em',
         color: 'var(--text-error)',

@@ -313,7 +313,7 @@ export const en: TranslationKeys = {
     advanced: {
       performanceAndDebug: 'Performance & Debug',
       debugMode: 'Debug Mode',
-      debugModeDesc: 'When enabled, shows detailed debug logs in browser console (including prompt content, directory analysis results, etc.)',
+      debugModeDesc: 'When enabled, shows detailed debug logs in browser console (including prompt content, directory analysis results, etc.), and skips server binary version checks and downloads (requires local binary present)',
       featureVisibility: 'Feature Visibility',
       featureVisibilityDesc: 'Control where plugin features are displayed, customize your workflow.',
       aiNamingVisibility: 'AI Filename Generation',

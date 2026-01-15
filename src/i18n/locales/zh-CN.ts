@@ -313,7 +313,7 @@ export const zhCN: TranslationKeys = {
     advanced: {
       performanceAndDebug: '性能与调试',
       debugMode: '调试模式',
-      debugModeDesc: '启用后，在浏览器控制台显示详细的调试日志（包括 prompt 内容、目录分析结果等）',
+      debugModeDesc: '启用后，在浏览器控制台显示详细的调试日志（包括 prompt 内容、目录分析结果等），并跳过服务器二进制版本检查与下载（需本地已安装）',
       featureVisibility: '功能显示',
       featureVisibilityDesc: '控制插件功能的显示位置，自定义您的工作流程。',
       aiNamingVisibility: 'AI 文件名生成',

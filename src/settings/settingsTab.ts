@@ -311,8 +311,7 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
       plugin: this.plugin,
       configManager: this.configManager,
       containerEl: contentEl,
-      expandedSections: this.expandedSections,
-      refreshDisplay: () => this.display()
+      expandedSections: this.expandedSections
     };
 
     // 根据当前标签页委托渲染

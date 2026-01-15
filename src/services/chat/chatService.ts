@@ -2,6 +2,8 @@ import type { App} from 'obsidian';
 import { Events, Notice, TFile } from 'obsidian';
 import { AIClient } from '../ai/aiClient';
 import type { SmartWorkflowSettings } from '../../settings/settings';
+import { ConfigManager } from '../config/configManager';
+import type { ISecretService } from '../secret';
 import type { ServerManager } from '../server/serverManager';
 import { t } from '../../i18n';
 
@@ -14,15 +16,22 @@ export class ChatService extends Events {
   private app: App;
   private settings: SmartWorkflowSettings;
   private serverManager: ServerManager;
+  private configManager: ConfigManager;
   private history: ChatMessage[] = [];
   private aiClient: AIClient | null = null;
   private isProcessing: boolean = false;
 
-  constructor(app: App, settings: SmartWorkflowSettings, serverManager: ServerManager) {
+  constructor(
+    app: App,
+    settings: SmartWorkflowSettings,
+    serverManager: ServerManager,
+    secretService?: ISecretService
+  ) {
     super();
     this.app = app;
     this.settings = settings;
     this.serverManager = serverManager;
+    this.configManager = new ConfigManager(settings, undefined, secretService);
   }
 
   getHistory() {
@@ -151,8 +160,14 @@ If you don't need a tool, just respond normally.`;
     
     const model = provider.models[0];
     
+    const resolvedProvider = this.configManager.resolveProviderForRequest(provider);
+    if (!resolvedProvider) {
+      this.addSystemMessage(t('aiService.invalidApiKey'));
+      return;
+    }
+
     this.aiClient = new AIClient({
-      provider,
+      provider: resolvedProvider,
       model,
       serverManager: this.serverManager
     });

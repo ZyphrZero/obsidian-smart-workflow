@@ -140,7 +140,6 @@ export class FileNamingSettingsRenderer extends BaseSettingsRenderer {
           };
         }
         await this.saveSettings();
-        this.refreshDisplay();
       });
     });
 
@@ -294,8 +293,10 @@ export class FileNamingSettingsRenderer extends BaseSettingsRenderer {
       .setDesc(t('settingsDetails.naming.basePromptTemplateDesc'))
       .setHeading();
 
+    let baseTemplateTextArea: any;
     new Setting(namingCard)
       .addTextArea(text => {
+        baseTemplateTextArea = text;
         text
           .setValue(this.context.plugin.settings.basePromptTemplate ?? BASE_PROMPT_TEMPLATE)
           .onChange(async (value) => {
@@ -314,7 +315,10 @@ export class FileNamingSettingsRenderer extends BaseSettingsRenderer {
         .onClick(async () => {
           this.context.plugin.settings.basePromptTemplate = BASE_PROMPT_TEMPLATE;
           await this.saveSettings();
-          this.refreshDisplay();
+          // 直接更新 TextArea 的值
+          if (baseTemplateTextArea) {
+            baseTemplateTextArea.setValue(BASE_PROMPT_TEMPLATE);
+          }
         }));
 
     // 高级模板编辑器
@@ -323,8 +327,10 @@ export class FileNamingSettingsRenderer extends BaseSettingsRenderer {
       .setDesc(t('settingsDetails.naming.advancedPromptTemplateDesc'))
       .setHeading();
 
+    let advancedTemplateTextArea: any;
     new Setting(namingCard)
       .addTextArea(text => {
+        advancedTemplateTextArea = text;
         text
           .setValue(this.context.plugin.settings.advancedPromptTemplate ?? ADVANCED_PROMPT_TEMPLATE)
           .onChange(async (value) => {
@@ -343,7 +349,10 @@ export class FileNamingSettingsRenderer extends BaseSettingsRenderer {
         .onClick(async () => {
           this.context.plugin.settings.advancedPromptTemplate = ADVANCED_PROMPT_TEMPLATE;
           await this.saveSettings();
-          this.refreshDisplay();
+          // 直接更新 TextArea 的值
+          if (advancedTemplateTextArea) {
+            advancedTemplateTextArea.setValue(ADVANCED_PROMPT_TEMPLATE);
+          }
         }));
 
     // 功能显示设置

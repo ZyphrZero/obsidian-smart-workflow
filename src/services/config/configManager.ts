@@ -509,6 +509,92 @@ export class ConfigManager {
   }
 
   /**
+   * 规范化密钥值（去除空白，空值返回 undefined）
+   */
+  private normalizeKeyValue(value: string | undefined): string | undefined {
+    if (!value) {
+      return undefined;
+    }
+    const trimmed = value.trim();
+    return trimmed === '' ? undefined : trimmed;
+  }
+
+  /**
+   * 解析单个密钥配置为运行时可用格式
+   * 注意：仅用于请求，不会写回设置
+   */
+  private resolveKeyConfigForRequest(keyConfig: KeyConfig | undefined): KeyConfig | undefined {
+    const value = this.normalizeKeyValue(this.resolveKeyValue(keyConfig));
+    if (!value) {
+      return undefined;
+    }
+    return { mode: 'local', localValue: value };
+  }
+
+  /**
+   * 解析多密钥配置为运行时可用格式
+   */
+  private resolveKeyConfigsForRequest(
+    keyConfigs: KeyConfig[] | undefined,
+    currentKeyIndex?: number
+  ): { keyConfigs: KeyConfig[]; currentKeyIndex: number } | undefined {
+    if (!keyConfigs || keyConfigs.length === 0) {
+      return undefined;
+    }
+
+    const resolved = keyConfigs
+      .map((keyConfig, index) => ({
+        index,
+        keyConfig: this.resolveKeyConfigForRequest(keyConfig),
+      }))
+      .filter((item): item is { index: number; keyConfig: KeyConfig } => !!item.keyConfig);
+
+    if (resolved.length === 0) {
+      return undefined;
+    }
+
+    let resolvedIndex = 0;
+    if (currentKeyIndex !== undefined) {
+      const matchedIndex = resolved.findIndex(item => item.index === currentKeyIndex);
+      if (matchedIndex >= 0) {
+        resolvedIndex = matchedIndex;
+      }
+    }
+
+    return {
+      keyConfigs: resolved.map(item => item.keyConfig),
+      currentKeyIndex: resolvedIndex,
+    };
+  }
+
+  /**
+   * 解析供应商密钥为运行时可用格式（不修改原始设置）
+   */
+  resolveProviderForRequest(provider: Provider): Provider | undefined {
+    const resolvedMulti = this.resolveKeyConfigsForRequest(provider.keyConfigs, provider.currentKeyIndex);
+    if (resolvedMulti) {
+      return {
+        ...provider,
+        keyConfigs: resolvedMulti.keyConfigs,
+        currentKeyIndex: resolvedMulti.currentKeyIndex,
+        keyConfig: resolvedMulti.keyConfigs[resolvedMulti.currentKeyIndex],
+      };
+    }
+
+    const resolvedPrimary = this.resolveKeyConfigForRequest(provider.keyConfig);
+    if (!resolvedPrimary) {
+      return undefined;
+    }
+
+    return {
+      ...provider,
+      keyConfig: resolvedPrimary,
+      keyConfigs: undefined,
+      currentKeyIndex: undefined,
+    };
+  }
+
+  /**
    * 获取供应商的 API 密钥（统一接口）
    * 自动处理共享/本地存储模式
    * @param providerId 供应商 ID

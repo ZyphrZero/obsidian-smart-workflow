@@ -89,7 +89,18 @@ export class WritingService {
       return;
     }
 
-    const { provider, model, promptTemplate } = resolvedConfig;
+    const resolvedProvider = this.configManager.resolveProviderForRequest(resolvedConfig.provider);
+    if (!resolvedProvider) {
+      callbacks.onError(new AIError(
+        AIErrorCode.INVALID_API_KEY,
+        t('aiService.invalidApiKey'),
+        false
+      ));
+      return;
+    }
+
+    const { model, promptTemplate } = resolvedConfig;
+    const provider = resolvedProvider;
     const prompt = this.buildPolishPrompt(text, promptTemplate);
 
     if (this.settings.debugMode) {

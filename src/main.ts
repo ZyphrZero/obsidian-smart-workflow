@@ -208,7 +208,8 @@ export default class SmartWorkflowPlugin extends Plugin {
       this._serverManager = new this._serverManagerModule.ServerManager(
         pluginDir,
         version,
-        downloadAcceleratorUrl
+        downloadAcceleratorUrl,
+        this.settings.debugMode
       );
       
       // 应用配置中的连接设置
@@ -217,6 +218,7 @@ export default class SmartWorkflowPlugin extends Plugin {
         maxAttempts: maxReconnectAttempts,
         interval: reconnectInterval,
       });
+      this._serverManager.updateDebugMode(this.settings.debugMode);
       
       debugLog('[SmartWorkflowPlugin] ServerManager initialized');
     }
@@ -281,7 +283,7 @@ export default class SmartWorkflowPlugin extends Plugin {
     if (!this._chatService) {
       debugLog('[SmartWorkflowPlugin] Initializing Chat Service...');
       const serverManager = await this.getServerManager();
-      this._chatService = new ChatService(this.app, this.settings, serverManager);
+      this._chatService = new ChatService(this.app, this.settings, serverManager, this.secretService);
       debugLog('[SmartWorkflowPlugin] Chat Service initialized');
     }
     return this._chatService;
@@ -559,8 +561,11 @@ export default class SmartWorkflowPlugin extends Plugin {
     setDebugMode(this.settings.debugMode);
 
     // 桌面端预先检查并更新服务器二进制（延迟执行，避免阻塞启动）
-    if (!Platform.isMobile) {
+    if (!Platform.isMobile && !this.settings.debugMode) {
       window.setTimeout(() => {
+        if (this.settings.debugMode) {
+          return;
+        }
         this.getServerManager()
           .then(serverManager => serverManager.ensureBinaryUpdated())
           .catch(error => {
@@ -1591,6 +1596,7 @@ export default class SmartWorkflowPlugin extends Plugin {
         maxAttempts: maxReconnectAttempts,
         interval: reconnectInterval,
       });
+      this._serverManager.updateDebugMode(this.settings.debugMode);
     }
 
     // 重置标签、分类、归档相关服务实例，使其在下次使用时重新初始化以应用新设置

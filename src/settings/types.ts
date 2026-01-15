@@ -104,8 +104,6 @@ export interface RendererContext {
   containerEl: HTMLElement;
   /** 当前展开的区块集合 */
   expandedSections: Set<string>;
-  /** 刷新显示的回调函数 */
-  refreshDisplay: () => void;
 }
 
 /**

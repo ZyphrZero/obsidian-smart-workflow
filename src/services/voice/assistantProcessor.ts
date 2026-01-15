@@ -366,6 +366,11 @@ ${selectedText}
       throw new Error('AI 助手配置的模型已被删除，请重新选择');
     }
     
-    return { provider, model };
+    const resolvedProvider = this.configManager.resolveProviderForRequest(provider);
+    if (!resolvedProvider) {
+      throw new Error('无效的 API Key');
+    }
+
+    return { provider: resolvedProvider, model };
   }
 }

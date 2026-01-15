@@ -327,7 +327,12 @@ export class LLMPostProcessor implements ILLMPostProcessor {
       throw new Error('LLM 后处理配置的模型已被删除，请重新选择');
     }
     
-    return { provider, model };
+    const resolvedProvider = this.configManager.resolveProviderForRequest(provider);
+    if (!resolvedProvider) {
+      throw new Error('无效的 API Key');
+    }
+
+    return { provider: resolvedProvider, model };
   }
 
   /**

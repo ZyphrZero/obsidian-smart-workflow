@@ -63,7 +63,7 @@ export class TerminalSettingsRenderer extends BaseSettingsRenderer {
     // 默认 Shell 程序选择
     const currentShell = getCurrentPlatformShell(this.context.plugin.settings.terminal);
     
-    new Setting(shellCard)
+    const shellDropdownSetting = new Setting(shellCard)
       .setName(t('settingsDetails.terminal.defaultShell'))
       .setDesc(t('settingsDetails.terminal.defaultShellDesc'))
       .addDropdown(dropdown => {
@@ -83,37 +83,26 @@ export class TerminalSettingsRenderer extends BaseSettingsRenderer {
         dropdown.onChange(async (value) => {
           setCurrentPlatformShell(this.context.plugin.settings.terminal, value as ShellType);
           await this.saveSettings();
-          this.refreshDisplay();
+          
+          // 使用局部更新替代全量刷新
+          this.toggleConditionalSection(
+            shellCard,
+            'custom-shell-path',
+            value === 'custom',
+            (el) => this.renderCustomShellPathSetting(el),
+            shellDropdownSetting.settingEl
+          );
         });
       });
 
-    // 自定义程序路径（仅在选择 custom 时显示）
-    if (currentShell === 'custom') {
-      const currentCustomPath = getCurrentPlatformCustomShellPath(this.context.plugin.settings.terminal);
-      
-      new Setting(shellCard)
-        .setName(t('settingsDetails.terminal.customShellPath'))
-        .setDesc(t('settingsDetails.terminal.customShellPathDesc'))
-        .addText(text => {
-          text
-            .setPlaceholder(t('settingsDetails.terminal.customShellPathPlaceholder'))
-            .setValue(currentCustomPath)
-            .onChange(async (value) => {
-              setCurrentPlatformCustomShellPath(this.context.plugin.settings.terminal, value);
-              await this.saveSettings();
-              
-              // 验证路径
-              this.validateCustomShellPath(shellCard, value);
-            });
-          
-          // 初始验证
-          setTimeout(() => {
-            this.validateCustomShellPath(shellCard, currentCustomPath);
-          }, 0);
-          
-          return text;
-        });
-    }
+    // 自定义程序路径（仅在选择 custom 时显示）- 初始渲染
+    this.toggleConditionalSection(
+      shellCard,
+      'custom-shell-path',
+      currentShell === 'custom',
+      (el) => this.renderCustomShellPathSetting(el),
+      shellDropdownSetting.settingEl
+    );
 
     // 默认启动参数
     new Setting(shellCard)
@@ -140,6 +129,37 @@ export class TerminalSettingsRenderer extends BaseSettingsRenderer {
           this.context.plugin.settings.terminal.autoEnterVaultDirectory = value;
           await this.saveSettings();
         }));
+  }
+
+  /**
+   * 渲染自定义 Shell 路径设置
+   * 提取为独立方法，用于 toggleConditionalSection 调用
+   */
+  private renderCustomShellPathSetting(container: HTMLElement): void {
+    const currentCustomPath = getCurrentPlatformCustomShellPath(this.context.plugin.settings.terminal);
+    
+    new Setting(container)
+      .setName(t('settingsDetails.terminal.customShellPath'))
+      .setDesc(t('settingsDetails.terminal.customShellPathDesc'))
+      .addText(text => {
+        text
+          .setPlaceholder(t('settingsDetails.terminal.customShellPathPlaceholder'))
+          .setValue(currentCustomPath)
+          .onChange(async (value) => {
+            setCurrentPlatformCustomShellPath(this.context.plugin.settings.terminal, value);
+            await this.saveSettings();
+            
+            // 验证路径
+            this.validateCustomShellPath(container, value);
+          });
+        
+        // 初始验证
+        setTimeout(() => {
+          this.validateCustomShellPath(container, currentCustomPath);
+        }, 0);
+        
+        return text;
+      });
   }
 
 
@@ -220,7 +240,7 @@ export class TerminalSettingsRenderer extends BaseSettingsRenderer {
       .setHeading();
 
     // 使用 Obsidian 主题
-    new Setting(themeCard)
+    const useObsidianThemeSetting = new Setting(themeCard)
       .setName(t('settingsDetails.terminal.useObsidianTheme'))
       .setDesc(t('settingsDetails.terminal.useObsidianThemeDesc'))
       .addToggle(toggle => toggle
@@ -228,21 +248,34 @@ export class TerminalSettingsRenderer extends BaseSettingsRenderer {
         .onChange(async (value) => {
           this.context.plugin.settings.terminal.useObsidianTheme = value;
           await this.saveSettings();
-          this.refreshDisplay();
+          
+          // 使用局部更新替代全量刷新
+          this.toggleConditionalSection(
+            themeCard,
+            'custom-color-settings',
+            !value,
+            (el) => this.renderCustomColorSettingsContent(el),
+            useObsidianThemeSetting.settingEl
+          );
         }));
 
-    // 自定义颜色设置（仅在不使用 Obsidian 主题时显示）
-    if (!this.context.plugin.settings.terminal.useObsidianTheme) {
-      this.renderCustomColorSettings(themeCard);
-    }
+    // 自定义颜色设置（仅在不使用 Obsidian 主题时显示）- 初始渲染
+    this.toggleConditionalSection(
+      themeCard,
+      'custom-color-settings',
+      !this.context.plugin.settings.terminal.useObsidianTheme,
+      (el) => this.renderCustomColorSettingsContent(el),
+      useObsidianThemeSetting.settingEl
+    );
   }
 
   /**
-   * 渲染自定义颜色设置
+   * 渲染自定义颜色设置内容
+   * 提取为独立方法，用于 toggleConditionalSection 调用
    */
-  private renderCustomColorSettings(themeCard: HTMLElement): void {
+  private renderCustomColorSettingsContent(container: HTMLElement): void {
     // 背景色
-    new Setting(themeCard)
+    new Setting(container)
       .setName(t('settingsDetails.terminal.backgroundColor'))
       .setDesc(t('settingsDetails.terminal.backgroundColorDesc'))
       .addColorPicker(color => color
@@ -257,12 +290,11 @@ export class TerminalSettingsRenderer extends BaseSettingsRenderer {
         .onClick(async () => {
           this.context.plugin.settings.terminal.backgroundColor = undefined;
           await this.saveSettings();
-          this.refreshDisplay();
           new Notice(t('notices.settings.backgroundColorReset'));
         }));
 
     // 前景色
-    new Setting(themeCard)
+    new Setting(container)
       .setName(t('settingsDetails.terminal.foregroundColor'))
       .setDesc(t('settingsDetails.terminal.foregroundColorDesc'))
       .addColorPicker(color => color
@@ -277,22 +309,24 @@ export class TerminalSettingsRenderer extends BaseSettingsRenderer {
         .onClick(async () => {
           this.context.plugin.settings.terminal.foregroundColor = undefined;
           await this.saveSettings();
-          this.refreshDisplay();
           new Notice(t('notices.settings.foregroundColorReset'));
         }));
 
     // 背景图片设置（仅 Canvas 渲染器支持）
-    if (this.context.plugin.settings.terminal.preferredRenderer === 'canvas') {
-      this.renderBackgroundImageSettings(themeCard);
-    }
+    this.toggleConditionalSection(
+      container,
+      'background-image-settings',
+      this.context.plugin.settings.terminal.preferredRenderer === 'canvas',
+      (el) => this.renderBackgroundImageSettings(el)
+    );
   }
 
 
   /**
    * 渲染背景图片设置
    */
-  private renderBackgroundImageSettings(themeCard: HTMLElement): void {
-    const bgImageSetting = new Setting(themeCard)
+  private renderBackgroundImageSettings(container: HTMLElement): void {
+    const bgImageSetting = new Setting(container)
       .setName(t('settingsDetails.terminal.backgroundImage'))
       .setDesc(t('settingsDetails.terminal.backgroundImageDesc'));
     
@@ -306,9 +340,16 @@ export class TerminalSettingsRenderer extends BaseSettingsRenderer {
           await this.saveSettings();
         });
       
-      // 失去焦点时刷新界面
+      // 失去焦点时使用局部更新
       text.inputEl.addEventListener('blur', () => {
-        this.refreshDisplay();
+        const hasImage = !!this.context.plugin.settings.terminal.backgroundImage;
+        this.toggleConditionalSection(
+          container,
+          'background-image-options',
+          hasImage,
+          (el) => this.renderBackgroundImageOptionsContent(el),
+          bgImageSetting.settingEl
+        );
       });
       
       return inputEl;
@@ -320,98 +361,140 @@ export class TerminalSettingsRenderer extends BaseSettingsRenderer {
       .onClick(async () => {
         this.context.plugin.settings.terminal.backgroundImage = undefined;
         await this.saveSettings();
-        this.refreshDisplay();
+        
+        // 使用局部更新移除背景图片选项
+        this.toggleConditionalSection(
+          container,
+          'background-image-options',
+          false,
+          (el) => this.renderBackgroundImageOptionsContent(el),
+          bgImageSetting.settingEl
+        );
+        
         new Notice(t('notices.settings.backgroundImageCleared'));
       }));
 
+    // 背景图片相关选项（仅在有背景图片时显示）- 初始渲染
+    this.toggleConditionalSection(
+      container,
+      'background-image-options',
+      !!this.context.plugin.settings.terminal.backgroundImage,
+      (el) => this.renderBackgroundImageOptionsContent(el),
+      bgImageSetting.settingEl
+    );
+  }
+
+  /**
+   * 渲染背景图片相关选项内容
+   * 提取为独立方法，用于 toggleConditionalSection 调用
+   */
+  private renderBackgroundImageOptionsContent(container: HTMLElement): void {
     // 背景图片透明度
-    if (this.context.plugin.settings.terminal.backgroundImage) {
-      new Setting(themeCard)
-        .setName(t('settingsDetails.terminal.backgroundImageOpacity'))
-        .setDesc(t('settingsDetails.terminal.backgroundImageOpacityDesc'))
-        .addSlider(slider => slider
-          .setLimits(0, 1, 0.05)
-          .setValue(this.context.plugin.settings.terminal.backgroundImageOpacity ?? 0.5)
-          .setDynamicTooltip()
-          .onChange(async (value) => {
-            this.context.plugin.settings.terminal.backgroundImageOpacity = value;
-            await this.saveSettings();
-          }));
+    new Setting(container)
+      .setName(t('settingsDetails.terminal.backgroundImageOpacity'))
+      .setDesc(t('settingsDetails.terminal.backgroundImageOpacityDesc'))
+      .addSlider(slider => slider
+        .setLimits(0, 1, 0.05)
+        .setValue(this.context.plugin.settings.terminal.backgroundImageOpacity ?? 0.5)
+        .setDynamicTooltip()
+        .onChange(async (value) => {
+          this.context.plugin.settings.terminal.backgroundImageOpacity = value;
+          await this.saveSettings();
+        }));
 
-      // 背景图片大小
-      new Setting(themeCard)
-        .setName(t('settingsDetails.terminal.backgroundImageSize'))
-        .setDesc(t('settingsDetails.terminal.backgroundImageSizeDesc'))
-        .addDropdown(dropdown => dropdown
-          .addOption('cover', t('backgroundSizeOptions.cover'))
-          .addOption('contain', t('backgroundSizeOptions.contain'))
-          .addOption('auto', t('backgroundSizeOptions.auto'))
-          .setValue(this.context.plugin.settings.terminal.backgroundImageSize || 'cover')
-          .onChange(async (value: 'cover' | 'contain' | 'auto') => {
-            this.context.plugin.settings.terminal.backgroundImageSize = value;
-            await this.saveSettings();
-          }));
+    // 背景图片大小
+    new Setting(container)
+      .setName(t('settingsDetails.terminal.backgroundImageSize'))
+      .setDesc(t('settingsDetails.terminal.backgroundImageSizeDesc'))
+      .addDropdown(dropdown => dropdown
+        .addOption('cover', t('backgroundSizeOptions.cover'))
+        .addOption('contain', t('backgroundSizeOptions.contain'))
+        .addOption('auto', t('backgroundSizeOptions.auto'))
+        .setValue(this.context.plugin.settings.terminal.backgroundImageSize || 'cover')
+        .onChange(async (value: 'cover' | 'contain' | 'auto') => {
+          this.context.plugin.settings.terminal.backgroundImageSize = value;
+          await this.saveSettings();
+        }));
 
-      // 背景图片位置
-      new Setting(themeCard)
-        .setName(t('settingsDetails.terminal.backgroundImagePosition'))
-        .setDesc(t('settingsDetails.terminal.backgroundImagePositionDesc'))
-        .addDropdown(dropdown => dropdown
-          .addOption('center', t('backgroundPositionOptions.center'))
-          .addOption('top', t('backgroundPositionOptions.top'))
-          .addOption('bottom', t('backgroundPositionOptions.bottom'))
-          .addOption('left', t('backgroundPositionOptions.left'))
-          .addOption('right', t('backgroundPositionOptions.right'))
-          .addOption('top left', t('backgroundPositionOptions.topLeft'))
-          .addOption('top right', t('backgroundPositionOptions.topRight'))
-          .addOption('bottom left', t('backgroundPositionOptions.bottomLeft'))
-          .addOption('bottom right', t('backgroundPositionOptions.bottomRight'))
-          .setValue(this.context.plugin.settings.terminal.backgroundImagePosition || 'center')
-          .onChange(async (value) => {
-            this.context.plugin.settings.terminal.backgroundImagePosition = value;
-            await this.saveSettings();
-          }));
+    // 背景图片位置
+    new Setting(container)
+      .setName(t('settingsDetails.terminal.backgroundImagePosition'))
+      .setDesc(t('settingsDetails.terminal.backgroundImagePositionDesc'))
+      .addDropdown(dropdown => dropdown
+        .addOption('center', t('backgroundPositionOptions.center'))
+        .addOption('top', t('backgroundPositionOptions.top'))
+        .addOption('bottom', t('backgroundPositionOptions.bottom'))
+        .addOption('left', t('backgroundPositionOptions.left'))
+        .addOption('right', t('backgroundPositionOptions.right'))
+        .addOption('top left', t('backgroundPositionOptions.topLeft'))
+        .addOption('top right', t('backgroundPositionOptions.topRight'))
+        .addOption('bottom left', t('backgroundPositionOptions.bottomLeft'))
+        .addOption('bottom right', t('backgroundPositionOptions.bottomRight'))
+        .setValue(this.context.plugin.settings.terminal.backgroundImagePosition || 'center')
+        .onChange(async (value) => {
+          this.context.plugin.settings.terminal.backgroundImagePosition = value;
+          await this.saveSettings();
+        }));
 
-      // 毛玻璃效果
-      new Setting(themeCard)
-        .setName(t('settingsDetails.terminal.blurEffect'))
-        .setDesc(t('settingsDetails.terminal.blurEffectDesc'))
-        .addToggle(toggle => toggle
-          .setValue(this.context.plugin.settings.terminal.enableBlur ?? false)
-          .onChange(async (value) => {
-            this.context.plugin.settings.terminal.enableBlur = value;
-            await this.saveSettings();
-            this.refreshDisplay();
-          }));
+    // 毛玻璃效果
+    const blurEffectSetting = new Setting(container)
+      .setName(t('settingsDetails.terminal.blurEffect'))
+      .setDesc(t('settingsDetails.terminal.blurEffectDesc'))
+      .addToggle(toggle => toggle
+        .setValue(this.context.plugin.settings.terminal.enableBlur ?? false)
+        .onChange(async (value) => {
+          this.context.plugin.settings.terminal.enableBlur = value;
+          await this.saveSettings();
+          
+          // 使用局部更新替代全量刷新
+          this.toggleConditionalSection(
+            container,
+            'blur-amount-slider',
+            value,
+            (el) => this.renderBlurAmountSlider(el),
+            blurEffectSetting.settingEl
+          );
+        }));
 
-      // 毛玻璃模糊程度
-      if (this.context.plugin.settings.terminal.enableBlur) {
-        new Setting(themeCard)
-          .setName(t('settingsDetails.terminal.blurAmount'))
-          .setDesc(t('settingsDetails.terminal.blurAmountDesc'))
-          .addSlider(slider => slider
-            .setLimits(0, 20, 1)
-            .setValue(this.context.plugin.settings.terminal.blurAmount ?? 10)
-            .setDynamicTooltip()
-            .onChange(async (value) => {
-              this.context.plugin.settings.terminal.blurAmount = value;
-              await this.saveSettings();
-            }));
-      }
+    // 毛玻璃模糊程度（仅在启用毛玻璃效果时显示）- 初始渲染
+    this.toggleConditionalSection(
+      container,
+      'blur-amount-slider',
+      this.context.plugin.settings.terminal.enableBlur ?? false,
+      (el) => this.renderBlurAmountSlider(el),
+      blurEffectSetting.settingEl
+    );
 
-      // 文本透明度
-      new Setting(themeCard)
-        .setName(t('settingsDetails.terminal.textOpacity'))
-        .setDesc(t('settingsDetails.terminal.textOpacityDesc'))
-        .addSlider(slider => slider
-          .setLimits(0, 1, 0.05)
-          .setValue(this.context.plugin.settings.terminal.textOpacity ?? 1.0)
-          .setDynamicTooltip()
-          .onChange(async (value) => {
-            this.context.plugin.settings.terminal.textOpacity = value;
-            await this.saveSettings();
-          }));
-    }
+    // 文本透明度
+    new Setting(container)
+      .setName(t('settingsDetails.terminal.textOpacity'))
+      .setDesc(t('settingsDetails.terminal.textOpacityDesc'))
+      .addSlider(slider => slider
+        .setLimits(0, 1, 0.05)
+        .setValue(this.context.plugin.settings.terminal.textOpacity ?? 1.0)
+        .setDynamicTooltip()
+        .onChange(async (value) => {
+          this.context.plugin.settings.terminal.textOpacity = value;
+          await this.saveSettings();
+        }));
+  }
+
+  /**
+   * 渲染模糊程度滑块
+   * 提取为独立方法，用于 toggleConditionalSection 调用
+   */
+  private renderBlurAmountSlider(container: HTMLElement): void {
+    new Setting(container)
+      .setName(t('settingsDetails.terminal.blurAmount'))
+      .setDesc(t('settingsDetails.terminal.blurAmountDesc'))
+      .addSlider(slider => slider
+        .setLimits(0, 20, 1)
+        .setValue(this.context.plugin.settings.terminal.blurAmount ?? 10)
+        .setDynamicTooltip()
+        .onChange(async (value) => {
+          this.context.plugin.settings.terminal.blurAmount = value;
+          await this.saveSettings();
+        }));
   }
 
 
@@ -488,9 +571,29 @@ export class TerminalSettingsRenderer extends BaseSettingsRenderer {
         .onChange(async (value: 'canvas' | 'webgl') => {
           this.context.plugin.settings.terminal.preferredRenderer = value;
           await this.saveSettings();
-          this.refreshDisplay();
+          this.updateBackgroundImageSettingsVisibility();
           new Notice(t('notices.settings.rendererUpdated'));
         }));
+  }
+
+  /**
+   * 更新背景图片设置可见性
+   * 仅在自定义主题设置已渲染时生效
+   */
+  private updateBackgroundImageSettingsVisibility(): void {
+    const customColorContainer = this.context.containerEl.querySelector<HTMLElement>(
+      '.conditional-section-custom-color-settings'
+    );
+    if (!customColorContainer) {
+      return;
+    }
+
+    this.toggleConditionalSection(
+      customColorContainer,
+      'background-image-settings',
+      this.context.plugin.settings.terminal.preferredRenderer === 'canvas',
+      (el) => this.renderBackgroundImageSettings(el)
+    );
   }
 
   /**

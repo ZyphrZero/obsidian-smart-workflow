@@ -182,12 +182,17 @@ export class TagService {
         throw new Error(t('tagging.service.noAIConfig'));
       }
 
+      const resolvedProvider = this.configManager.resolveProviderForRequest(config.provider);
+      if (!resolvedProvider) {
+        throw new Error(t('aiService.invalidApiKey'));
+      }
+
       // 构建 Prompt
       const prompt = this.buildTaggingPrompt(content, existingTags, config.promptTemplate);
 
       // 创建 AI 客户端
       const aiClient = new AIClient({
-        provider: config.provider,
+        provider: resolvedProvider,
         model: config.model,
         timeout: this.settings.timeout,
         debugMode: this.settings.debugMode,

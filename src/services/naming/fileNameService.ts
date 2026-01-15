@@ -185,7 +185,13 @@ export class FileNameService {
       throw new Error(t('aiService.configNotResolved'));
     }
 
-    const { provider, model, promptTemplate } = resolvedConfig;
+    const resolvedProvider = this.configManager.resolveProviderForRequest(resolvedConfig.provider);
+    if (!resolvedProvider) {
+      throw new Error(t('aiService.invalidApiKey'));
+    }
+
+    const { model, promptTemplate } = resolvedConfig;
+    const provider = resolvedProvider;
     const prompt = this.preparePrompt(content, promptTemplate, model, currentFileName, directoryNamingStyle);
 
     if (this.settings.debugMode) {

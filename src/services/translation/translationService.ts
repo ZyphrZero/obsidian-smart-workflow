@@ -155,7 +155,18 @@ export class TranslationService {
       return;
     }
 
-    const { provider, model } = resolvedConfig;
+    const resolvedProvider = this.configManager.resolveProviderForRequest(resolvedConfig.provider);
+    if (!resolvedProvider) {
+      callbacks.onError(new AIError(
+        AIErrorCode.INVALID_API_KEY,
+        t('aiService.invalidApiKey'),
+        false
+      ));
+      return;
+    }
+
+    const { model } = resolvedConfig;
+    const provider = resolvedProvider;
 
     try {
       // 1. 语言检测（如果需要）

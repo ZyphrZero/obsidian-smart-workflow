@@ -57,30 +57,53 @@ export class TranslationSettingsRenderer extends BaseSettingsRenderer {
 
     // 点击切换展开状态
     headerEl.addEventListener('click', () => {
-      if (isExpanded) {
-        this.context.expandedSections.delete('translation-feature-expanded');
-      } else {
+      const newExpanded = !isExpanded;
+      if (newExpanded) {
         this.context.expandedSections.add('translation-feature-expanded');
+      } else {
+        this.context.expandedSections.delete('translation-feature-expanded');
       }
-      this.refreshDisplay();
+      
+      // 更新图标
+      chevronEl.empty();
+      setIcon(chevronEl, newExpanded ? 'chevron-down' : 'chevron-right');
+      
+      // 更新标题下边距
+      headerEl.setCssProps({
+        'margin-bottom': newExpanded ? '20px' : '0'
+      });
+      
+      // 使用 toggleConditionalSection 局部更新内容区域
+      this.toggleConditionalSection(
+        translationCard,
+        'translation-content',
+        newExpanded,
+        (el) => this.renderTranslationContent(el),
+        headerEl
+      );
     });
 
-    // 如果未展开，不渲染内容
-    if (!isExpanded) {
-      return;
+    // 如果展开，渲染内容
+    if (isExpanded) {
+      const contentEl = translationCard.createDiv({ cls: 'conditional-section-translation-content feature-content' });
+      this.renderTranslationContent(contentEl);
     }
+  }
 
-    // 内容容器
-    const contentEl = translationCard.createDiv({ cls: 'feature-content' });
-
+  /**
+   * 渲染翻译设置内容（供 toggleConditionalSection 使用）
+   */
+  private renderTranslationContent(containerEl: HTMLElement): void {
+    containerEl.addClass('feature-content');
+    
     // AI 供应商/模型绑定
-    this.renderProviderBinding(contentEl);
+    this.renderProviderBinding(containerEl);
 
     // 可见性设置
-    this.renderVisibilitySettings(contentEl);
+    this.renderVisibilitySettings(containerEl);
 
     // 翻译设置
-    this.renderTranslationSettings(contentEl);
+    this.renderTranslationSettings(containerEl);
   }
 
   /**
@@ -155,14 +178,17 @@ export class TranslationSettingsRenderer extends BaseSettingsRenderer {
           };
         }
         await this.saveSettings();
-        this.refreshDisplay();
       });
     });
 
+    // 绑定状态容器（用于局部更新）
+    const statusContainerId = 'translation-binding-status';
+    const statusContainer = containerEl.createDiv({ cls: `conditional-section-${statusContainerId}` });
+    
     // 显示当前绑定状态
     if (currentProvider && currentModel) {
       const displayName = currentModel.displayName || currentModel.name;
-      const statusEl = containerEl.createDiv({ cls: 'feature-binding-status' });
+      const statusEl = statusContainer.createDiv({ cls: 'feature-binding-status' });
       statusEl.setCssProps({
         'font-size': '0.85em',
         color: 'var(--text-muted)',

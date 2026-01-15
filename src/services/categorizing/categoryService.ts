@@ -247,6 +247,11 @@ export class CategoryService {
         throw new Error(t('archiving.service.noAIConfig'));
       }
 
+      const resolvedProvider = this.configManager.resolveProviderForRequest(config.provider);
+      if (!resolvedProvider) {
+        throw new Error(t('aiService.invalidApiKey'));
+      }
+
       // 构建 Prompt
       const prompt = this.buildCategorizingPrompt(
         content,
@@ -257,7 +262,7 @@ export class CategoryService {
 
       // 创建 AI 客户端
       const aiClient = new AIClient({
-        provider: config.provider,
+        provider: resolvedProvider,
         model: config.model,
         timeout: this.settings.timeout,
         debugMode: this.settings.debugMode,

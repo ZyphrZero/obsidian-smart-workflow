@@ -135,29 +135,14 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
     // 功能开关卡片
     this.renderEnableSettings(containerEl);
 
-    // 仅在功能启用时显示其他设置
-    if (this.context.plugin.settings.voice.enabled) {
-      // 状态表盘（iOS 风格）
-      this.renderStatusDashboard(containerEl);
-
-      // 快捷键说明卡片
-      this.renderHotkeySettings(containerEl);
-
-      // ASR 配置卡片
-      this.renderASRSettings(containerEl);
-
-      // LLM 后处理配置卡片
-      this.renderLLMPostProcessingSettings(containerEl);
-
-      // AI 助手配置卡片
-      this.renderAssistantSettings(containerEl);
-
-      // 其他设置卡片
-      this.renderOtherSettings(containerEl);
-
-      // 历史记录卡片
-      this.renderHistorySettings(containerEl);
-    }
+    // 使用 toggleConditionalSection 渲染启用后的设置
+    // 这样在初始渲染时也能正确显示
+    this.toggleConditionalSection(
+      containerEl,
+      'voice-enabled-settings',
+      this.context.plugin.settings.voice.enabled,
+      (el) => this.renderEnabledSettings(el)
+    );
   }
 
   // ============================================================================
@@ -218,7 +203,6 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
           mode: modes[0],
         };
         await this.saveSettings();
-        this.refreshDisplay();
       }
     );
     
@@ -251,7 +235,6 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
           };
         }
         await this.saveSettings();
-        this.refreshDisplay();
       }
     );
     
@@ -273,7 +256,6 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
       async (value) => {
         this.context.plugin.settings.voice.primaryASR.mode = value as VoiceASRMode;
         await this.saveSettings();
-        this.refreshDisplay();
       }
     );
     
@@ -285,7 +267,6 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
       async (value) => {
         this.context.plugin.settings.voice.removeTrailingPunctuation = value;
         await this.saveSettings();
-        this.refreshDisplay();
       }
     );
   }
@@ -306,74 +287,124 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
     this.renderHeaderToggle(headerEl, voiceSettings.enableLLMPostProcessing, async (value) => {
       this.context.plugin.settings.voice.enableLLMPostProcessing = value;
       await this.saveSettings();
-      this.refreshDisplay();
+      
+      // 使用局部更新替代全量刷新
+      this.toggleConditionalSection(
+        card,
+        'llm-status-content',
+        value,
+        (el) => this.renderLLMStatusCardContent(el, true),
+        headerEl
+      );
+      // 如果禁用，显示提示
+      this.toggleConditionalSection(
+        card,
+        'llm-status-hint',
+        !value,
+        (el) => this.renderLLMStatusCardHint(el),
+        headerEl
+      );
     });
     
-    // 卡片内容
-    const contentEl = card.createDiv({ cls: 'voice-status-card-content' });
+    // 卡片内容区域 - 初始渲染
+    this.toggleConditionalSection(
+      card,
+      'llm-status-content',
+      voiceSettings.enableLLMPostProcessing,
+      (el) => this.renderLLMStatusCardContent(el, true),
+      headerEl
+    );
+    // 禁用提示 - 初始渲染
+    this.toggleConditionalSection(
+      card,
+      'llm-status-hint',
+      !voiceSettings.enableLLMPostProcessing,
+      (el) => this.renderLLMStatusCardHint(el),
+      headerEl
+    );
+  }
+
+  /**
+   * 渲染 LLM 状态卡片内容
+   */
+  private renderLLMStatusCardContent(contentEl: HTMLElement, isEnabled: boolean): void {
+    const voiceSettings = this.context.plugin.settings.voice;
     
-    if (voiceSettings.enableLLMPostProcessing) {
-      // 当前预设 - 点击可选择
-      const activePreset = voiceSettings.llmPresets.find(p => p.id === voiceSettings.activeLLMPresetId);
-      const presetOptions = voiceSettings.llmPresets.map(p => ({ value: p.id, label: p.name }));
-      this.renderSelectableStatusItem(
-        contentEl, 
-        t('voice.dashboard.activePreset'), 
-        activePreset?.name || '-',
-        'bookmark',
-        'info',
-        presetOptions,
-        voiceSettings.activeLLMPresetId,
-        async (value) => {
-          this.context.plugin.settings.voice.activeLLMPresetId = value;
-          await this.saveSettings();
-          this.refreshDisplay();
-        }
-      );
-      
-      // 使用的模型 - 点击可选择
-      let modelName = '-';
-      let currentModelValue = '';
-      if (voiceSettings.postProcessingProviderId && voiceSettings.postProcessingModelId) {
-        const provider = this.context.configManager.getProvider(voiceSettings.postProcessingProviderId);
-        const model = provider?.models.find(m => m.id === voiceSettings.postProcessingModelId);
-        modelName = model?.displayName || model?.name || '-';
-        currentModelValue = `${voiceSettings.postProcessingProviderId}|${voiceSettings.postProcessingModelId}`;
-      }
-      
-      // 构建模型选项
-      const modelOptions = this.buildProviderModelOptions();
-      this.renderSelectableStatusItem(
-        contentEl, 
-        t('voice.dashboard.llmModel'), 
-        modelName, 
-        'cpu', 
-        'success',
-        modelOptions,
-        currentModelValue,
-        async (value) => {
-          if (!value) {
-            this.context.plugin.settings.voice.postProcessingProviderId = undefined;
-            this.context.plugin.settings.voice.postProcessingModelId = undefined;
-          } else {
-            const [providerId, modelId] = value.split('|');
-            this.context.plugin.settings.voice.postProcessingProviderId = providerId;
-            this.context.plugin.settings.voice.postProcessingModelId = modelId;
-          }
-          await this.saveSettings();
-          this.refreshDisplay();
-        }
-      );
-    } else {
-      // 未启用时显示提示
-      const hintEl = contentEl.createDiv({ cls: 'voice-status-hint clickable' });
-      hintEl.setText(t('voice.dashboard.llmDisabledHint'));
-      hintEl.addEventListener('click', async () => {
-        this.context.plugin.settings.voice.enableLLMPostProcessing = true;
+    // 当前预设 - 点击可选择
+    const activePreset = voiceSettings.llmPresets.find(p => p.id === voiceSettings.activeLLMPresetId);
+    const presetOptions = voiceSettings.llmPresets.map(p => ({ value: p.id, label: p.name }));
+    this.renderSelectableStatusItem(
+      contentEl, 
+      t('voice.dashboard.activePreset'), 
+      activePreset?.name || '-',
+      'bookmark',
+      'info',
+      presetOptions,
+      voiceSettings.activeLLMPresetId,
+      async (value) => {
+        this.context.plugin.settings.voice.activeLLMPresetId = value;
         await this.saveSettings();
-        this.refreshDisplay();
-      });
+      }
+    );
+    
+    // 使用的模型 - 点击可选择
+    let modelName = '-';
+    let currentModelValue = '';
+    if (voiceSettings.postProcessingProviderId && voiceSettings.postProcessingModelId) {
+      const provider = this.context.configManager.getProvider(voiceSettings.postProcessingProviderId);
+      const model = provider?.models.find(m => m.id === voiceSettings.postProcessingModelId);
+      modelName = model?.displayName || model?.name || '-';
+      currentModelValue = `${voiceSettings.postProcessingProviderId}|${voiceSettings.postProcessingModelId}`;
     }
+    
+    // 构建模型选项
+    const modelOptions = this.buildProviderModelOptions();
+    this.renderSelectableStatusItem(
+      contentEl, 
+      t('voice.dashboard.llmModel'), 
+      modelName, 
+      'cpu', 
+      'success',
+      modelOptions,
+      currentModelValue,
+      async (value) => {
+        if (!value) {
+          this.context.plugin.settings.voice.postProcessingProviderId = undefined;
+          this.context.plugin.settings.voice.postProcessingModelId = undefined;
+        } else {
+          const [providerId, modelId] = value.split('|');
+          this.context.plugin.settings.voice.postProcessingProviderId = providerId;
+          this.context.plugin.settings.voice.postProcessingModelId = modelId;
+        }
+        await this.saveSettings();
+      }
+    );
+  }
+
+  /**
+   * 渲染 LLM 状态卡片禁用提示
+   */
+  private renderLLMStatusCardHint(contentEl: HTMLElement): void {
+    const hintEl = contentEl.createDiv({ cls: 'voice-status-hint clickable' });
+    hintEl.setText(t('voice.dashboard.llmDisabledHint'));
+    hintEl.addEventListener('click', async () => {
+      this.context.plugin.settings.voice.enableLLMPostProcessing = true;
+      await this.saveSettings();
+      
+      // 使用局部更新
+      const card = contentEl.closest('.voice-status-card') as HTMLElement;
+      const headerEl = card?.querySelector('.voice-status-card-header') as HTMLElement;
+      if (card && headerEl) {
+        // 更新开关状态
+        const toggleEl = headerEl.querySelector('.voice-status-toggle');
+        if (toggleEl) {
+          toggleEl.classList.add('active');
+        }
+        // 切换内容区域
+        this.toggleConditionalSection(card, 'llm-status-hint', false, () => {}, headerEl);
+        this.toggleConditionalSection(card, 'llm-status-content', true, (el) => this.renderLLMStatusCardContent(el, true), headerEl);
+      }
+    });
   }
 
   /**
@@ -392,60 +423,111 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
     this.renderHeaderToggle(headerEl, voiceSettings.assistantConfig.enabled, async (value) => {
       this.context.plugin.settings.voice.assistantConfig.enabled = value;
       await this.saveSettings();
-      this.refreshDisplay();
+      
+      // 使用局部更新替代全量刷新
+      this.toggleConditionalSection(
+        card,
+        'assistant-status-content',
+        value,
+        (el) => this.renderAssistantStatusCardContent(el),
+        headerEl
+      );
+      // 如果禁用，显示提示
+      this.toggleConditionalSection(
+        card,
+        'assistant-status-hint',
+        !value,
+        (el) => this.renderAssistantStatusCardHint(el),
+        headerEl
+      );
     });
     
-    // 卡片内容
-    const contentEl = card.createDiv({ cls: 'voice-status-card-content' });
+    // 卡片内容区域 - 初始渲染
+    this.toggleConditionalSection(
+      card,
+      'assistant-status-content',
+      voiceSettings.assistantConfig.enabled,
+      (el) => this.renderAssistantStatusCardContent(el),
+      headerEl
+    );
+    // 禁用提示 - 初始渲染
+    this.toggleConditionalSection(
+      card,
+      'assistant-status-hint',
+      !voiceSettings.assistantConfig.enabled,
+      (el) => this.renderAssistantStatusCardHint(el),
+      headerEl
+    );
+  }
+
+  /**
+   * 渲染 AI 助手状态卡片内容
+   */
+  private renderAssistantStatusCardContent(contentEl: HTMLElement): void {
+    const voiceSettings = this.context.plugin.settings.voice;
     
-    if (voiceSettings.assistantConfig.enabled) {
-      // 使用的模型 - 点击可选择
-      let modelName = '-';
-      let currentModelValue = '';
-      if (voiceSettings.assistantConfig.providerId && voiceSettings.assistantConfig.modelId) {
-        const provider = this.context.configManager.getProvider(voiceSettings.assistantConfig.providerId);
-        const model = provider?.models.find(m => m.id === voiceSettings.assistantConfig.modelId);
-        modelName = model?.displayName || model?.name || '-';
-        currentModelValue = `${voiceSettings.assistantConfig.providerId}|${voiceSettings.assistantConfig.modelId}`;
-      }
-      
-      // 构建模型选项
-      const modelOptions = this.buildProviderModelOptions();
-      this.renderSelectableStatusItem(
-        contentEl, 
-        t('voice.dashboard.assistantModel'), 
-        modelName, 
-        'cpu', 
-        'success',
-        modelOptions,
-        currentModelValue,
-        async (value) => {
-          if (!value) {
-            this.context.plugin.settings.voice.assistantConfig.providerId = undefined;
-            this.context.plugin.settings.voice.assistantConfig.modelId = undefined;
-          } else {
-            const [providerId, modelId] = value.split('|');
-            this.context.plugin.settings.voice.assistantConfig.providerId = providerId;
-            this.context.plugin.settings.voice.assistantConfig.modelId = modelId;
-          }
-          await this.saveSettings();
-          this.refreshDisplay();
-        }
-      );
-      
-      // 支持的模式（只读显示）
-      this.renderStatusItem(contentEl, t('voice.dashboard.qaMode'), t('voice.dashboard.supported'), 'message-circle', 'info');
-      this.renderStatusItem(contentEl, t('voice.dashboard.textProcessMode'), t('voice.dashboard.supported'), 'file-text', 'info');
-    } else {
-      // 未启用时显示提示
-      const hintEl = contentEl.createDiv({ cls: 'voice-status-hint clickable' });
-      hintEl.setText(t('voice.dashboard.assistantDisabledHint'));
-      hintEl.addEventListener('click', async () => {
-        this.context.plugin.settings.voice.assistantConfig.enabled = true;
-        await this.saveSettings();
-        this.refreshDisplay();
-      });
+    // 使用的模型 - 点击可选择
+    let modelName = '-';
+    let currentModelValue = '';
+    if (voiceSettings.assistantConfig.providerId && voiceSettings.assistantConfig.modelId) {
+      const provider = this.context.configManager.getProvider(voiceSettings.assistantConfig.providerId);
+      const model = provider?.models.find(m => m.id === voiceSettings.assistantConfig.modelId);
+      modelName = model?.displayName || model?.name || '-';
+      currentModelValue = `${voiceSettings.assistantConfig.providerId}|${voiceSettings.assistantConfig.modelId}`;
     }
+    
+    // 构建模型选项
+    const modelOptions = this.buildProviderModelOptions();
+    this.renderSelectableStatusItem(
+      contentEl, 
+      t('voice.dashboard.assistantModel'), 
+      modelName, 
+      'cpu', 
+      'success',
+      modelOptions,
+      currentModelValue,
+      async (value) => {
+        if (!value) {
+          this.context.plugin.settings.voice.assistantConfig.providerId = undefined;
+          this.context.plugin.settings.voice.assistantConfig.modelId = undefined;
+        } else {
+          const [providerId, modelId] = value.split('|');
+          this.context.plugin.settings.voice.assistantConfig.providerId = providerId;
+          this.context.plugin.settings.voice.assistantConfig.modelId = modelId;
+        }
+        await this.saveSettings();
+      }
+    );
+    
+    // 支持的模式（只读显示）
+    this.renderStatusItem(contentEl, t('voice.dashboard.qaMode'), t('voice.dashboard.supported'), 'message-circle', 'info');
+    this.renderStatusItem(contentEl, t('voice.dashboard.textProcessMode'), t('voice.dashboard.supported'), 'file-text', 'info');
+  }
+
+  /**
+   * 渲染 AI 助手状态卡片禁用提示
+   */
+  private renderAssistantStatusCardHint(contentEl: HTMLElement): void {
+    const hintEl = contentEl.createDiv({ cls: 'voice-status-hint clickable' });
+    hintEl.setText(t('voice.dashboard.assistantDisabledHint'));
+    hintEl.addEventListener('click', async () => {
+      this.context.plugin.settings.voice.assistantConfig.enabled = true;
+      await this.saveSettings();
+      
+      // 使用局部更新
+      const card = contentEl.closest('.voice-status-card') as HTMLElement;
+      const headerEl = card?.querySelector('.voice-status-card-header') as HTMLElement;
+      if (card && headerEl) {
+        // 更新开关状态
+        const toggleEl = headerEl.querySelector('.voice-status-toggle');
+        if (toggleEl) {
+          toggleEl.classList.add('active');
+        }
+        // 切换内容区域
+        this.toggleConditionalSection(card, 'assistant-status-hint', false, () => {}, headerEl);
+        this.toggleConditionalSection(card, 'assistant-status-content', true, (el) => this.renderAssistantStatusCardContent(el), headerEl);
+      }
+    });
   }
 
   /**
@@ -633,7 +715,7 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
       name: t('voice.settings.dictationCommand'),
       description: t('voice.settings.dictationCommandDesc'),
       i18nPrefix: 'voice.settings',
-      onRefresh: () => this.refreshDisplay(),
+      // 不再传递 onRefresh，快捷键组件内部会自动更新显示
     });
     
     // 助手模式命令
@@ -644,7 +726,6 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
       name: t('voice.settings.assistantCommand'),
       description: t('voice.settings.assistantCommandDesc'),
       i18nPrefix: 'voice.settings',
-      onRefresh: () => this.refreshDisplay(),
     });
     
     // 取消录音命令
@@ -655,7 +736,6 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
       name: t('voice.settings.cancelCommand'),
       description: t('voice.settings.cancelCommandDesc'),
       i18nPrefix: 'voice.settings',
-      onRefresh: () => this.refreshDisplay(),
     });
   }
 
@@ -684,10 +764,53 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
     toggleTrack.createDiv({ cls: 'voice-enable-toggle-thumb' });
     
     toggleEl.addEventListener('click', async () => {
-      this.context.plugin.settings.voice.enabled = !isEnabled;
+      const newEnabled = !this.context.plugin.settings.voice.enabled;
+      this.context.plugin.settings.voice.enabled = newEnabled;
       await this.saveSettings();
-      this.refreshDisplay();
+      
+      // 更新开关样式
+      if (newEnabled) {
+        toggleEl.addClass('active');
+      } else {
+        toggleEl.removeClass('active');
+      }
+      
+      // 使用 toggleConditionalSection 显示/隐藏其他设置
+      this.toggleConditionalSection(
+        containerEl,
+        'voice-enabled-settings',
+        newEnabled,
+        (el) => this.renderEnabledSettings(el),
+        card
+      );
     });
+  }
+
+  /**
+   * 渲染启用后的设置内容
+   * 当语音功能启用时显示的所有设置
+   */
+  private renderEnabledSettings(containerEl: HTMLElement): void {
+    // 状态表盘（iOS 风格）
+    this.renderStatusDashboard(containerEl);
+
+    // 快捷键说明卡片
+    this.renderHotkeySettings(containerEl);
+
+    // ASR 配置卡片
+    this.renderASRSettings(containerEl);
+
+    // LLM 后处理配置卡片
+    this.renderLLMPostProcessingSettings(containerEl);
+
+    // AI 助手配置卡片
+    this.renderAssistantSettings(containerEl);
+
+    // 其他设置卡片
+    this.renderOtherSettings(containerEl);
+
+    // 历史记录卡片
+    this.renderHistorySettings(containerEl);
   }
 
   // ============================================================================
@@ -762,6 +885,7 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
     const voiceSettings = this.context.plugin.settings.voice;
     const config = type === 'primary' ? voiceSettings.primaryASR : voiceSettings.backupASR;
     const isBackup = type === 'backup';
+    const sectionId = `asr-provider-details-${type}`;
 
     // 供应商选择
     const providerSetting = new Setting(containerEl)
@@ -790,7 +914,16 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
               };
             }
             await this.saveSettings();
-            this.refreshDisplay();
+            
+            // 使用局部更新替代全量刷新
+            const newConfig = this.context.plugin.settings.voice.backupASR;
+            this.toggleConditionalSection(
+              containerEl,
+              sectionId,
+              !!newConfig,
+              (el) => this.renderASRProviderDetailsContent(el, type, newConfig!),
+              providerSetting.settingEl
+            );
           });
       });
     } else {
@@ -809,15 +942,47 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
               mode: modes[0],
             };
             await this.saveSettings();
-            this.refreshDisplay();
+            
+            // 使用局部更新替代全量刷新
+            // 先移除旧区域，再创建新区域
+            this.toggleConditionalSection(
+              containerEl,
+              sectionId,
+              false,
+              () => {},
+              providerSetting.settingEl
+            );
+            this.toggleConditionalSection(
+              containerEl,
+              sectionId,
+              true,
+              (el) => this.renderASRProviderDetailsContent(el, type, this.context.plugin.settings.voice.primaryASR),
+              providerSetting.settingEl
+            );
           });
       });
     }
 
-    // 如果有配置，显示模式选择和 API Key 输入
-    if (config) {
-      this.renderASRProviderDetails(containerEl, type, config);
-    }
+    // 如果有配置，显示模式选择和 API Key 输入 - 初始渲染
+    this.toggleConditionalSection(
+      containerEl,
+      sectionId,
+      !!config,
+      (el) => this.renderASRProviderDetailsContent(el, type, config!),
+      providerSetting.settingEl
+    );
+  }
+
+  /**
+   * 渲染 ASR 供应商详细配置内容
+   * 提取为独立方法，用于 toggleConditionalSection 调用
+   */
+  private renderASRProviderDetailsContent(
+    container: HTMLElement,
+    type: 'primary' | 'backup',
+    config: VoiceASRProviderConfig
+  ): void {
+    this.renderASRProviderDetails(container, type, config);
   }
 
   /**
@@ -1176,7 +1341,7 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
       .setHeading();
 
     // 启用 LLM 后处理
-    new Setting(card)
+    const enableLLMSetting = new Setting(card)
       .setName(t('voice.settings.enableLLMPostProcessing'))
       .setDesc(t('voice.settings.enableLLMPostProcessingDesc'))
       .addToggle(toggle => toggle
@@ -1184,17 +1349,37 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
         .onChange(async (value) => {
           this.context.plugin.settings.voice.enableLLMPostProcessing = value;
           await this.saveSettings();
-          this.refreshDisplay();
+          
+          // 使用局部更新替代全量刷新
+          this.toggleConditionalSection(
+            card,
+            'llm-post-processing-config',
+            value,
+            (el) => this.renderLLMPostProcessingConfigContent(el),
+            enableLLMSetting.settingEl
+          );
         }));
 
-    // 仅在启用后处理时显示详细配置
-    if (voiceSettings.enableLLMPostProcessing) {
-      // 选择供应商和模型
-      this.renderProviderModelBinding(card, 'postProcessing');
+    // LLM 后处理配置区域（仅在启用时显示）- 初始渲染
+    this.toggleConditionalSection(
+      card,
+      'llm-post-processing-config',
+      voiceSettings.enableLLMPostProcessing,
+      (el) => this.renderLLMPostProcessingConfigContent(el),
+      enableLLMSetting.settingEl
+    );
+  }
 
-      // 预设管理
-      this.renderPresetManagement(card);
-    }
+  /**
+   * 渲染 LLM 后处理配置内容
+   * 提取为独立方法，用于 toggleConditionalSection 调用
+   */
+  private renderLLMPostProcessingConfigContent(container: HTMLElement): void {
+    // 选择供应商和模型
+    this.renderProviderModelBinding(container, 'postProcessing');
+
+    // 预设管理
+    this.renderPresetManagement(container);
   }
 
   /**
@@ -1316,13 +1501,12 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
           });
       });
 
-    // 预设列表
+    // 预设列表容器
     const presetListEl = containerEl.createDiv({ cls: 'voice-preset-list' });
     presetListEl.style.marginTop = '12px';
 
-    voiceSettings.llmPresets.forEach(preset => {
-      this.renderPresetItem(presetListEl, preset);
-    });
+    // 渲染预设列表
+    this.renderPresetList(presetListEl);
 
     // 添加预设按钮
     new Setting(containerEl)
@@ -1338,7 +1522,8 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
           this.context.plugin.settings.voice.llmPresets.push(newPreset);
           this.editingPresetId = newPreset.id;
           await this.saveSettings();
-          this.refreshDisplay();
+          // 使用局部更新替代全量刷新
+          this.renderPresetList(presetListEl);
         }));
 
     // 重置为默认预设按钮
@@ -1348,10 +1533,24 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
         .onClick(async () => {
           this.context.plugin.settings.voice.llmPresets = [...DEFAULT_VOICE_LLM_PRESETS];
           this.context.plugin.settings.voice.activeLLMPresetId = 'polishing';
+          this.editingPresetId = null;
           await this.saveSettings();
-          this.refreshDisplay();
+          // 使用局部更新替代全量刷新
+          this.renderPresetList(presetListEl);
           new Notice(t('voice.settings.presetsReset'));
         }));
+  }
+
+  /**
+   * 渲染预设列表
+   * 提取为独立方法，用于局部更新
+   */
+  private renderPresetList(presetListEl: HTMLElement): void {
+    presetListEl.empty();
+    const voiceSettings = this.context.plugin.settings.voice;
+    voiceSettings.llmPresets.forEach(preset => {
+      this.renderPresetItem(presetListEl, preset);
+    });
   }
 
   /**
@@ -1409,7 +1608,9 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
           .setCta()
           .onClick(() => {
             this.editingPresetId = null;
-            this.refreshDisplay();
+            // 使用局部更新替代全量刷新
+            const presetListEl = containerEl;
+            this.renderPresetList(presetListEl);
           }));
     } else {
       // 显示模式
@@ -1431,7 +1632,9 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
       editBtn.setAttribute('aria-label', t('common.edit'));
       editBtn.addEventListener('click', () => {
         this.editingPresetId = preset.id;
-        this.refreshDisplay();
+        // 使用局部更新替代全量刷新
+        const presetListEl = containerEl;
+        this.renderPresetList(presetListEl);
       });
 
       // 删除按钮（默认预设不可删除）
@@ -1449,7 +1652,9 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
               this.context.plugin.settings.voice.activeLLMPresetId = presets[0]?.id || 'polishing';
             }
             await this.saveSettings();
-            this.refreshDisplay();
+            // 使用局部更新替代全量刷新
+            const presetListEl = containerEl;
+            this.renderPresetList(presetListEl);
           }
         });
       }
@@ -1487,7 +1692,7 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
       .setHeading();
 
     // 启用 AI 助手
-    new Setting(card)
+    const enableAssistantSetting = new Setting(card)
       .setName(t('voice.settings.enableAssistant'))
       .setDesc(t('voice.settings.enableAssistantDesc'))
       .addToggle(toggle => toggle
@@ -1495,66 +1700,86 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
         .onChange(async (value) => {
           this.context.plugin.settings.voice.assistantConfig.enabled = value;
           await this.saveSettings();
-          this.refreshDisplay();
+          
+          // 使用局部更新替代全量刷新
+          this.toggleConditionalSection(
+            card,
+            'assistant-config',
+            value,
+            (el) => this.renderAssistantConfigContent(el),
+            enableAssistantSetting.settingEl
+          );
         }));
 
-    // 仅在启用助手时显示详细配置
-    if (assistantConfig.enabled) {
-      // 选择供应商和模型
-      this.renderProviderModelBinding(card, 'assistant');
+    // AI 助手配置区域（仅在启用时显示）- 初始渲染
+    this.toggleConditionalSection(
+      card,
+      'assistant-config',
+      assistantConfig.enabled,
+      (el) => this.renderAssistantConfigContent(el),
+      enableAssistantSetting.settingEl
+    );
+  }
 
-      // Q&A 系统提示词
-      new Setting(card)
-        .setName(t('voice.settings.qaSystemPrompt'))
-        .setDesc(t('voice.settings.qaSystemPromptDesc'));
+  /**
+   * 渲染 AI 助手配置内容
+   * 提取为独立方法，用于 toggleConditionalSection 调用
+   */
+  private renderAssistantConfigContent(container: HTMLElement): void {
+    // 选择供应商和模型
+    this.renderProviderModelBinding(container, 'assistant');
 
-      const qaTextAreaEl = card.createEl('textarea');
-      qaTextAreaEl.value = assistantConfig.qaSystemPrompt;
-      qaTextAreaEl.rows = 6;
-      qaTextAreaEl.style.width = '100%';
-      qaTextAreaEl.style.marginBottom = '12px';
-      qaTextAreaEl.style.resize = 'vertical';
-      qaTextAreaEl.addEventListener('change', async () => {
-        this.context.plugin.settings.voice.assistantConfig.qaSystemPrompt = qaTextAreaEl.value;
-        await this.saveSettings();
-      });
+    // Q&A 系统提示词
+    new Setting(container)
+      .setName(t('voice.settings.qaSystemPrompt'))
+      .setDesc(t('voice.settings.qaSystemPromptDesc'));
 
-      // 重置 Q&A 提示词按钮
-      new Setting(card)
-        .addButton(button => button
-          .setButtonText(t('voice.settings.resetQaPrompt'))
-          .onClick(async () => {
-            this.context.plugin.settings.voice.assistantConfig.qaSystemPrompt = DEFAULT_VOICE_ASSISTANT_QA_PROMPT;
-            await this.saveSettings();
-            this.refreshDisplay();
-          }));
+    const qaTextAreaEl = container.createEl('textarea');
+    qaTextAreaEl.value = this.context.plugin.settings.voice.assistantConfig.qaSystemPrompt;
+    qaTextAreaEl.rows = 6;
+    qaTextAreaEl.style.width = '100%';
+    qaTextAreaEl.style.marginBottom = '12px';
+    qaTextAreaEl.style.resize = 'vertical';
+    qaTextAreaEl.addEventListener('change', async () => {
+      this.context.plugin.settings.voice.assistantConfig.qaSystemPrompt = qaTextAreaEl.value;
+      await this.saveSettings();
+    });
 
-      // 文本处理系统提示词
-      new Setting(card)
-        .setName(t('voice.settings.textProcessingSystemPrompt'))
-        .setDesc(t('voice.settings.textProcessingSystemPromptDesc'));
+    // 重置 Q&A 提示词按钮
+    new Setting(container)
+      .addButton(button => button
+        .setButtonText(t('voice.settings.resetQaPrompt'))
+        .onClick(async () => {
+          this.context.plugin.settings.voice.assistantConfig.qaSystemPrompt = DEFAULT_VOICE_ASSISTANT_QA_PROMPT;
+          qaTextAreaEl.value = DEFAULT_VOICE_ASSISTANT_QA_PROMPT;
+          await this.saveSettings();
+        }));
 
-      const textProcessingTextAreaEl = card.createEl('textarea');
-      textProcessingTextAreaEl.value = assistantConfig.textProcessingSystemPrompt;
-      textProcessingTextAreaEl.rows = 6;
-      textProcessingTextAreaEl.style.width = '100%';
-      textProcessingTextAreaEl.style.marginBottom = '12px';
-      textProcessingTextAreaEl.style.resize = 'vertical';
-      textProcessingTextAreaEl.addEventListener('change', async () => {
-        this.context.plugin.settings.voice.assistantConfig.textProcessingSystemPrompt = textProcessingTextAreaEl.value;
-        await this.saveSettings();
-      });
+    // 文本处理系统提示词
+    new Setting(container)
+      .setName(t('voice.settings.textProcessingSystemPrompt'))
+      .setDesc(t('voice.settings.textProcessingSystemPromptDesc'));
 
-      // 重置文本处理提示词按钮
-      new Setting(card)
-        .addButton(button => button
-          .setButtonText(t('voice.settings.resetTextProcessingPrompt'))
-          .onClick(async () => {
-            this.context.plugin.settings.voice.assistantConfig.textProcessingSystemPrompt = DEFAULT_VOICE_ASSISTANT_TEXT_PROCESSING_PROMPT;
-            await this.saveSettings();
-            this.refreshDisplay();
-          }));
-    }
+    const textProcessingTextAreaEl = container.createEl('textarea');
+    textProcessingTextAreaEl.value = this.context.plugin.settings.voice.assistantConfig.textProcessingSystemPrompt;
+    textProcessingTextAreaEl.rows = 6;
+    textProcessingTextAreaEl.style.width = '100%';
+    textProcessingTextAreaEl.style.marginBottom = '12px';
+    textProcessingTextAreaEl.style.resize = 'vertical';
+    textProcessingTextAreaEl.addEventListener('change', async () => {
+      this.context.plugin.settings.voice.assistantConfig.textProcessingSystemPrompt = textProcessingTextAreaEl.value;
+      await this.saveSettings();
+    });
+
+    // 重置文本处理提示词按钮
+    new Setting(container)
+      .addButton(button => button
+        .setButtonText(t('voice.settings.resetTextProcessingPrompt'))
+        .onClick(async () => {
+          this.context.plugin.settings.voice.assistantConfig.textProcessingSystemPrompt = DEFAULT_VOICE_ASSISTANT_TEXT_PROCESSING_PROMPT;
+          textProcessingTextAreaEl.value = DEFAULT_VOICE_ASSISTANT_TEXT_PROCESSING_PROMPT;
+          await this.saveSettings();
+        }));
   }
 
   // ============================================================================

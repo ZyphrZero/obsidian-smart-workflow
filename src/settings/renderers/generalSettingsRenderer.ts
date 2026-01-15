@@ -60,17 +60,31 @@ export class GeneralSettingsRenderer extends BaseSettingsRenderer {
             null,
             async () => {
               await this.saveSettings();
-              this.refreshDisplay();
+              // 使用 toggleConditionalSection 重新渲染供应商列表
+              this.toggleConditionalSection(providerCard, 'provider-list', false, () => {});
+              this.toggleConditionalSection(providerCard, 'provider-list', true, (el) => this.renderProviderList(el));
             }
           );
           modal.open();
         }));
 
-    // 供应商列表
+    // 供应商列表（使用条件区域便于局部刷新）
+    this.toggleConditionalSection(
+      providerCard,
+      'provider-list',
+      true,
+      (el) => this.renderProviderList(el)
+    );
+  }
+
+  /**
+   * 渲染供应商列表
+   */
+  private renderProviderList(containerEl: HTMLElement): void {
     const providers = this.context.configManager.getProviders();
     
     if (providers.length === 0) {
-      const emptyEl = providerCard.createDiv({ cls: 'provider-empty' });
+      const emptyEl = containerEl.createDiv({ cls: 'provider-empty' });
       emptyEl.setCssProps({
         padding: '20px',
         'text-align': 'center',
@@ -82,7 +96,7 @@ export class GeneralSettingsRenderer extends BaseSettingsRenderer {
 
     // 渲染每个供应商
     providers.forEach(provider => {
-      this.renderProviderItem(providerCard, provider);
+      this.renderProviderItem(containerEl, provider);
     });
   }
 
@@ -176,8 +190,24 @@ export class GeneralSettingsRenderer extends BaseSettingsRenderer {
     if (provider.models.length > 0) {
       modelCountEl.addEventListener('click', (e) => {
         e.stopPropagation();
-        providerExpandedStatus.set(provider.id, !isExpanded);
-        this.refreshDisplay();
+        const newExpanded = !isExpanded;
+        providerExpandedStatus.set(provider.id, newExpanded);
+        
+        // 更新图标
+        const chevron = modelCountEl.querySelector('.model-chevron');
+        if (chevron) {
+          chevron.empty();
+          setIcon(chevron as HTMLElement, newExpanded ? 'chevron-down' : 'chevron-right');
+        }
+        
+        // 使用 toggleConditionalSection 局部更新模型列表
+        this.toggleConditionalSection(
+          providerContainer,
+          `model-list-${provider.id}`,
+          newExpanded,
+          (el) => this.renderModelListContent(el, provider),
+          headerEl
+        );
       });
     }
 
@@ -217,7 +247,9 @@ export class GeneralSettingsRenderer extends BaseSettingsRenderer {
         null,
         async () => {
           await this.saveSettings();
-          this.refreshDisplay();
+          // 使用 toggleConditionalSection 重新渲染模型列表
+          this.toggleConditionalSection(providerContainer, `model-list-${provider.id}`, false, () => {});
+          this.toggleConditionalSection(providerContainer, `model-list-${provider.id}`, true, (el) => this.renderModelListContent(el, this.context.configManager.getProvider(provider.id)!), headerEl);
         }
       );
       modal.open();
@@ -234,7 +266,12 @@ export class GeneralSettingsRenderer extends BaseSettingsRenderer {
         provider,
         async () => {
           await this.saveSettings();
-          this.refreshDisplay();
+          // 重新渲染整个供应商列表（因为供应商名称可能改变）
+          const providerCard = containerEl.closest('.settings-card');
+          if (providerCard) {
+            this.toggleConditionalSection(providerCard as HTMLElement, 'provider-list', false, () => {});
+            this.toggleConditionalSection(providerCard as HTMLElement, 'provider-list', true, (el) => this.renderProviderList(el));
+          }
         }
       );
       modal.open();
@@ -253,7 +290,12 @@ export class GeneralSettingsRenderer extends BaseSettingsRenderer {
             this.context.configManager.deleteProvider(provider.id);
             await this.saveSettings();
             new Notice('✅ ' + t('notices.configDeleted'));
-            this.refreshDisplay();
+            // 重新渲染供应商列表
+            const providerCard = containerEl.closest('.settings-card');
+            if (providerCard) {
+              this.toggleConditionalSection(providerCard as HTMLElement, 'provider-list', false, () => {});
+              this.toggleConditionalSection(providerCard as HTMLElement, 'provider-list', true, (el) => this.renderProviderList(el));
+            }
           } catch (error) {
             new Notice('❌ ' + (error instanceof Error ? error.message : String(error)));
           }
@@ -265,7 +307,9 @@ export class GeneralSettingsRenderer extends BaseSettingsRenderer {
     // 模型列表区域（仅当展开且有模型时显示）
     const isModelListExpanded = providerExpandedStatus.get(provider.id) ?? true;
     if (provider.models.length > 0 && isModelListExpanded) {
-      this.renderModelList(providerContainer, provider);
+      // 创建条件区域容器
+      const modelListSection = providerContainer.createDiv({ cls: `conditional-section-model-list-${provider.id}` });
+      this.renderModelListContent(modelListSection, provider);
     } else if (provider.models.length === 0) {
       // 无模型时显示提示文本
       const noModelsEl = providerContainer.createDiv({ cls: 'no-models-hint' });
@@ -285,21 +329,18 @@ export class GeneralSettingsRenderer extends BaseSettingsRenderer {
     }
   }
 
-
   /**
-   * 渲染模型列表（支持拖拽排序）
+   * 渲染模型列表内容（供 toggleConditionalSection 使用）
    */
-  private renderModelList(containerEl: HTMLElement, provider: Provider): void {
-    // 模型列表
-    const modelsEl = containerEl.createDiv({ cls: 'model-list' });
-    modelsEl.setCssProps({
+  private renderModelListContent(containerEl: HTMLElement, provider: Provider): void {
+    containerEl.setCssProps({
       'margin-top': '8px',
       'padding-top': '8px',
       'border-top': '1px solid var(--background-modifier-border)'
     });
 
     if (provider.models.length === 0) {
-      const emptyEl = modelsEl.createDiv();
+      const emptyEl = containerEl.createDiv();
       emptyEl.setCssProps({
         'font-size': '0.85em',
         color: 'var(--text-muted)',
@@ -313,14 +354,19 @@ export class GeneralSettingsRenderer extends BaseSettingsRenderer {
     let draggedIndex: number | null = null;
 
     provider.models.forEach((model, index) => {
-      this.renderModelItem(modelsEl, provider, model, index, {
+      this.renderModelItem(containerEl, provider, model, index, {
         onDragStart: (idx) => { draggedIndex = idx; },
         onDragEnd: () => { draggedIndex = null; },
         onDrop: async (targetIdx) => {
           if (draggedIndex !== null && draggedIndex !== targetIdx) {
             this.context.configManager.reorderModel(provider.id, draggedIndex, targetIdx);
             await this.saveSettings();
-            this.refreshDisplay();
+            // 重新渲染模型列表
+            const parentEl = containerEl.parentElement;
+            if (parentEl) {
+              this.toggleConditionalSection(parentEl, `model-list-${provider.id}`, false, () => {});
+              this.toggleConditionalSection(parentEl, `model-list-${provider.id}`, true, (el) => this.renderModelListContent(el, this.context.configManager.getProvider(provider.id)!));
+            }
           }
         },
         getDraggedIndex: () => draggedIndex
@@ -506,7 +552,12 @@ export class GeneralSettingsRenderer extends BaseSettingsRenderer {
         model,
         async () => {
           await this.saveSettings();
-          this.refreshDisplay();
+          // 重新渲染模型列表
+          const providerContainer = containerEl.closest('.provider-item');
+          if (providerContainer) {
+            this.toggleConditionalSection(providerContainer as HTMLElement, `model-list-${provider.id}`, false, () => {});
+            this.toggleConditionalSection(providerContainer as HTMLElement, `model-list-${provider.id}`, true, (el) => this.renderModelListContent(el, this.context.configManager.getProvider(provider.id)!));
+          }
         }
       );
       modal.open();
@@ -528,7 +579,12 @@ export class GeneralSettingsRenderer extends BaseSettingsRenderer {
           try {
             this.context.configManager.deleteModel(provider.id, model.id);
             await this.saveSettings();
-            this.refreshDisplay();
+            // 重新渲染模型列表
+            const providerContainer = containerEl.closest('.provider-item');
+            if (providerContainer) {
+              this.toggleConditionalSection(providerContainer as HTMLElement, `model-list-${provider.id}`, false, () => {});
+              this.toggleConditionalSection(providerContainer as HTMLElement, `model-list-${provider.id}`, true, (el) => this.renderModelListContent(el, this.context.configManager.getProvider(provider.id)!));
+            }
           } catch (error) {
             new Notice('❌ ' + (error instanceof Error ? error.message : String(error)));
           }
@@ -578,11 +634,16 @@ export class GeneralSettingsRenderer extends BaseSettingsRenderer {
     }
 
     try {
+      const resolvedProvider = this.context.configManager.resolveProviderForRequest(provider);
+      if (!resolvedProvider) {
+        throw new Error(t('aiService.invalidApiKey'));
+      }
+
       const tester = new ConnectionTester({
         timeout: this.context.plugin.settings.timeout || 15000,
         debugMode: this.context.plugin.settings.debugMode,
       });
-      await tester.testConnection(provider, model);
+      await tester.testConnection(resolvedProvider, model);
       new Notice('✅ ' + t('notices.connectionSuccess'));
     } catch (error) {
       new Notice('❌ ' + t('notices.connectionFailed', { 
@@ -684,7 +745,12 @@ export class GeneralSettingsRenderer extends BaseSettingsRenderer {
             }
           }
           await this.saveSettings();
-          this.refreshDisplay();
+          // 重新渲染供应商列表
+          const providerCard = this.context.containerEl.querySelector('.settings-card');
+          if (providerCard) {
+            this.toggleConditionalSection(providerCard as HTMLElement, 'provider-list', false, () => {});
+            this.toggleConditionalSection(providerCard as HTMLElement, 'provider-list', true, (el) => this.renderProviderList(el));
+          }
           new Notice('✅ ' + t('settingsDetails.general.modelsAdded', { count: String(selectedModels.length) }));
         },
         async () => {

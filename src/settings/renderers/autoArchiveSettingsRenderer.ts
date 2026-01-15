@@ -76,7 +76,6 @@ export class AutoArchiveSettingsRenderer extends BaseSettingsRenderer {
         .onChange(async (value) => {
           this.context.plugin.settings.autoArchive.enabled = value;
           await this.context.plugin.saveSettings();
-          this.context.refreshDisplay();
         })
       );
 
@@ -142,7 +141,7 @@ export class AutoArchiveSettingsRenderer extends BaseSettingsRenderer {
       name: t('autoArchive.commands.autoArchive'),
       description: t('autoArchive.settings.hotkeyDesc'),
       i18nPrefix: 'autoArchive.settings',
-      onRefresh: () => this.context.refreshDisplay(),
+      // 不再传递 onRefresh，快捷键组件内部会自动更新显示
     });
   }
 

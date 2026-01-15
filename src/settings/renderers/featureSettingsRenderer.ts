@@ -85,24 +85,53 @@ export class FeatureSettingsRenderer extends BaseSettingsRenderer {
       'font-size': '1em'
     });
 
+    // 内容容器（用于条件渲染）
+    const contentWrapper = toolbarCard.createDiv({ cls: 'feature-content-wrapper' });
+
     // 点击切换展开状态
     headerEl.addEventListener('click', () => {
-      if (isExpanded) {
-        this.context.expandedSections.delete('selection-toolbar-expanded');
-      } else {
+      const willExpand = !this.context.expandedSections.has('selection-toolbar-expanded');
+      
+      if (willExpand) {
         this.context.expandedSections.add('selection-toolbar-expanded');
+        // 更新图标
+        chevronEl.empty();
+        setIcon(chevronEl, 'chevron-down');
+        // 更新 header margin
+        headerEl.setCssProps({ 'margin-bottom': '20px' });
+      } else {
+        this.context.expandedSections.delete('selection-toolbar-expanded');
+        // 更新图标
+        chevronEl.empty();
+        setIcon(chevronEl, 'chevron-right');
+        // 更新 header margin
+        headerEl.setCssProps({ 'margin-bottom': '0' });
       }
-      this.refreshDisplay();
+      
+      // 使用 toggleConditionalSection 显示/隐藏内容
+      this.toggleConditionalSection(
+        contentWrapper,
+        'selection-toolbar-content',
+        willExpand,
+        (el) => this.renderSelectionToolbarContent(el)
+      );
     });
 
-    // 如果未展开，不渲染内容
-    if (!isExpanded) {
-      return;
+    // 初始渲染：如果已展开，渲染内容
+    if (isExpanded) {
+      this.toggleConditionalSection(
+        contentWrapper,
+        'selection-toolbar-content',
+        true,
+        (el) => this.renderSelectionToolbarContent(el)
+      );
     }
+  }
 
-    // 内容容器
-    const contentEl = toolbarCard.createDiv({ cls: 'feature-content' });
-
+  /**
+   * 渲染选中工具栏内容
+   */
+  private renderSelectionToolbarContent(contentEl: HTMLElement): void {
     // 启用开关
     new Setting(contentEl)
       .setName(t('selectionToolbar.settings.enabled'))
@@ -239,8 +268,22 @@ export class FeatureSettingsRenderer extends BaseSettingsRenderer {
       .setDesc(t('selectionToolbar.settings.buttonConfigDesc'))
       .setHeading();
 
-    // 按钮列表容器
-    const buttonListEl = containerEl.createDiv({ cls: 'toolbar-button-list' });
+    // 按钮列表容器（用于条件渲染）
+    const buttonListWrapper = containerEl.createDiv({ cls: 'toolbar-button-list-wrapper' });
+    
+    // 使用 toggleConditionalSection 渲染按钮列表，便于拖拽后刷新
+    this.toggleConditionalSection(
+      buttonListWrapper,
+      'toolbar-button-list',
+      true,
+      (el) => this.renderButtonList(el, buttonListWrapper)
+    );
+  }
+
+  /**
+   * 渲染按钮列表内容
+   */
+  private renderButtonList(buttonListEl: HTMLElement, wrapperEl: HTMLElement): void {
     buttonListEl.setCssProps({
       'margin-top': '8px'
     });
@@ -355,7 +398,10 @@ export class FeatureSettingsRenderer extends BaseSettingsRenderer {
           
           await this.saveSettings();
           this.context.plugin.updateSelectionToolbarSettings();
-          this.refreshDisplay();
+          
+          // 使用 toggleConditionalSection 重新渲染按钮列表
+          this.toggleConditionalSection(wrapperEl, 'toolbar-button-list', false, () => {});
+          this.toggleConditionalSection(wrapperEl, 'toolbar-button-list', true, (el) => this.renderButtonList(el, wrapperEl));
         }
       });
 
