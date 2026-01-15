@@ -1,6 +1,7 @@
 # Smart Workflow
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Release](https://img.shields.io/github/v/release/ZyphrZero/obsidian-smart-workflow)](https://github.com/ZyphrZero/obsidian-smart-workflow/releases)
 
 **Smart Workflow** 是一款强大的 Obsidian 插件，集成 AI 智能功能、终端、语音输入，提升知识管理效率。
 
