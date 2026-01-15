@@ -2,8 +2,6 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
-> 🎯 **User Experience First** — Intuitive interaction and seamless workflow over feature bloat.
-
 **Smart Workflow** is a powerful Obsidian plugin that enhances your knowledge management with AI-powered features, integrated terminal, and voice input.
 
 [中文文档](./README_CN.md)
