@@ -127,6 +127,8 @@ export class FileNamingSettingsRenderer extends BaseSettingsRenderer {
 
       // 监听变化
       dropdown.onChange(async (value) => {
+        let nextProviderId: string | undefined;
+        let nextModelId: string | undefined;
         if (!value) {
           // 清除绑定
           delete this.context.plugin.settings.featureBindings.naming;
@@ -138,15 +140,29 @@ export class FileNamingSettingsRenderer extends BaseSettingsRenderer {
             modelId,
             promptTemplate: existingBinding?.promptTemplate ?? this.context.plugin.settings.defaultPromptTemplate
           };
+          nextProviderId = providerId;
+          nextModelId = modelId;
         }
         await this.saveSettings();
+        updateStatus(nextProviderId, nextModelId);
       });
     });
 
-    // 显示当前绑定状态
-    if (currentProvider && currentModel) {
-      const displayName = currentModel.displayName || currentModel.name;
-      const statusEl = containerEl.createDiv({ cls: 'feature-binding-status' });
+    // 绑定状态容器（用于局部更新）
+    const statusContainerId = 'naming-binding-status';
+    const statusContainer = containerEl.createDiv({ cls: `conditional-section-${statusContainerId}` });
+    const updateStatus = (providerId?: string, modelId?: string): void => {
+      statusContainer.empty();
+      if (!providerId || !modelId) {
+        return;
+      }
+      const provider = this.context.configManager.getProvider(providerId);
+      const model = provider?.models.find(item => item.id === modelId);
+      if (!provider || !model) {
+        return;
+      }
+      const displayName = model.displayName || model.name;
+      const statusEl = statusContainer.createDiv({ cls: 'feature-binding-status' });
       statusEl.setCssProps({
         'font-size': '0.85em',
         color: 'var(--text-muted)',
@@ -157,10 +173,13 @@ export class FileNamingSettingsRenderer extends BaseSettingsRenderer {
         'border-radius': '4px'
       });
       statusEl.setText(t('settingsDetails.general.currentBindingStatus', {
-        provider: currentProvider.name,
+        provider: provider.name,
         model: displayName
       }));
-    }
+    };
+    
+    // 显示当前绑定状态
+    updateStatus(currentProvider?.id, currentModel?.id);
   }
 
   /**

@@ -57,7 +57,8 @@ export class TranslationSettingsRenderer extends BaseSettingsRenderer {
 
     // 点击切换展开状态
     headerEl.addEventListener('click', () => {
-      const newExpanded = !isExpanded;
+      const isExpandedNow = this.context.expandedSections.has('translation-feature-expanded');
+      const newExpanded = !isExpandedNow;
       if (newExpanded) {
         this.context.expandedSections.add('translation-feature-expanded');
       } else {
@@ -166,6 +167,8 @@ export class TranslationSettingsRenderer extends BaseSettingsRenderer {
 
       // 监听变化
       dropdown.onChange(async (value) => {
+        let nextProviderId: string | undefined;
+        let nextModelId: string | undefined;
         if (!value) {
           // 清除绑定
           delete this.context.plugin.settings.featureBindings.translation;
@@ -176,18 +179,28 @@ export class TranslationSettingsRenderer extends BaseSettingsRenderer {
             modelId,
             promptTemplate: '' // 翻译功能不需要自定义 prompt
           };
+          nextProviderId = providerId;
+          nextModelId = modelId;
         }
         await this.saveSettings();
+        updateStatus(nextProviderId, nextModelId);
       });
     });
 
     // 绑定状态容器（用于局部更新）
     const statusContainerId = 'translation-binding-status';
     const statusContainer = containerEl.createDiv({ cls: `conditional-section-${statusContainerId}` });
-    
-    // 显示当前绑定状态
-    if (currentProvider && currentModel) {
-      const displayName = currentModel.displayName || currentModel.name;
+    const updateStatus = (providerId?: string, modelId?: string): void => {
+      statusContainer.empty();
+      if (!providerId || !modelId) {
+        return;
+      }
+      const provider = this.context.configManager.getProvider(providerId);
+      const model = provider?.models.find(item => item.id === modelId);
+      if (!provider || !model) {
+        return;
+      }
+      const displayName = model.displayName || model.name;
       const statusEl = statusContainer.createDiv({ cls: 'feature-binding-status' });
       statusEl.setCssProps({
         'font-size': '0.85em',
@@ -199,10 +212,13 @@ export class TranslationSettingsRenderer extends BaseSettingsRenderer {
         'border-radius': '4px'
       });
       statusEl.setText(t('settingsDetails.general.currentBindingStatus', {
-        provider: currentProvider.name,
+        provider: provider.name,
         model: displayName
       }));
-    }
+    };
+    
+    // 显示当前绑定状态
+    updateStatus(currentProvider?.id, currentModel?.id);
   }
 
   /**
