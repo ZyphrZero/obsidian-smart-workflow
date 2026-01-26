@@ -73,11 +73,17 @@ export class BinaryDownloader {
 
   /**
    * 检查二进制文件是否存在且版本匹配
+   * @param skipVersionCheck 是否跳过版本检查（调试模式使用）
    */
-  binaryExists(): boolean {
+  binaryExists(skipVersionCheck = false): boolean {
     const binaryPath = this.getBinaryPath();
     if (!fs.existsSync(binaryPath)) {
       return false;
+    }
+    
+    // 如果跳过版本检查，只要文件存在就返回 true
+    if (skipVersionCheck) {
+      return true;
     }
     
     // 检查版本是否匹配
@@ -87,11 +93,17 @@ export class BinaryDownloader {
   
   /**
    * 检查是否需要更新（文件存在但版本不匹配）
+   * @param skipVersionCheck 是否跳过版本检查（调试模式使用）
    */
-  needsUpdate(): boolean {
+  needsUpdate(skipVersionCheck = false): boolean {
     const binaryPath = this.getBinaryPath();
     if (!fs.existsSync(binaryPath)) {
       return false; // 文件不存在，需要下载而非更新
+    }
+    
+    // 如果跳过版本检查，认为不需要更新
+    if (skipVersionCheck) {
+      return false;
     }
     
     const installedVersion = this.getInstalledVersion();
@@ -100,8 +112,9 @@ export class BinaryDownloader {
   
   /**
    * 获取已安装的二进制版本
+   * @param skipExecution 是否跳过执行二进制文件（调试模式使用）
    */
-  private getInstalledVersion(): string | null {
+  private getInstalledVersion(skipExecution = false): string | null {
     try {
       const binaryPath = this.getBinaryPath();
       if (!fs.existsSync(binaryPath)) {
@@ -119,6 +132,14 @@ export class BinaryDownloader {
         return cachedVersion;
       }
       
+      // 如果跳过执行，尝试从文件元数据推断版本
+      if (skipExecution) {
+        debugLog('[BinaryDownloader] 跳过版本检测，使用预期版本:', this.version);
+        this.installedVersionCache = this.version;
+        this.writeCachedVersion(binaryPath, this.version);
+        return this.version;
+      }
+      
       const result = spawnSync(binaryPath, ['--version'], {
         encoding: 'utf-8',
         windowsHide: true,
@@ -127,6 +148,7 @@ export class BinaryDownloader {
 
       if (result.error || result.status !== 0) {
         debugWarn('[BinaryDownloader] 获取二进制版本失败:', result.error ?? result.stderr);
+        debugWarn('[BinaryDownloader] 提示: 如果在离线环境或遇到权限问题，请开启调试模式跳过版本检测');
         this.installedVersionCache = null;
         return null;
       }
@@ -172,6 +194,9 @@ export class BinaryDownloader {
       onProgress?.(progress);
     };
 
+    const binaryPath = this.getBinaryPath();
+    const tempPath = this.getTempBinaryPath(binaryPath);
+
     try {
       notify({ stage: 'checking', percent: 0 });
       
@@ -187,10 +212,10 @@ export class BinaryDownloader {
       notify({ stage: 'downloading', percent: 10 });
       
       // 下载二进制文件
-      const binaryPath = this.getBinaryPath();
+      this.safeUnlink(tempPath);
       
       try {
-        await this.downloadFile(binaryInfo.url, binaryPath, (percent, downloadedBytes, totalBytes) => {
+        await this.downloadFile(binaryInfo.url, tempPath, (percent, downloadedBytes, totalBytes) => {
           // 下载阶段占 10% - 80%
           notify({
             stage: 'downloading',
@@ -211,7 +236,7 @@ export class BinaryDownloader {
           const latestUrl = this.applyDownloadAccelerator(`${latestBaseUrl}/${binaryInfo.filename}`);
           const latestChecksumUrl = this.applyDownloadAccelerator(`${latestBaseUrl}/${binaryInfo.filename}.sha256`);
           
-          await this.downloadFile(latestUrl, binaryPath, (percent, downloadedBytes, totalBytes) => {
+          await this.downloadFile(latestUrl, tempPath, (percent, downloadedBytes, totalBytes) => {
             notify({
               stage: 'downloading',
               percent: 10 + percent * 0.7,
@@ -235,11 +260,11 @@ export class BinaryDownloader {
           const checksumContent = await this.fetchText(binaryInfo.checksumUrl);
           const expectedHash = checksumContent.split(/\s+/)[0].toLowerCase();
           
-          const actualHash = await this.calculateSHA256(binaryPath);
+          const actualHash = await this.calculateSHA256(tempPath);
           
           if (actualHash !== expectedHash) {
             // 删除损坏的文件
-            fs.unlinkSync(binaryPath);
+            this.safeUnlink(tempPath);
             throw new Error(
               t('notices.checksumMismatch') || 
               `校验和不匹配: 期望 ${expectedHash}, 实际 ${actualHash}`
@@ -255,9 +280,10 @@ export class BinaryDownloader {
 
       // 设置可执行权限 (Unix)
       if (process.platform !== 'win32') {
-        fs.chmodSync(binaryPath, 0o755);
+        fs.chmodSync(tempPath, 0o755);
       }
 
+      await this.replaceBinary(tempPath, binaryPath);
       this.writeCachedVersion(binaryPath, this.version);
       this.installedVersionCache = this.version;
       
@@ -266,6 +292,7 @@ export class BinaryDownloader {
       debugLog('[BinaryDownloader] 二进制文件下载完成:', binaryPath);
       
     } catch (error) {
+      this.safeUnlink(tempPath);
       const errorMessage = error instanceof Error ? error.message : String(error);
       errorLog('[BinaryDownloader] 下载失败:', errorMessage);
       
@@ -465,6 +492,55 @@ export class BinaryDownloader {
       fs.writeFileSync(cachePath, JSON.stringify(payload));
     } catch (error) {
       debugWarn('[BinaryDownloader] 写入版本缓存失败:', error);
+    }
+  }
+
+  private getTempBinaryPath(binaryPath: string): string {
+    return `${binaryPath}.download`;
+  }
+
+  private async replaceBinary(tempPath: string, destPath: string): Promise<void> {
+    const maxAttempts = 5;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        if (fs.existsSync(destPath)) {
+          fs.unlinkSync(destPath);
+        }
+        fs.renameSync(tempPath, destPath);
+        return;
+      } catch (error) {
+        if (this.isFileBusyError(error) && attempt < maxAttempts) {
+          await this.delay(200 * attempt);
+          continue;
+        }
+        if (this.isFileBusyError(error)) {
+          throw new Error(
+            t('notices.binaryInUse') ||
+            '二进制文件被占用，请关闭 Obsidian 或结束 smart-workflow-server 进程后重试'
+          );
+        }
+        throw error;
+      }
+    }
+  }
+
+  private isFileBusyError(error: unknown): boolean {
+    const code = (error as NodeJS.ErrnoException | null)?.code;
+    return code === 'EBUSY' || code === 'EPERM' || code === 'EACCES';
+  }
+
+  private async delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private safeUnlink(filePath: string): void {
+    if (!fs.existsSync(filePath)) {
+      return;
+    }
+    try {
+      fs.unlinkSync(filePath);
+    } catch (error) {
+      debugWarn('[BinaryDownloader] 清理临时文件失败:', error);
     }
   }
 

@@ -216,11 +216,13 @@ export default class SmartWorkflowPlugin extends Plugin {
       const pluginDir = this.getPluginDir();
       const version = this.manifest.version;
       const downloadAcceleratorUrl = this.settings.serverConnection?.downloadAcceleratorUrl ?? '';
+      const offlineMode = this.settings.serverConnection?.offlineMode ?? false;
       this._serverManager = new this._serverManagerModule.ServerManager(
         pluginDir,
         version,
         downloadAcceleratorUrl,
-        this.settings.debugMode
+        this.settings.debugMode,
+        offlineMode
       );
       
       // 应用配置中的连接设置
@@ -572,9 +574,9 @@ export default class SmartWorkflowPlugin extends Plugin {
     setDebugMode(this.settings.debugMode);
 
     // 桌面端预先检查并更新服务器二进制（延迟执行，避免阻塞启动）
-    if (!Platform.isMobile && !this.settings.debugMode) {
+    if (!Platform.isMobile && !this.settings.serverConnection?.offlineMode) {
       window.setTimeout(() => {
-        if (this.settings.debugMode) {
+        if (this.settings.serverConnection?.offlineMode) {
           return;
         }
         this.getServerManager()

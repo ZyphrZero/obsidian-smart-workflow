@@ -81,6 +81,7 @@ export const zhCN: TranslationKeys = {
     binaryUpdateComplete: '服务器组件更新完成',
     binaryNotAvailable: '当前平台没有可用的服务器组件',
     checksumMismatch: '文件校验失败，请重试',
+    binaryInUse: '二进制文件被占用，请关闭 Obsidian 或结束 smart-workflow-server 进程后重试',
 
   // Chat
   chat: {
@@ -313,7 +314,7 @@ export const zhCN: TranslationKeys = {
     advanced: {
       performanceAndDebug: '性能与调试',
       debugMode: '调试模式',
-      debugModeDesc: '启用后，在浏览器控制台显示详细的调试日志（包括 prompt 内容、目录分析结果等），并跳过服务器二进制版本检查与下载（需本地已安装）',
+      debugModeDesc: '启用后，在浏览器控制台显示详细的调试日志（包括 prompt 内容、目录分析结果等）',
       featureVisibility: '功能显示',
       featureVisibilityDesc: '控制插件功能的显示位置，自定义您的工作流程。',
       aiNamingVisibility: 'AI 文件名生成',
@@ -335,7 +336,9 @@ export const zhCN: TranslationKeys = {
       showInStatusBarDesc: '在底部状态栏显示终端快捷入口',
       // 服务器连接设置
       serverConnection: '服务器连接',
-      serverConnectionDesc: '配置 WebSocket 断线重连参数',
+      serverConnectionDesc: '配置 WebSocket 断线重连参数和离线模式',
+      offlineMode: '离线模式',
+      offlineModeDesc: '启用后，跳过服务器二进制版本检查与自动下载。适用于内网环境或手动管理二进制文件的场景',
       reconnectMaxAttempts: '最大重连次数',
       reconnectMaxAttemptsDesc: '连接断开后的最大重连尝试次数（1-20）',
       reconnectInterval: '重连间隔',

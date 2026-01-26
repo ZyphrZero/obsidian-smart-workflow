@@ -57,8 +57,11 @@ export class ServerManager {
   /** 插件版本 */
   private version: string;
   
-  /** 调试模式 */
+  /** 调试模式（仅控制日志输出） */
   private debugMode: boolean;
+  
+  /** 离线模式（跳过版本检测和自动下载） */
+  private offlineMode: boolean;
   
   /** 二进制下载器 */
   private binaryDownloader: BinaryDownloader;
@@ -118,11 +121,13 @@ export class ServerManager {
     pluginDir: string,
     version: string = '0.0.0',
     downloadAcceleratorUrl: string = '',
-    debugMode: boolean = false
+    debugMode: boolean = false,
+    offlineMode: boolean = false
   ) {
     this.pluginDir = pluginDir;
     this.version = version;
     this.debugMode = debugMode;
+    this.offlineMode = offlineMode;
     this.binaryDownloader = new BinaryDownloader(pluginDir, version, downloadAcceleratorUrl);
   }
 
@@ -155,8 +160,8 @@ export class ServerManager {
    * 确保二进制文件已更新（不启动服务器）
    */
   async ensureBinaryUpdated(): Promise<void> {
-    if (this.debugMode) {
-      debugLog('[ServerManager] 调试模式已开启，跳过二进制版本检查与下载');
+    if (this.offlineMode) {
+      debugLog('[ServerManager] 离线模式已开启，跳过二进制版本检查与下载');
       return;
     }
     await this.ensureBinaryReady();
@@ -428,12 +433,12 @@ export class ServerManager {
   }
 
   private async ensureBinaryReady(): Promise<void> {
-    if (this.debugMode) {
+    if (this.offlineMode) {
       const binaryPath = this.getBinaryPath();
       if (!fs.existsSync(binaryPath)) {
         throw new ServerManagerError(
           ServerErrorCode.BINARY_NOT_FOUND,
-          '调试模式已开启，未进行版本检查与下载，请确保服务器二进制已存在'
+          '离线模式已开启，未进行版本检查与下载，请确保服务器二进制已存在'
         );
       }
       return;
@@ -453,11 +458,18 @@ export class ServerManager {
   }
 
   private async performBinaryUpdate(): Promise<void> {
-    const needsDownload = !this.binaryDownloader.binaryExists();
-    const needsUpdate = this.binaryDownloader.needsUpdate();
+    const skipVersionCheck = this.offlineMode;
+    const needsDownload = !this.binaryDownloader.binaryExists(skipVersionCheck);
+    const needsUpdate = this.binaryDownloader.needsUpdate(skipVersionCheck);
 
     if (!needsDownload && !needsUpdate) {
       return;
+    }
+
+    const shouldRestart = needsUpdate && this.isServerRunning();
+    if (shouldRestart) {
+      debugLog('[ServerManager] 服务器运行中，更新前先停止服务器');
+      await this.shutdown();
     }
 
     const messageKey = needsUpdate ? 'notices.updatingBinary' : 'notices.downloadingBinary';
@@ -469,6 +481,8 @@ export class ServerManager {
       t(messageKey) || defaultMessage,
       0
     );
+
+    let updateSucceeded = false;
 
     try {
       await this.binaryDownloader.download((progress) => {
@@ -485,6 +499,7 @@ export class ServerManager {
       const completeKey = needsUpdate ? 'notices.binaryUpdateComplete' : 'notices.binaryDownloadComplete';
       const completeMessage = needsUpdate ? '服务器组件更新完成' : '服务器组件下载完成';
       new Notice(t(completeKey) || completeMessage, 3000);
+      updateSucceeded = true;
 
     } catch (downloadError) {
       notice.hide();
@@ -492,6 +507,17 @@ export class ServerManager {
         ServerErrorCode.BINARY_NOT_FOUND,
         `下载二进制文件失败: ${downloadError instanceof Error ? downloadError.message : String(downloadError)}`
       );
+    } finally {
+      if (shouldRestart) {
+        this.resetShutdownState();
+        if (updateSucceeded) {
+          setTimeout(() => {
+            this.ensureServer().catch((error) => {
+              errorLog('[ServerManager] 更新后重启服务器失败:', error);
+            });
+          }, 0);
+        }
+      }
     }
   }
 
@@ -978,5 +1004,10 @@ export class ServerManager {
   updateDebugMode(debugMode: boolean): void {
     this.debugMode = debugMode;
     debugLog('[ServerManager] 更新调试模式:', this.debugMode);
+  }
+  
+  updateOfflineMode(offlineMode: boolean): void {
+    this.offlineMode = offlineMode;
+    debugLog('[ServerManager] 更新离线模式:', this.offlineMode);
   }
 }

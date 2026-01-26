@@ -82,6 +82,25 @@ export class AdvancedSettingsRenderer extends BaseSettingsRenderer {
   private renderServerConnectionContent(containerEl: HTMLElement): void {
     const settings = this.context.plugin.settings;
 
+    // 离线模式
+    new Setting(containerEl)
+      .setName(t('settingsDetails.advanced.offlineMode'))
+      .setDesc(t('settingsDetails.advanced.offlineModeDesc'))
+      .addToggle(toggle => toggle
+        .setValue(settings.serverConnection.offlineMode)
+        .onChange(async (value) => {
+          settings.serverConnection.offlineMode = value;
+          await this.saveSettings();
+          
+          // 更新 ServerManager 的离线模式
+          try {
+            const serverManager = await this.context.plugin.getServerManager();
+            serverManager.updateOfflineMode(value);
+          } catch (error) {
+            // ServerManager 可能还未初始化，忽略错误
+          }
+        }));
+
     // 最大重连次数
     new Setting(containerEl)
       .setName(t('settingsDetails.advanced.reconnectMaxAttempts'))

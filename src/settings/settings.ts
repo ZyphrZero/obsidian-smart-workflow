@@ -1005,6 +1005,8 @@ export interface ServerConnectionSettings {
   reconnectInterval: number;
   /** 下载加速源 */
   downloadAcceleratorUrl: string;
+  /** 离线模式（跳过版本检测和自动下载） */
+  offlineMode: boolean;
 }
 
 /**
@@ -1014,6 +1016,7 @@ export const DEFAULT_SERVER_CONNECTION_SETTINGS: ServerConnectionSettings = {
   maxReconnectAttempts: 5,
   reconnectInterval: 3000,
   downloadAcceleratorUrl: 'https://ghfast.top/',
+  offlineMode: false,
 };
 
 /**

@@ -81,6 +81,7 @@ export const en: TranslationKeys = {
     binaryUpdateComplete: 'Server component updated',
     binaryNotAvailable: 'No server component available for this platform',
     checksumMismatch: 'File verification failed, please retry',
+    binaryInUse: 'Binary file is in use. Close Obsidian or stop the smart-workflow-server process and retry',
 
   // Chat
   chat: {
@@ -313,7 +314,7 @@ export const en: TranslationKeys = {
     advanced: {
       performanceAndDebug: 'Performance & Debug',
       debugMode: 'Debug Mode',
-      debugModeDesc: 'When enabled, shows detailed debug logs in browser console (including prompt content, directory analysis results, etc.), and skips server binary version checks and downloads (requires local binary present)',
+      debugModeDesc: 'When enabled, shows detailed debug logs in browser console (including prompt content, directory analysis results, etc.)',
       featureVisibility: 'Feature Visibility',
       featureVisibilityDesc: 'Control where plugin features are displayed, customize your workflow.',
       aiNamingVisibility: 'AI Filename Generation',
@@ -335,7 +336,9 @@ export const en: TranslationKeys = {
       showInStatusBarDesc: 'Show terminal shortcut in bottom status bar',
       // Server connection settings
       serverConnection: 'Server Connection',
-      serverConnectionDesc: 'Configure WebSocket reconnection parameters',
+      serverConnectionDesc: 'Configure WebSocket reconnection parameters and offline mode',
+      offlineMode: 'Offline Mode',
+      offlineModeDesc: 'When enabled, skips server binary version checks and automatic downloads. Suitable for intranet environments or manual binary management',
       reconnectMaxAttempts: 'Max Reconnect Attempts',
       reconnectMaxAttemptsDesc: 'Maximum number of reconnection attempts after disconnection (1-20)',
       reconnectInterval: 'Reconnect Interval',

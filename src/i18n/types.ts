@@ -95,6 +95,7 @@ export interface TranslationKeys {
     binaryUpdateComplete: string;
     binaryNotAvailable: string;
     checksumMismatch: string;
+    binaryInUse: string;
 
   // 聊天界面
   chat: {
@@ -355,6 +356,8 @@ export interface TranslationKeys {
       // 服务器连接设置
       serverConnection: string;
       serverConnectionDesc: string;
+      offlineMode: string;
+      offlineModeDesc: string;
       reconnectMaxAttempts: string;
       reconnectMaxAttemptsDesc: string;
       reconnectInterval: string;
