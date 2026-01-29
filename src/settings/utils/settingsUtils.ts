@@ -54,8 +54,14 @@ export function getSettingTabs(): SettingTab[] {
         { id: 'voice', name: t('settings.tabs.voice'), icon: 'mic' },
       ]
     },
+    { id: 'terminal', name: t('settings.tabs.terminal'), icon: 'terminal' },
     { id: 'advanced', name: t('settings.tabs.advanced'), icon: 'sliders-horizontal' }
   ];
+  
+  // 移动端过滤掉终端选项
+  if (Platform.isMobile) {
+    return tabs.filter(tab => tab.id !== 'terminal');
+  }
   
   return tabs;
 }

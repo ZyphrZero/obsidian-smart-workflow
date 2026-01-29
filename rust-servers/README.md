@@ -1,6 +1,6 @@
 # Smart Workflow Server
 
-A unified Rust backend server for the Smart Workflow Obsidian plugin, providing voice input, LLM streaming, and utility functions via WebSocket.
+A unified Rust backend server for the Smart Workflow Obsidian plugin, providing PTY terminal, voice input, LLM streaming, and utility functions via WebSocket.
 
 ## Project Structure
 
@@ -11,6 +11,10 @@ rust-servers/
 │   ├── main.rs             # Entry point, CLI parsing, server startup
 │   ├── server.rs           # WebSocket server implementation
 │   ├── router.rs           # Message router, dispatches to modules
+│   ├── pty/                # PTY terminal module
+│   │   ├── mod.rs          # PtyHandler
+│   │   ├── session.rs      # PTY session management (portable-pty)
+│   │   └── shell.rs        # Shell detection and integration scripts
 │   ├── voice/              # Voice input module
 │   │   ├── mod.rs          # VoiceHandler
 │   │   ├── config.rs       # ASR configuration
@@ -36,6 +40,7 @@ rust-servers/
 
 | Dependency | Purpose |
 |------------|---------|
+| `portable-pty` | Cross-platform PTY library |
 | `tokio` | Async runtime |
 | `tokio-tungstenite` | WebSocket server/client |
 | `cpal` | Audio recording |
@@ -86,9 +91,22 @@ All messages use JSON format and must include a `module` field to specify the ta
 
 | Module | Function |
 |--------|----------|
+| `pty` | Terminal session management |
 | `voice` | Audio recording and ASR transcription |
 | `llm` | LLM streaming request handling |
 | `utils` | Language detection and other utilities |
+
+### PTY Module
+
+```jsonc
+// Initialize terminal
+{ "module": "pty", "type": "init", "shell_type": "powershell", "cwd": "/path" }
+
+// Resize terminal
+{ "module": "pty", "type": "resize", "cols": 120, "rows": 30 }
+
+// Input: send text or binary data directly
+```
 
 ### Voice Module
 
@@ -157,16 +175,16 @@ Response:
 ┌─────────────────────────────────────────────────────────────┐
 │                   Message Router                             │
 │                    (router.rs)                               │
-│  ┌─────────┬─────────┬─────────┐                            │
-│  │  Voice  │   LLM   │  Utils  │                            │
-│  └────┬────┴────┬────┴────┬────┘                            │
-└───────┼─────────┼─────────┼───────────────────────────────┘
-        │         │         │
-        ▼         ▼         ▼
-   ┌─────────┐ ┌─────────┐ ┌─────────┐
-   │ Audio   │ │ HTTP    │ │Language │
-   │Recorder │ │ Client  │ │Detector │
-   └─────────┘ └─────────┘ └─────────┘
+│  ┌─────────┬─────────┬─────────┬─────────┐                  │
+│  │   PTY   │  Voice  │   LLM   │  Utils  │                  │
+│  └────┬────┴────┬────┴────┬────┴────┬────┘                  │
+└───────┼─────────┼─────────┼─────────┼───────────────────────┘
+        │         │         │         │
+        ▼         ▼         ▼         ▼
+   ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐
+   │ PTY     │ │ Audio   │ │ HTTP    │ │Language │
+   │ Session │ │Recorder │ │ Client  │ │Detector │
+   └─────────┘ └─────────┘ └─────────┘ └─────────┘
 ```
 
 ## Plugin Integration
@@ -182,5 +200,6 @@ The server is managed by `ServerManager` on the TypeScript side:
 ## Error Handling
 
 - WebSocket disconnection triggers automatic resource cleanup
+- PTY session exit notifies client
 - ASR transcription failure falls back to backup engine
 - LLM requests support cancellation and timeout handling

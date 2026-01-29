@@ -115,7 +115,49 @@ export interface ServerEvents {
   'ws-reconnect-failed': () => void;
 }
 
+// ============================================================================
+// PTY 模块类型
+// ============================================================================
 
+/**
+ * PTY 配置
+ */
+export interface PtyConfig {
+  /** Shell 类型 */
+  shell_type?: string;
+  /** Shell 参数 */
+  shell_args?: string[];
+  /** 工作目录 */
+  cwd?: string;
+  /** 环境变量 */
+  env?: Record<string, string>;
+  /** 列数 */
+  cols?: number;
+  /** 行数 */
+  rows?: number;
+}
+
+/**
+ * PTY 初始化响应
+ */
+export interface PtyInitResponse {
+  /** 会话 ID */
+  session_id: string;
+  /** 是否成功 */
+  success: boolean;
+}
+
+/**
+ * 会话级别事件监听器
+ */
+export interface SessionEventListeners {
+  /** 输出数据处理器 */
+  output: Set<(data: Uint8Array) => void>;
+  /** 退出处理器 */
+  exit: Set<(code: number) => void>;
+  /** 错误处理器 */
+  error: Set<(code: string, message: string) => void>;
+}
 
 // ============================================================================
 // Voice 模块类型 (复用 voice/types.ts 中的定义)

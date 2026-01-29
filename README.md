@@ -3,7 +3,7 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Release](https://img.shields.io/github/v/release/ZyphrZero/obsidian-smart-workflow)](https://github.com/ZyphrZero/obsidian-smart-workflow/releases)
 
-**Smart Workflow** is a powerful Obsidian plugin that enhances your knowledge management with AI-powered features and voice input.
+**Smart Workflow** is a powerful Obsidian plugin that enhances your knowledge management with AI-powered features, integrated terminal, and voice input.
 
 [中文文档](./README_CN.md)
 
@@ -14,6 +14,12 @@
 - Multi-provider management with quick switching
 - Custom prompt templates with variable injection
 - Reasoning model support (auto-filters `<think>` tags)
+
+### 💻 Integrated Terminal
+- Cross-platform: Windows, macOS, Linux
+- Rust PTY server with WebSocket communication
+- Multi-shell support: PowerShell, CMD, Bash, Zsh, WSL
+- Canvas/WebGL rendering, customizable themes
 
 ### 🎤 Voice Input
 - Push-to-talk dictation mode
@@ -61,6 +67,10 @@ pnpm install:dev   # Install to Obsidian
 - **Command Palette**: `Ctrl/Cmd + P` → "Generate AI File Name"
 - **Right-click Menu**: Right-click file or editor
 
+### Terminal
+- **Command Palette**: `Ctrl/Cmd + P` → "Open Terminal"
+- Supports custom shell paths and appearance settings
+
 ### Voice Input
 - Configure ASR credentials in settings
 - Use hotkey to start/stop recording
@@ -74,6 +84,12 @@ pnpm install:dev   # Install to Obsidian
 {{currentFileName}}   - Current file name
 {{#if currentFileName}}...{{/if}}  - Conditional block
 ```
+
+### Terminal Settings
+- Shell path customization
+- Renderer: Canvas (compatible) / WebGL (performant)
+- Theme colors, background image, blur effects
+- Scrollback buffer (100-10000 lines)
 
 ### Voice Settings
 - ASR provider: Qwen / Doubao / SenseVoice
@@ -89,6 +105,7 @@ pnpm install:dev   # Install to Obsidian
 ├─────────────────────────────────────────────────────────────┤
 │  Services                                                    │
 │  ├── naming/       AI file naming                           │
+│  ├── terminal/     Terminal management                      │
 │  ├── voice/        Voice input & ASR                        │
 │  ├── translation/  Language detection & translation         │
 │  ├── writing/      Writing assistant                        │
@@ -96,6 +113,7 @@ pnpm install:dev   # Install to Obsidian
 ├─────────────────────────────────────────────────────────────┤
 │  UI                                                          │
 │  ├── settings/     Settings tabs                            │
+│  ├── terminal/     Terminal view (xterm.js)                 │
 │  ├── selection/    Selection toolbar                        │
 │  └── voice/        Voice overlay                            │
 └─────────────────────────────────────────────────────────────┘
@@ -104,6 +122,7 @@ pnpm install:dev   # Install to Obsidian
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │              Smart Workflow Server (Rust)                    │
+│  ├── pty/      Terminal sessions                            │
 │  ├── voice/    Audio recording & ASR                        │
 │  ├── llm/      LLM streaming                                │
 │  └── utils/    Language detection                           │
@@ -114,6 +133,12 @@ pnpm install:dev   # Install to Obsidian
 
 **Q: Which AI providers are supported?**  
 A: Any OpenAI-compatible API. Tested with OpenAI, Claude, DeepSeek, Qwen, GLM, etc.
+
+**Q: How to change terminal shell?**  
+A: Settings > Terminal > Shell Configuration. Enter custom path like `C:\Program Files\Git\bin\bash.exe`.
+
+**Q: Canvas or WebGL renderer?**  
+A: Try WebGL first for better performance. Switch to Canvas if issues occur.
 
 **Q: Voice input not working?**  
 A: Check ASR credentials and ensure microphone permissions are granted.

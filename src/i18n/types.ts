@@ -41,6 +41,17 @@ export interface TranslationKeys {
   // 命令
   commands: {
     generateAiFilename: string;
+    openTerminal: string;
+    terminalSearch: string;
+    terminalClear: string;
+    terminalCopy: string;
+    terminalPaste: string;
+    terminalFontIncrease: string;
+    terminalFontDecrease: string;
+    terminalFontReset: string;
+    terminalSplitHorizontal: string;
+    terminalSplitVertical: string;
+    terminalClearBuffer: string;
     // 语音输入命令
     voiceDictation: string;
     voiceAssistant: string;
@@ -55,6 +66,7 @@ export interface TranslationKeys {
   // 侧边栏
   ribbon: {
     aiFilenameTooltip: string;
+    terminalTooltip: string;
   };
 
   // 通知消息
@@ -71,6 +83,7 @@ export interface TranslationKeys {
     cannotDeleteDefault: string;
     cannotDeleteLast: string;
     cannotDeleteLastModel: string;
+    ptyServerStartFailed: string;
     serverStartFailed: string;
     wsReconnectFailed: string;
     wsReconnectSuccess: string;
@@ -83,13 +96,68 @@ export interface TranslationKeys {
     binaryNotAvailable: string;
     checksumMismatch: string;
     binaryInUse: string;
-  };
 
   // 聊天界面
   chat: {
     placeholder: string;
     history: string;
     newChat: string;
+  };
+
+  // 终端相关
+  terminal: {
+      serverStarted: string;
+      serverStopped: string;
+      serverCrashed: string;
+      serverRestarting: string;
+      serverRestartFailed: string;
+      serverRestartSuccess: string;
+      initFailed: string;
+      renderFailed: string;
+      createFailed: string;
+    };
+    // 设置相关
+    settings: {
+      scrollbackRangeError: string;
+      heightRangeError: string;
+      rendererUpdated: string;
+      backgroundColorReset: string;
+      foregroundColorReset: string;
+      backgroundImageCleared: string;
+    };
+  };
+
+  // 终端
+  terminal: {
+    defaultTitle: string;
+    renameTerminal: string;
+    renameTerminalPlaceholder: string;
+    contextMenu: {
+      copy: string;
+      copyAsPlainText: string;
+      paste: string;
+      selectAll: string;
+      selectLine: string;
+      clear: string;
+      clearBuffer: string;
+      search: string;
+      copyPath: string;
+      openInExplorer: string;
+      newTerminal: string;
+      splitTerminal: string;
+      splitHorizontal: string;
+      splitVertical: string;
+      fontSize: string;
+      fontIncrease: string;
+      fontDecrease: string;
+      fontReset: string;
+    };
+    search: {
+      placeholder: string;
+      previous: string;
+      next: string;
+      close: string;
+    };
   };
 
   // 设置标签页
@@ -103,6 +171,7 @@ export interface TranslationKeys {
       autoArchive: string;
       writing: string;
       voice: string;
+      terminal: string;
       advanced: string;
     };
     header: {
@@ -197,7 +266,70 @@ export interface TranslationKeys {
       advancedPromptTemplateDesc: string;
       resetToDefault: string;
     };
-
+    terminal: {
+      shellSettings: string;
+      defaultShell: string;
+      defaultShellDesc: string;
+      customShellPath: string;
+      customShellPathDesc: string;
+      customShellPathPlaceholder: string;
+      defaultArgs: string;
+      defaultArgsDesc: string;
+      defaultArgsPlaceholder: string;
+      autoEnterVault: string;
+      autoEnterVaultDesc: string;
+      instanceBehavior: string;
+      newInstanceLayout: string;
+      newInstanceLayoutDesc: string;
+      createNearExisting: string;
+      createNearExistingDesc: string;
+      focusNewInstance: string;
+      focusNewInstanceDesc: string;
+      lockNewInstance: string;
+      lockNewInstanceDesc: string;
+      themeSettings: string;
+      useObsidianTheme: string;
+      useObsidianThemeDesc: string;
+      backgroundColor: string;
+      backgroundColorDesc: string;
+      foregroundColor: string;
+      foregroundColorDesc: string;
+      backgroundImage: string;
+      backgroundImageDesc: string;
+      backgroundImagePlaceholder: string;
+      backgroundImageOpacity: string;
+      backgroundImageOpacityDesc: string;
+      backgroundImageSize: string;
+      backgroundImageSizeDesc: string;
+      backgroundImagePosition: string;
+      backgroundImagePositionDesc: string;
+      blurEffect: string;
+      blurEffectDesc: string;
+      blurAmount: string;
+      blurAmountDesc: string;
+      textOpacity: string;
+      textOpacityDesc: string;
+      appearanceSettings: string;
+      fontSize: string;
+      fontSizeDesc: string;
+      fontFamily: string;
+      fontFamilyDesc: string;
+      fontFamilyPlaceholder: string;
+      cursorStyle: string;
+      cursorStyleDesc: string;
+      cursorBlink: string;
+      cursorBlinkDesc: string;
+      rendererType: string;
+      rendererTypeDesc: string;
+      behaviorSettings: string;
+      scrollback: string;
+      scrollbackDesc: string;
+      defaultHeight: string;
+      defaultHeightDesc: string;
+      visibilitySettings: string;
+      pathValid: string;
+      pathInvalid: string;
+    };
     advanced: {
       performanceAndDebug: string;
       debugMode: string;
@@ -206,6 +338,8 @@ export interface TranslationKeys {
       featureVisibilityDesc: string;
       aiNamingVisibility: string;
       aiNamingVisibilityDesc: string;
+      terminalVisibility: string;
+      terminalVisibilityDesc: string;
       showInCommandPalette: string;
       showInCommandPaletteDesc: string;
       showInEditorMenu: string;
@@ -214,6 +348,11 @@ export interface TranslationKeys {
       showInFileMenuDesc: string;
       showInRibbon: string;
       showInRibbonDesc: string;
+      showInRibbonTerminalDesc: string;
+      showInNewTab: string;
+      showInNewTabDesc: string;
+      showInStatusBar: string;
+      showInStatusBarDesc: string;
       // 服务器连接设置
       serverConnection: string;
       serverConnectionDesc: string;
@@ -346,6 +485,63 @@ export interface TranslationKeys {
     };
   };
 
+  // Shell 选项
+  shellOptions: {
+    cmd: string;
+    powershell: string;
+    gitbash: string;
+    wsl: string;
+    bash: string;
+    zsh: string;
+    custom: string;
+  };
+
+  // 布局选项
+  layoutOptions: {
+    replaceTab: string;
+    newTab: string;
+    newLeftTab: string;
+    newLeftSplit: string;
+    newRightTab: string;
+    newRightSplit: string;
+    newHorizontalSplit: string;
+    newVerticalSplit: string;
+    newWindow: string;
+  };
+
+  // 光标样式选项
+  cursorStyleOptions: {
+    block: string;
+    underline: string;
+    bar: string;
+  };
+
+  // 渲染器选项
+  rendererOptions: {
+    canvas: string;
+    webgl: string;
+  };
+
+  // 背景图片大小选项
+  backgroundSizeOptions: {
+    cover: string;
+    contain: string;
+    auto: string;
+  };
+
+  // 背景图片位置选项
+  backgroundPositionOptions: {
+    center: string;
+    top: string;
+    bottom: string;
+    left: string;
+    right: string;
+    topLeft: string;
+    topRight: string;
+    bottomLeft: string;
+    bottomRight: string;
+  };
+
   // 文件名服务
   fileNameService: {
     noChangeNeeded: string;
@@ -389,6 +585,24 @@ export interface TranslationKeys {
     invalidApiKey: string;
     invalidEndpoint: string;
     noModelConfigured: string;
+  };
+
+  // 终端实例
+  terminalInstance: {
+    rendererNotSupported: string;
+    webglContextLost: string;
+    rendererLoadFailed: string;
+    instanceDestroyed: string;
+    startFailed: string;
+    connectionTimeout: string;
+    cannotConnect: string;
+  };
+
+  // 终端服务
+  terminalService: {
+    processNotStarted: string;
+    portInfoTimeout: string;
+    startFailedWithCode: string;
   };
 
   // 模型类型

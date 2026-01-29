@@ -17,6 +17,7 @@ import {
   GeneralSettingsRenderer,
   FeatureSettingsRenderer,
   FileNamingSettingsRenderer,
+  TerminalSettingsRenderer,
   AdvancedSettingsRenderer,
   VoiceSettingsRenderer,
   TaggingSettingsRenderer,
@@ -39,6 +40,7 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
   private generalRenderer: GeneralSettingsRenderer;
   private featureSettingsRenderer: FeatureSettingsRenderer;
   private fileNamingRenderer: FileNamingSettingsRenderer;
+  private terminalRenderer: TerminalSettingsRenderer;
   private advancedRenderer: AdvancedSettingsRenderer;
   private voiceRenderer: VoiceSettingsRenderer;
   private taggingRenderer: TaggingSettingsRenderer;
@@ -59,6 +61,7 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
     this.generalRenderer = new GeneralSettingsRenderer();
     this.featureSettingsRenderer = new FeatureSettingsRenderer();
     this.fileNamingRenderer = new FileNamingSettingsRenderer();
+    this.terminalRenderer = new TerminalSettingsRenderer();
     this.advancedRenderer = new AdvancedSettingsRenderer();
     this.voiceRenderer = new VoiceSettingsRenderer();
     this.taggingRenderer = new TaggingSettingsRenderer();
@@ -330,6 +333,9 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
         break;
       case 'voice':
         this.voiceRenderer.render(context);
+        break;
+      case 'terminal':
+        this.terminalRenderer.render(context);
         break;
       case 'advanced':
         this.advancedRenderer.render(context);

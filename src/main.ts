@@ -1,10 +1,14 @@
 import type { Menu, WorkspaceLeaf, WorkspaceLeaf as WL } from 'obsidian';
-import { Plugin, TFile, MarkdownView, Modal, Setting, Platform, normalizePath, setIcon, ItemView } from 'obsidian';
+import { Plugin, TFile, MarkdownView, Modal, Setting, Platform, normalizePath, setIcon } from 'obsidian';
 import type { SmartWorkflowSettings} from './settings/settings';
 import { DEFAULT_SETTINGS } from './settings/settings';
 import { SmartWorkflowSettingTab } from './settings/settingsTab';
 import { FileNameService } from './services/naming/fileNameService';
 import { NoticeHelper } from './ui/noticeHelper';
+// 终端相关模块仅在桌面端使用，使用 type 导入避免移动端加载失败
+import type { TerminalService } from './services/terminal/terminalService';
+import type { TerminalView } from './ui/terminal/terminalView';
+import { TERMINAL_VIEW_TYPE } from './ui/terminal/terminalView';
 import { ChatService } from './services/chat/chatService';
 import { ChatView, CHAT_VIEW_TYPE } from './ui/chat/chatView';
 import { WritingApplyView, WRITING_APPLY_VIEW_TYPE } from './ui/writing/writingApplyView';
@@ -144,11 +148,14 @@ export default class SmartWorkflowPlugin extends Plugin {
   
   // 延迟初始化的服务（桌面端专用服务使用动态导入）
   private _serverManager: ServerManager | null = null;
+  private _terminalService: TerminalService | null = null;
   private _chatService: ChatService | null = null;
   private _selectionToolbarManager: SelectionToolbarManager | null = null;
   
   // 动态导入的模块缓存
   private _serverManagerModule: typeof import('./services/server/serverManager') | null = null;
+  private _terminalServiceModule: typeof import('./services/terminal/terminalService') | null = null;
+  private _terminalViewModule: typeof import('./ui/terminal/terminalView') | null = null;
   
   // 语音输入服务（延迟初始化）
   private _voiceInputService: VoiceInputService | null = null;
@@ -174,6 +181,8 @@ export default class SmartWorkflowPlugin extends Plugin {
   // 功能可见性管理器
   private _featureVisibilityManager: FeatureVisibilityManager | null = null;
 
+  // 终端状态栏元素
+  private _terminalStatusBarItem: HTMLElement | null = null;  // 按住模式相关
   // 语音状态栏元素
   private _voiceStatusBarItem: HTMLElement | null = null;
   private _voiceStatusDashboard: VoiceStatusDashboard | null = null;
@@ -239,7 +248,42 @@ export default class SmartWorkflowPlugin extends Plugin {
     return this._serverManager;
   }
 
+  /**
+   * 获取终端服务（延迟初始化，仅桌面端）
+   */
+  async getTerminalService(): Promise<TerminalService> {
+    if (Platform.isMobile) {
+      throw new Error('TerminalService is not available on mobile');
+    }
+    
+    if (!this._terminalService) {
+      debugLog('[SmartWorkflowPlugin] Initializing Terminal Service...');
+      
+      // 动态导入 TerminalService 模块
+      if (!this._terminalServiceModule) {
+        this._terminalServiceModule = await import('./services/terminal/terminalService');
+      }
+      
+      const serverManager = await this.getServerManager();
+      this._terminalService = new this._terminalServiceModule.TerminalService(
+        this.app, 
+        this.settings.terminal, 
+        serverManager
+      );
+      debugLog('[SmartWorkflowPlugin] Terminal Service initialized');
+    }
+    return this._terminalService;
+  }
 
+  /**
+   * 同步获取已初始化的 TerminalService
+   */
+  get terminalService(): TerminalService {
+    if (!this._terminalService) {
+      throw new Error('TerminalService not initialized. Call getTerminalService() first.');
+    }
+    return this._terminalService;
+  }
 
   /**
    * 获取聊天服务（延迟初始化，仅桌面端）
@@ -556,6 +600,12 @@ export default class SmartWorkflowPlugin extends Plugin {
     // 初始化功能可见性管理器并注册功能
     this.registerFeatureVisibility();
 
+    // 注册终端视图（仅桌面端，使用动态导入）
+    if (this.isTerminalEnabled()) {
+      // 预加载终端模块
+      this.registerTerminalView();
+    }
+
     // 注册聊天视图（仅桌面端）
     if (!Platform.isMobile) {
       this.registerChatView();
@@ -643,6 +693,25 @@ export default class SmartWorkflowPlugin extends Plugin {
       }
     });
 
+    // 添加打开终端命令（仅桌面端，使用 checkCallback 实现动态可见性）
+    if (!Platform.isMobile) {
+      this.addCommand({
+        id: 'open-terminal',
+        name: t('commands.openTerminal'),
+        hotkeys: [{ modifiers: ['Ctrl'], key: 'o' }],
+        checkCallback: (checking: boolean) => {
+          // 检查可见性配置
+          if (!this.featureVisibilityManager.isVisibleAt('terminal', 'showInCommandPalette')) {
+            return false;
+          }
+          if (!checking) {
+            this.activateTerminalView();
+          }
+          return true;
+        }
+      });
+    }
+
     // 添加打开聊天命令
     this.addCommand({
       id: 'open-chat',
@@ -651,6 +720,163 @@ export default class SmartWorkflowPlugin extends Plugin {
         await this.activateChatView();
       }
     });
+
+    // 终端快捷键命令（仅桌面端）
+    if (this.isTerminalEnabled()) {
+      this.addCommand({
+        id: 'terminal-clear',
+        name: t('commands.terminalClear'),
+        hotkeys: [{ modifiers: ['Ctrl', 'Shift'], key: 'r' }],
+        checkCallback: (checking: boolean) => {
+          const terminalView = this.getActiveTerminalView();
+          if (terminalView?.getTerminalInstance()) {
+            if (!checking) {
+              terminalView.getTerminalInstance()?.getXterm().clear();
+            }
+            return true;
+          }
+          return false;
+        }
+      });
+
+      this.addCommand({
+        id: 'terminal-copy',
+        name: t('commands.terminalCopy'),
+        hotkeys: [{ modifiers: ['Ctrl', 'Shift'], key: 'c' }],
+        checkCallback: (checking: boolean) => {
+          const terminalView = this.getActiveTerminalView();
+          const terminal = terminalView?.getTerminalInstance();
+          if (terminal?.getXterm().hasSelection()) {
+            if (!checking) {
+              const selection = terminal.getXterm().getSelection();
+              navigator.clipboard.writeText(selection);
+              terminal.getXterm().clearSelection();
+            }
+            return true;
+          }
+          return false;
+        }
+      });
+
+      this.addCommand({
+        id: 'terminal-paste',
+        name: t('commands.terminalPaste'),
+        hotkeys: [{ modifiers: ['Ctrl', 'Shift'], key: 'v' }],
+        checkCallback: (checking: boolean) => {
+          const terminalView = this.getActiveTerminalView();
+          const terminal = terminalView?.getTerminalInstance();
+          if (terminal) {
+            if (!checking) {
+              navigator.clipboard.readText().then(text => {
+                if (text) terminal.write(text);
+              });
+            }
+            return true;
+          }
+          return false;
+        }
+      });
+
+      this.addCommand({
+        id: 'terminal-font-increase',
+        name: t('commands.terminalFontIncrease'),
+        hotkeys: [{ modifiers: ['Ctrl'], key: '=' }],
+        checkCallback: (checking: boolean) => {
+          const terminalView = this.getActiveTerminalView();
+          const terminal = terminalView?.getTerminalInstance();
+          if (terminal) {
+            if (!checking) {
+              terminal.increaseFontSize();
+            }
+            return true;
+          }
+          return false;
+        }
+      });
+
+      this.addCommand({
+        id: 'terminal-font-decrease',
+        name: t('commands.terminalFontDecrease'),
+        hotkeys: [{ modifiers: ['Ctrl'], key: '-' }],
+        checkCallback: (checking: boolean) => {
+          const terminalView = this.getActiveTerminalView();
+          const terminal = terminalView?.getTerminalInstance();
+          if (terminal) {
+            if (!checking) {
+              terminal.decreaseFontSize();
+            }
+            return true;
+          }
+          return false;
+        }
+      });
+
+      this.addCommand({
+        id: 'terminal-font-reset',
+        name: t('commands.terminalFontReset'),
+        hotkeys: [{ modifiers: ['Ctrl'], key: '0' }],
+        checkCallback: (checking: boolean) => {
+          const terminalView = this.getActiveTerminalView();
+          const terminal = terminalView?.getTerminalInstance();
+          if (terminal) {
+            if (!checking) {
+              terminal.resetFontSize();
+            }
+            return true;
+          }
+          return false;
+        }
+      });
+
+      this.addCommand({
+        id: 'terminal-split-horizontal',
+        name: t('commands.terminalSplitHorizontal'),
+        hotkeys: [{ modifiers: ['Ctrl', 'Shift'], key: 'h' }],
+        checkCallback: (checking: boolean) => {
+          const terminalView = this.getActiveTerminalView();
+          if (terminalView) {
+            if (!checking) {
+              this.splitTerminal('horizontal');
+            }
+            return true;
+          }
+          return false;
+        }
+      });
+
+      this.addCommand({
+        id: 'terminal-split-vertical',
+        name: t('commands.terminalSplitVertical'),
+        hotkeys: [{ modifiers: ['Ctrl', 'Shift'], key: 'j' }],
+        checkCallback: (checking: boolean) => {
+          const terminalView = this.getActiveTerminalView();
+          if (terminalView) {
+            if (!checking) {
+              this.splitTerminal('vertical');
+            }
+            return true;
+          }
+          return false;
+        }
+      });
+
+      this.addCommand({
+        id: 'terminal-clear-buffer',
+        name: t('commands.terminalClearBuffer'),
+        hotkeys: [{ modifiers: ['Ctrl', 'Shift'], key: 'k' }],
+        checkCallback: (checking: boolean) => {
+          const terminalView = this.getActiveTerminalView();
+          const terminal = terminalView?.getTerminalInstance();
+          if (terminal) {
+            if (!checking) {
+              terminal.clearBuffer();
+            }
+            return true;
+          }
+          return false;
+        }
+      });
+    }
 
     // ========================================================================
     // 语音输入命令注册（仅桌面端）
@@ -848,6 +1074,16 @@ export default class SmartWorkflowPlugin extends Plugin {
         this.cleanupTitleAnimations();
       })
     );
+
+    // 注册新标签页中的"打开终端"选项（仅桌面端）
+    if (this.isTerminalEnabled() && this.settings.featureVisibility.terminal.showInNewTab) {
+      this.registerNewTabTerminalAction();
+    }
+
+    // 初始化终端状态栏（仅桌面端）
+    if (this.isTerminalEnabled()) {
+      this.initTerminalStatusBar();
+    }
 
     // 初始化语音状态栏（仅桌面端）
     if (!Platform.isMobile) {
@@ -1180,10 +1416,28 @@ export default class SmartWorkflowPlugin extends Plugin {
       // 功能绑定：直接使用
       featureBindings: loaded.featureBindings || {},
       // 嵌套对象深度合并
+      terminal: {
+        ...DEFAULT_SETTINGS.terminal,
+        ...loaded.terminal,
+        platformShells: {
+          ...DEFAULT_SETTINGS.terminal.platformShells,
+          ...loaded.terminal?.platformShells
+        },
+        platformCustomShellPaths: {
+          ...DEFAULT_SETTINGS.terminal.platformCustomShellPaths,
+          ...loaded.terminal?.platformCustomShellPaths
+        }
+      },
       featureVisibility: {
         aiNaming: {
           ...DEFAULT_SETTINGS.featureVisibility.aiNaming,
           ...loaded.featureVisibility?.aiNaming
+        },
+        terminal: {
+          ...DEFAULT_SETTINGS.featureVisibility.terminal,
+          ...loaded.featureVisibility?.terminal,
+          // 移动端强制关闭终端功能
+          enabled: Platform.isMobile ? false : (loaded.featureVisibility?.terminal?.enabled ?? DEFAULT_SETTINGS.featureVisibility.terminal.enabled)
         },
         voice: {
           ...DEFAULT_SETTINGS.featureVisibility.voice,
@@ -1340,6 +1594,11 @@ export default class SmartWorkflowPlugin extends Plugin {
       this._featureVisibilityManager.updateAllVisibility();
     }
     
+    // 更新终端服务的设置（仅当已初始化时）
+    if (this._terminalService) {
+      this._terminalService.updateSettings(this.settings.terminal);
+    }
+    
     // 更新选中工具栏的设置（仅当已初始化时）
     if (this._selectionToolbarManager) {
       this._selectionToolbarManager.updateSettings(this.settings.selectionToolbar, this.settings);
@@ -1409,6 +1668,14 @@ export default class SmartWorkflowPlugin extends Plugin {
    * 检查终端功能是否启用
    * 移动端默认关闭，桌面端根据设置决定
    */
+  isTerminalEnabled(): boolean {
+    // 移动端始终禁用终端
+    if (Platform.isMobile) {
+      return false;
+    }
+    // 桌面端根据设置决定
+    return this.settings.featureVisibility.terminal.enabled;
+  }
 
   /**
    * 注册功能可见性配置
@@ -1425,6 +1692,25 @@ export default class SmartWorkflowPlugin extends Plugin {
         callback: () => this.handleGenerateCommand(),
       },
     });
+
+    // 终端功能（仅桌面端）
+    if (!Platform.isMobile) {
+      this.featureVisibilityManager.registerFeature({
+        id: 'terminal',
+        getVisibility: () => this.settings.featureVisibility.terminal,
+        ribbon: {
+          icon: 'terminal-square',
+          tooltip: t('ribbon.terminalTooltip'),
+          callback: () => this.activateTerminalView(),
+        },
+        onVisibilityChange: () => {
+          // 当终端可见性设置变更时，更新新标签页中的终端按钮
+          this.injectTerminalButtonToEmptyViews();
+          // 更新状态栏显示
+          this.updateTerminalStatusBar();
+        },
+      });
+    }
 
     // 标签生成功能
     this.featureVisibilityManager.registerFeature({
@@ -1537,8 +1823,17 @@ export default class SmartWorkflowPlugin extends Plugin {
       }
     }
 
+    // 清理终端相关资源（仅当已初始化时）
+    if (this._terminalService) {
+      try {
+        await this._terminalService.shutdown();
+      } catch (error) {
+        errorLog('清理终端失败:', error);
+      }
+    }
+
     // 关闭统一服务器（仅当已初始化时）
-    // 这会关闭所有模块（Voice、LLM、Utils）
+    // 这会关闭所有模块（PTY、Voice、LLM、Utils）
     if (this._serverManager) {
       try {
         await this._serverManager.shutdown();
@@ -1982,6 +2277,20 @@ export default class SmartWorkflowPlugin extends Plugin {
   }
 
   /**
+   * 注册终端视图（使用动态导入）
+   */
+  private registerTerminalView(): void {
+    this.registerView(
+      TERMINAL_VIEW_TYPE,
+      (leaf: WorkspaceLeaf) => {
+        // 创建一个占位视图，实际初始化在 onOpen 时进行
+        const view = new TerminalViewWrapper(leaf, this);
+        return view;
+      }
+    );
+  }
+
+  /**
    * 注册聊天视图（使用动态导入）
    */
   private registerChatView(): void {
@@ -1992,6 +2301,29 @@ export default class SmartWorkflowPlugin extends Plugin {
         return view;
       }
     );
+  }
+
+  /**
+   * 激活终端视图
+   */
+  async activateTerminalView(): Promise<void> {
+    const { workspace } = this.app;
+    const leaf = this.getLeafForNewTerminal();
+
+    // 如果启用锁定新实例，设置标签页为锁定状态
+    if (this.settings.terminal.lockNewInstance) {
+      leaf.setPinned(true);
+    }
+
+    await leaf.setViewState({
+      type: TERMINAL_VIEW_TYPE,
+      active: this.settings.terminal.focusNewInstance,
+    });
+
+    // 如果启用聚焦新实例，切换到新标签页
+    if (this.settings.terminal.focusNewInstance) {
+      workspace.setActiveLeaf(leaf, { focus: true });
+    }
   }
 
   /**
@@ -2017,7 +2349,99 @@ export default class SmartWorkflowPlugin extends Plugin {
     workspace.revealLeaf(leaf);
   }
 
+  /**
+   * 获取当前活动的终端视图
+   */
+  private getActiveTerminalView(): TerminalViewWrapper | null {
+    const activeLeaf = this.app.workspace.activeLeaf;
+    if (activeLeaf?.view?.getViewType() === TERMINAL_VIEW_TYPE) {
+      return activeLeaf.view as TerminalViewWrapper;
+    }
+    return null;
+  }
 
+  /**
+   * 拆分终端
+   */
+  private async splitTerminal(direction: 'horizontal' | 'vertical'): Promise<void> {
+    const { workspace } = this.app;
+    const newLeaf = workspace.getLeaf('split', direction);
+    
+    await newLeaf.setViewState({
+      type: TERMINAL_VIEW_TYPE,
+      active: true,
+    });
+
+    workspace.setActiveLeaf(newLeaf, { focus: true });
+  }
+
+  /**
+   * 注册新标签页中的"打开终端"选项
+   * 通过监听 layout-change 事件，在空标签页中注入自定义按钮
+   */
+  private registerNewTabTerminalAction(): void {
+    this.registerEvent(
+      this.app.workspace.on('layout-change', () => {
+        this.injectTerminalButtonToEmptyViews();
+      })
+    );
+
+    // 初始注入
+    this.injectTerminalButtonToEmptyViews();
+  }
+
+  /**
+   * 向所有空标签页注入"打开终端"按钮
+   * 根据 showInNewTab 设置决定是否注入或移除按钮
+   */
+  private injectTerminalButtonToEmptyViews(): void {
+    const shouldShow = this.settings.featureVisibility.terminal.enabled && 
+                       this.settings.featureVisibility.terminal.showInNewTab;
+    
+    const emptyViews = document.querySelectorAll('.empty-state');
+    
+    emptyViews.forEach((emptyView) => {
+      const existingButton = emptyView.querySelector('.smart-workflow-terminal-action');
+      
+      if (!shouldShow) {
+        // 如果不应该显示，移除已存在的按钮
+        if (existingButton) {
+          existingButton.remove();
+        }
+        return;
+      }
+      
+      // 检查是否已经注入过
+      if (existingButton) {
+        return;
+      }
+
+      // 查找操作容器
+      const actionsContainer = emptyView.querySelector('.empty-state-action-list');
+      if (!actionsContainer) {
+        return;
+      }
+
+      // 创建"打开终端"按钮
+      const terminalAction = document.createElement('div');
+      terminalAction.className = 'empty-state-action smart-workflow-terminal-action';
+      terminalAction.textContent = t('commands.openTerminal') + ' (Ctrl+O)';
+      terminalAction.addEventListener('click', async () => {
+        await this.activateTerminalView();
+      });
+
+      // 添加到操作列表
+      actionsContainer.appendChild(terminalAction);
+    });
+  }
+
+  /**
+   * 移除所有空标签页中的终端按钮
+   */
+  private removeTerminalButtonsFromEmptyViews(): void {
+    const buttons = document.querySelectorAll('.smart-workflow-terminal-action');
+    buttons.forEach((button) => button.remove());
+  }
 
   /**
    * 初始化语音状态栏
@@ -2217,6 +2641,204 @@ export default class SmartWorkflowPlugin extends Plugin {
     if (!shouldShow) {
       this.closeVoiceStatusMenu();
     }
+  }
+
+  /**
+   * 初始化终端状态栏
+   * 创建状态栏元素并根据设置决定是否显示
+   */
+  private initTerminalStatusBar(): void {
+    // 创建状态栏元素
+    this._terminalStatusBarItem = this.addStatusBarItem();
+    this._terminalStatusBarItem.addClass('smart-workflow-terminal-status-bar');
+    this._terminalStatusBarItem.setText('>_');
+    this._terminalStatusBarItem.setAttr('aria-label', t('ribbon.terminalTooltip'));
+    this._terminalStatusBarItem.style.cursor = 'pointer';
+    
+    // 添加点击事件
+    this._terminalStatusBarItem.addEventListener('click', () => {
+      this.activateTerminalView();
+    });
+    
+    // 根据设置决定是否显示
+    this.updateTerminalStatusBar();
+  }
+
+  /**
+   * 更新终端状态栏显示状态
+   * 根据 showInStatusBar 设置决定是否显示
+   */
+  private updateTerminalStatusBar(): void {
+    if (!this._terminalStatusBarItem) return;
+    
+    const shouldShow = this.settings.featureVisibility.terminal.enabled && 
+                       this.settings.featureVisibility.terminal.showInStatusBar;
+    
+    if (shouldShow) {
+      this._terminalStatusBarItem.style.display = '';
+    } else {
+      this._terminalStatusBarItem.style.display = 'none';
+    }
+  }
+
+  /**
+   * 根据配置获取新终端的 WorkspaceLeaf
+   */
+  private getLeafForNewTerminal(): WorkspaceLeaf {
+    const { workspace } = this.app;
+    const { leftSplit, rightSplit } = workspace;
+    const { terminal: settings } = this.settings;
+
+    // 如果启用"在现有终端附近创建"
+    if (settings.createInstanceNearExistingOnes) {
+      const existingLeaves = workspace.getLeavesOfType(TERMINAL_VIEW_TYPE);
+      const existingLeaf = existingLeaves[existingLeaves.length - 1];
+
+      if (existingLeaf) {
+        const root = existingLeaf.getRoot();
+
+        // 如果在左侧栏，继续在左侧栏创建
+        if (root === leftSplit) {
+          const leftLeaf = workspace.getLeftLeaf(false);
+          if (leftLeaf) return leftLeaf;
+        }
+
+        // 如果在右侧栏，继续在右侧栏创建
+        if (root === rightSplit) {
+          const rightLeaf = workspace.getRightLeaf(false);
+          if (rightLeaf) return rightLeaf;
+        }
+
+        // 如果在主区域，设置为活动 leaf 并创建新标签页
+        workspace.setActiveLeaf(existingLeaf);
+        return workspace.getLeaf('tab');
+      }
+    }
+
+    // 根据 newInstanceBehavior 创建新的 leaf
+    switch (settings.newInstanceBehavior) {
+      case 'replaceTab':
+        // 替换当前标签页
+        return workspace.getLeaf();
+
+      case 'newTab':
+        // 新标签页：在当前标签组中创建新标签页
+        return workspace.getLeaf('tab');
+
+      case 'newLeftTab': {
+        // 左侧新标签页
+        const leftLeaf = workspace.getLeftLeaf(false);
+        return leftLeaf ?? workspace.getLeaf('split');
+      }
+
+      case 'newLeftSplit': {
+        // 左侧新分屏
+        const leftLeaf = workspace.getLeftLeaf(true);
+        return leftLeaf ?? workspace.getLeaf('split');
+      }
+
+      case 'newRightTab': {
+        // 右侧新标签页
+        const rightLeaf = workspace.getRightLeaf(false);
+        return rightLeaf ?? workspace.getLeaf('split');
+      }
+
+      case 'newRightSplit': {
+        // 右侧新分屏
+        const rightLeaf = workspace.getRightLeaf(true);
+        return rightLeaf ?? workspace.getLeaf('split');
+      }
+
+      case 'newHorizontalSplit':
+        // 水平分屏：在右侧创建分屏
+        return workspace.getLeaf('split', 'horizontal');
+
+      case 'newVerticalSplit':
+        // 垂直分屏：在下方创建分屏
+        return workspace.getLeaf('split', 'vertical');
+
+      case 'newWindow':
+        // 新窗口：在新窗口中打开
+        return workspace.getLeaf('window');
+
+      default:
+        // 默认：水平分屏
+        return workspace.getLeaf('split', 'vertical');
+    }
+  }
+}
+
+/**
+ * 终端视图包装器
+ * 使用动态导入延迟加载终端模块，避免移动端加载 Node.js 依赖
+ */
+import { ItemView } from 'obsidian';
+
+class TerminalViewWrapper extends ItemView {
+  private plugin: SmartWorkflowPlugin;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private realView: any = null;
+  private initialized = false;
+
+  constructor(leaf: WL, plugin: SmartWorkflowPlugin) {
+    super(leaf);
+    this.plugin = plugin;
+  }
+
+  getViewType(): string {
+    return TERMINAL_VIEW_TYPE;
+  }
+
+  getDisplayText(): string {
+    return this.realView?.getDisplayText() ?? 'Terminal';
+  }
+
+  getIcon(): string {
+    return 'terminal-square';
+  }
+
+  async onOpen(): Promise<void> {
+    if (this.initialized) return;
+    this.initialized = true;
+
+    try {
+      // 动态导入终端模块
+      const [terminalViewModule, terminalService] = await Promise.all([
+        import('./ui/terminal/terminalView'),
+        this.plugin.getTerminalService()
+      ]);
+
+      // 创建真实的终端视图
+      const { TerminalView: RealTerminalView } = terminalViewModule;
+      this.realView = new RealTerminalView(this.leaf, terminalService);
+      
+      // 将真实视图的内容挂载到当前容器
+      this.contentEl.empty();
+      await this.realView.onOpen();
+      
+      // 移动内容
+      if (this.realView.containerEl) {
+        while (this.realView.contentEl.firstChild) {
+          this.contentEl.appendChild(this.realView.contentEl.firstChild);
+        }
+      }
+    } catch (error) {
+      errorLog('[TerminalViewWrapper] Failed to initialize:', error);
+      this.contentEl.createEl('div', { 
+        text: 'Failed to load terminal. This feature is only available on desktop.',
+        cls: 'terminal-error'
+      });
+    }
+  }
+
+  async onClose(): Promise<void> {
+    if (this.realView) {
+      await this.realView.onClose();
+    }
+  }
+
+  getTerminalInstance() {
+    return this.realView?.getTerminalInstance?.() ?? null;
   }
 }
 

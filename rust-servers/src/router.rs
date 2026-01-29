@@ -35,6 +35,8 @@ macro_rules! log_debug {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ModuleType {
+    /// PTY 终端模块
+    Pty,
     /// 语音模块
     Voice,
     /// LLM 流式处理模块
@@ -46,6 +48,7 @@ pub enum ModuleType {
 impl std::fmt::Display for ModuleType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            ModuleType::Pty => write!(f, "pty"),
             ModuleType::Voice => write!(f, "voice"),
             ModuleType::Llm => write!(f, "llm"),
             ModuleType::Utils => write!(f, "utils"),
@@ -177,6 +180,8 @@ pub trait ModuleHandler: Send + Sync {
 /// 
 /// 负责将消息路由到对应的功能模块
 pub struct MessageRouter {
+    // PTY 模块处理器
+    pty_handler: crate::pty::PtyHandler,
     // Voice 模块处理器
     voice_handler: crate::voice::VoiceHandler,
     // LLM 模块处理器
@@ -189,17 +194,24 @@ impl MessageRouter {
     /// 创建新的消息路由器
     pub fn new() -> Self {
         Self {
+            pty_handler: crate::pty::PtyHandler::new(),
             voice_handler: crate::voice::VoiceHandler::new(),
             llm_handler: crate::llm::LLMHandler::new(),
             utils_handler: crate::utils::UtilsHandler::new(),
         }
     }
     
-    /// 设置 WebSocket 发送器 (用于 Voice 消息、LLM 流式响应等)
+    /// 设置 WebSocket 发送器 (用于 PTY 输出、Voice 消息、LLM 流式响应等)
     pub async fn set_ws_sender(&self, sender: WsSender) {
+        self.pty_handler.set_ws_sender(sender.clone()).await;
         self.voice_handler.set_ws_sender(sender.clone()).await;
         self.llm_handler.set_ws_sender(sender.clone()).await;
         self.utils_handler.set_ws_sender(sender).await;
+    }
+    
+    /// 获取 PTY 处理器引用 (用于写入数据)
+    pub fn pty_handler(&self) -> &crate::pty::PtyHandler {
+        &self.pty_handler
     }
     
     /// 获取 Voice 处理器引用
@@ -237,6 +249,7 @@ impl MessageRouter {
         if let Ok(value) = serde_json::from_str::<serde_json::Value>(text) {
             if let Some(module_str) = value.get("module").and_then(|v| v.as_str()) {
                 return match module_str {
+                    "pty" => Some(ModuleType::Pty),
                     "voice" => Some(ModuleType::Voice),
                     "llm" => Some(ModuleType::Llm),
                     "utils" => Some(ModuleType::Utils),
@@ -255,6 +268,11 @@ impl MessageRouter {
         log_info!("路由消息到模块: {}, 类型: {}", msg.module, msg.msg_type);
         
         match msg.module {
+            ModuleType::Pty => {
+                // PTY 模块处理
+                log_debug!("PTY 模块消息: {}", msg.msg_type);
+                self.pty_handler.handle(&msg).await
+            }
             ModuleType::Voice => {
                 // Voice 模块处理
                 log_debug!("Voice 模块消息: {}", msg.msg_type);
@@ -290,6 +308,7 @@ impl MessageRouter {
     #[allow(dead_code)]
     pub fn is_module_implemented(&self, module: ModuleType) -> bool {
         match module {
+            ModuleType::Pty => true,    // PTY 模块已实现
             ModuleType::Voice => true,  // Voice 模块已实现
             ModuleType::Llm => true,    // LLM 模块已实现
             ModuleType::Utils => true,  // Utils 模块已实现
@@ -310,6 +329,20 @@ impl Default for MessageRouter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    
+    #[test]
+    fn test_parse_pty_message() {
+        let router = MessageRouter::new();
+        let json = r#"{"module": "pty", "type": "init", "shell_type": "powershell"}"#;
+        
+        let msg = router.parse_message(json).unwrap();
+        assert_eq!(msg.module, ModuleType::Pty);
+        assert_eq!(msg.msg_type, "init");
+        
+        // 测试获取负载字段
+        let shell_type: Option<String> = msg.get_field("shell_type");
+        assert_eq!(shell_type, Some("powershell".to_string()));
+    }
     
     #[test]
     fn test_parse_voice_message() {
@@ -363,6 +396,7 @@ mod tests {
     fn test_try_parse_module_valid() {
         let router = MessageRouter::new();
         
+        assert_eq!(router.try_parse_module(r#"{"module": "pty"}"#), Some(ModuleType::Pty));
         assert_eq!(router.try_parse_module(r#"{"module": "voice"}"#), Some(ModuleType::Voice));
         assert_eq!(router.try_parse_module(r#"{"module": "llm"}"#), Some(ModuleType::Llm));
         assert_eq!(router.try_parse_module(r#"{"module": "utils"}"#), Some(ModuleType::Utils));
@@ -384,9 +418,9 @@ mod tests {
     
     #[test]
     fn test_server_response_error() {
-        let response = ServerResponse::error(ModuleType::Voice, "TEST_ERROR", "Test error message");
+        let response = ServerResponse::error(ModuleType::Pty, "TEST_ERROR", "Test error message");
         
-        assert_eq!(response.module, ModuleType::Voice);
+        assert_eq!(response.module, ModuleType::Pty);
         assert_eq!(response.msg_type, "error");
         
         let payload = response.payload.as_object().unwrap();
@@ -406,6 +440,7 @@ mod tests {
     
     #[test]
     fn test_module_type_display() {
+        assert_eq!(format!("{}", ModuleType::Pty), "pty");
         assert_eq!(format!("{}", ModuleType::Voice), "voice");
         assert_eq!(format!("{}", ModuleType::Llm), "llm");
         assert_eq!(format!("{}", ModuleType::Utils), "utils");
@@ -452,6 +487,12 @@ mod tests {
     }
     
     #[tokio::test]
+    async fn test_pty_module_is_implemented() {
+        let router = MessageRouter::new();
+        assert!(router.is_module_implemented(ModuleType::Pty));
+    }
+    
+    #[tokio::test]
     async fn test_voice_module_is_implemented() {
         let router = MessageRouter::new();
         assert!(router.is_module_implemented(ModuleType::Voice));
@@ -460,16 +501,19 @@ mod tests {
     #[test]
     fn test_module_message_get_field() {
         let router = MessageRouter::new();
-        let json = r#"{"module": "voice", "type": "start_recording", "mode": "press", "duration": 30}"#;
+        let json = r#"{"module": "pty", "type": "init", "cols": 80, "rows": 24, "shell_type": "bash"}"#;
         
         let msg = router.parse_message(json).unwrap();
         
         // 测试获取不同类型的字段
-        let mode: Option<String> = msg.get_field("mode");
-        assert_eq!(mode, Some("press".to_string()));
+        let cols: Option<u16> = msg.get_field("cols");
+        assert_eq!(cols, Some(80));
         
-        let duration: Option<u32> = msg.get_field("duration");
-        assert_eq!(duration, Some(30));
+        let rows: Option<u16> = msg.get_field("rows");
+        assert_eq!(rows, Some(24));
+        
+        let shell_type: Option<String> = msg.get_field("shell_type");
+        assert_eq!(shell_type, Some("bash".to_string()));
         
         // 测试获取不存在的字段
         let missing: Option<String> = msg.get_field("nonexistent");
@@ -479,12 +523,12 @@ mod tests {
     #[test]
     fn test_module_type_serialization() {
         // 测试序列化
-        let voice = ModuleType::Voice;
-        let json = serde_json::to_string(&voice).unwrap();
-        assert_eq!(json, r#""voice""#);
+        let pty = ModuleType::Pty;
+        let json = serde_json::to_string(&pty).unwrap();
+        assert_eq!(json, r#""pty""#);
         
         // 测试反序列化
-        let deserialized: ModuleType = serde_json::from_str(r#""llm""#).unwrap();
-        assert_eq!(deserialized, ModuleType::Llm);
+        let deserialized: ModuleType = serde_json::from_str(r#""voice""#).unwrap();
+        assert_eq!(deserialized, ModuleType::Voice);
     }
 }
