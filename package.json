@@ -1,7 +1,7 @@
 {
   "name": "obsidian-smart-workflow",
   "version": "1.3.6",
-  "description": "A smart workflow plugin for Obsidian with AI note naming, integrated terminal, voice input, translation, and writing assistant.",
+  "description": "A smart workflow plugin for Obsidian with AI note naming, voice input, translation, and writing assistant.",
   "main": "main.js",
   "packageManager": "pnpm@10.0.0",
   "scripts": {
@@ -19,7 +19,6 @@
     "obsidian",
     "plugin",
     "workflow",
-    "terminal",
     "intelligent"
   ],
   "author": "",
@@ -41,12 +40,6 @@
   "dependencies": {
     "@codemirror/state": "^6.5.3",
     "@codemirror/view": "^6.39.8",
-    "@xterm/addon-canvas": "^0.7.0",
-    "@xterm/addon-fit": "^0.11.0",
-    "@xterm/addon-search": "^0.16.0",
-    "@xterm/addon-web-links": "^0.12.0",
-    "@xterm/addon-webgl": "^0.19.0",
-    "@xterm/xterm": "^6.0.0",
     "vscode-diff": "^3.0.1"
   }
 }

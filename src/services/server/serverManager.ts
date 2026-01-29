@@ -24,7 +24,6 @@ import {
   ServerErrorCode, 
   ServerManagerError
 } from './types';
-import { PtyClient } from './ptyClient';
 import { VoiceClient } from './voiceClient';
 import { LLMClient } from './llmClient';
 import { UtilsClient } from './utilsClient';
@@ -112,7 +111,6 @@ export class ServerManager {
   private eventListeners: Map<keyof ServerEvents, Set<EventListener<keyof ServerEvents>>> = new Map();
   
   // 模块客户端 (懒加载)
-  private _ptyClient: PtyClient | null = null;
   private _voiceClient: VoiceClient | null = null;
   private _llmClient: LLMClient | null = null;
   private _utilsClient: UtilsClient | null = null;
@@ -165,21 +163,6 @@ export class ServerManager {
       return;
     }
     await this.ensureBinaryReady();
-  }
-
-  /**
-   * 获取 PTY 客户端
-   * 
-
-   */
-  pty(): PtyClient {
-    if (!this._ptyClient) {
-      this._ptyClient = new PtyClient();
-      if (this.ws) {
-        this._ptyClient.setWebSocket(this.ws);
-      }
-    }
-    return this._ptyClient;
   }
 
   /**
@@ -285,12 +268,10 @@ export class ServerManager {
     this.wsConnectPromise = null;
     
     // 销毁模块客户端
-    this._ptyClient?.destroy();
     this._voiceClient?.destroy();
     this._llmClient?.destroy();
     this._utilsClient?.destroy();
     
-    this._ptyClient = null;
     this._voiceClient = null;
     this._llmClient = null;
     this._utilsClient = null;
@@ -654,7 +635,6 @@ export class ServerManager {
         this.wsConnectPromise = null;
         
         // 清除模块客户端的 WebSocket
-        this._ptyClient?.setWebSocket(null);
         this._voiceClient?.setWebSocket(null);
         this._llmClient?.setWebSocket(null);
         this._utilsClient?.setWebSocket(null);
@@ -686,7 +666,6 @@ export class ServerManager {
    */
   private updateClientsWebSocket(): void {
     if (this.ws) {
-      this._ptyClient?.setWebSocket(this.ws);
       this._voiceClient?.setWebSocket(this.ws);
       this._llmClient?.setWebSocket(this.ws);
       this._utilsClient?.setWebSocket(this.ws);
@@ -697,28 +676,12 @@ export class ServerManager {
    * 处理 WebSocket 消息
    */
   private handleWebSocketMessage(event: MessageEvent): void {
-    // 处理二进制消息 (PTY 输出)
-    if (event.data instanceof ArrayBuffer) {
-      this._ptyClient?.handleBinaryMessage(event.data);
-      return;
-    }
-    
-    if (event.data instanceof Blob) {
-      event.data.arrayBuffer().then(buffer => {
-        this._ptyClient?.handleBinaryMessage(buffer);
-      });
-      return;
-    }
-    
     // 处理 JSON 消息
     try {
       const msg: ServerMessage = JSON.parse(event.data);
       
       // 根据模块分发消息
       switch (msg.module) {
-        case 'pty':
-          this._ptyClient?.handleMessage(msg);
-          break;
         case 'voice':
           this._voiceClient?.handleMessage(msg);
           break;

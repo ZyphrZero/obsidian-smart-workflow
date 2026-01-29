@@ -10,9 +10,6 @@ name = "smart-workflow-server"
 path = "src/main.rs"
 
 [dependencies]
-# PTY 支持
-portable-pty = "0.9"
-
 # 异步运行时
 tokio = { version = "1", features = ["rt", "net", "sync", "signal", "macros", "time"] }
 

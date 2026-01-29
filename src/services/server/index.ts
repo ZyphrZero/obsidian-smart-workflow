@@ -11,7 +11,6 @@ export type { DownloadProgress, DownloadProgressCallback } from './binaryDownloa
 
 // 模块客户端
 export { ModuleClient } from './moduleClient';
-export { PtyClient } from './ptyClient';
 export { VoiceClient } from './voiceClient';
 export { LLMClient } from './llmClient';
 export { UtilsClient } from './utilsClient';

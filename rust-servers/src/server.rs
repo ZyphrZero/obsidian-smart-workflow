@@ -109,7 +109,7 @@ async fn handle_connection(
     // 创建消息路由器
     let router = Arc::new(MessageRouter::new());
     
-    // 设置 WebSocket 发送器 (用于 PTY 输出)
+    // 设置 WebSocket 发送器
     router.set_ws_sender(Arc::clone(&ws_sender)).await;
     
     // 消息处理循环
@@ -127,37 +127,6 @@ async fn handle_connection(
                             &ws_sender
                         ).await {
                             log_error!("消息处理错误: {}", e);
-                        }
-                    }
-                    Message::Binary(data) => {
-                        // 二进制数据 - 写入 PTY
-                        // 格式: [session_id_length: u8][session_id: bytes][data: bytes]
-                        log_debug!("收到二进制数据: {} 字节", data.len());
-                        
-                        if data.len() < 2 {
-                            log_error!("二进制数据格式错误: 数据太短");
-                            continue;
-                        }
-                        
-                        let session_id_len = data[0] as usize;
-                        if data.len() < 1 + session_id_len {
-                            log_error!("二进制数据格式错误: session_id 长度不足");
-                            continue;
-                        }
-                        
-                        let session_id = match std::str::from_utf8(&data[1..1 + session_id_len]) {
-                            Ok(s) => s,
-                            Err(e) => {
-                                log_error!("二进制数据格式错误: session_id 不是有效 UTF-8: {}", e);
-                                continue;
-                            }
-                        };
-                        
-                        let pty_data = &data[1 + session_id_len..];
-                        log_debug!("写入 PTY: session_id={}, {} 字节", session_id, pty_data.len());
-                        
-                        if let Err(e) = router.pty_handler().write_data(session_id, pty_data).await {
-                            log_error!("写入 PTY 失败: session_id={}, {}", session_id, e);
                         }
                     }
                     Message::Close(_) => {
@@ -185,9 +154,6 @@ async fn handle_connection(
     }
     
     log_info!("WebSocket 连接已关闭");
-    
-    // 清理所有 PTY 会话
-    router.pty_handler().cleanup_all().await;
     
     // 清理 Voice 模块资源
     router.voice_handler().cleanup().await;
@@ -250,7 +216,6 @@ fn extract_module_from_json(text: &str) -> ModuleType {
     if let Ok(value) = serde_json::from_str::<serde_json::Value>(text) {
         if let Some(module_str) = value.get("module").and_then(|v| v.as_str()) {
             match module_str {
-                "pty" => return ModuleType::Pty,
                 "voice" => return ModuleType::Voice,
                 "llm" => return ModuleType::Llm,
                 "utils" => return ModuleType::Utils,

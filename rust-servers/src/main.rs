@@ -1,11 +1,10 @@
 // Unified Server Main Program
-// 统一的 Rust 后端服务器，提供 PTY、语音、LLM 流式处理、工具等功能
+// 统一的 Rust 后端服务器，提供语音、LLM 流式处理、工具等功能
 
 mod server;
 mod router;
 
 // 功能模块
-pub mod pty;
 pub mod voice;
 pub mod llm;
 pub mod utils;

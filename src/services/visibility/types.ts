@@ -13,7 +13,6 @@
  */
 export type FeatureId =
   | 'aiNaming' // AI 文件命名
-  | 'terminal' // 集成终端
   | 'voice' // 语音输入
   | 'tagging' // 标签生成
   | 'archiving' // 智能归档
