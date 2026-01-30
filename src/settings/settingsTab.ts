@@ -270,12 +270,24 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
     // 标题行（包含标题和重载按钮）
     const titleRow = headerEl.createDiv({ cls: 'settings-title-row' });
 
-    // 标题
-    const titleEl = titleRow.createEl('h2', { text: 'Smart Workflow' });
+    // 左侧：标题
+    const titleGroup = titleRow.createDiv({ cls: 'settings-title-group' });
+
+    const titleEl = titleGroup.createEl('h2', { text: 'Smart Workflow' });
     titleEl.addClass('settings-title');
 
+    // 右侧：反馈链接 + 重载按钮
+    const actionsGroup = titleRow.createDiv({ cls: 'settings-actions-group' });
+    
+    const feedbackContainer = actionsGroup.createDiv({ cls: 'settings-feedback' });
+    feedbackContainer.appendText(t('settings.header.feedbackText'));
+    feedbackContainer.createEl('a', {
+      text: t('settings.header.feedbackLink'),
+      href: 'https://github.com/ZyphrZero/obsidian-smart-workflow'
+    });
+
     // 重载按钮
-    const reloadBtn = titleRow.createEl('button', { cls: 'clickable-icon' });
+    const reloadBtn = actionsGroup.createEl('button', { cls: 'clickable-icon' });
     setIcon(reloadBtn, 'refresh-cw');
     reloadBtn.setAttribute('aria-label', t('settings.header.reload'));
     reloadBtn.addEventListener('click', async () => {
@@ -286,14 +298,6 @@ export class SmartWorkflowSettingTab extends PluginSettingTab {
       await this.app.plugins.enablePlugin(pluginId);
       // @ts-expect-error - 访问 Obsidian 内部 API
       this.app.setting.openTabById(pluginId);
-    });
-
-    // GitHub Feedback Link
-    const feedbackContainer = headerEl.createDiv({ cls: 'settings-feedback' });
-    feedbackContainer.appendText(t('settings.header.feedbackText'));
-    feedbackContainer.createEl('a', {
-      text: t('settings.header.feedbackLink'),
-      href: 'https://github.com/ZyphrZero/obsidian-smart-workflow'
     });
   }
 

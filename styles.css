@@ -414,29 +414,67 @@
   display: flex;
   flex-direction: column;
   margin-bottom: 16px;
+  padding-right: 20px;
 }
 /* 标题行 */
 .settings-title-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
+  justify-content: space-between;
+  gap: 16px;
 }
+
+.settings-title-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.settings-title-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.settings-title-icon svg {
+  display: block;
+  color: var(--text-accent);
+}
+
 /* 标题 */
 .settings-title {
   margin: 0 !important;
-  padding: 0;
+  padding: 0 !important;
   font-weight: 700;
   font-size: 1.5em;
   line-height: 1;
 }
+
+.settings-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
 /* 反馈链接 */
 .settings-feedback {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
+  white-space: nowrap;
 }
+
 .settings-feedback a {
   color: var(--text-accent);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.settings-feedback a:hover {
+  color: var(--text-accent-hover);
+  text-decoration: underline;
 }
 /* 内容区域 */
 .smart-workflow-content {
