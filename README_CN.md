@@ -7,6 +7,20 @@
 
 [English](./README.md)
 
+> **📢 重要提示**  
+> 终端功能已拆分到独立插件：[**Obsidian Termy**](https://github.com/ZyphrZero/Obsidian-Termy)  
+> 
+> **Termy 功能特性：**
+> - 完整终端体验，基于 xterm.js，支持 Canvas/WebGL 渲染
+> - 跨平台支持（Windows、macOS、Linux）
+> - 多 Shell 支持：cmd、PowerShell、WSL、Git Bash、bash、zsh、自定义 Shell
+> - 分屏功能（水平/垂直）和多会话管理
+> - 搜索、字体自定义、主题支持、背景图片
+> - 预设脚本，快速执行常用工作流
+> - 丰富的快捷键（Ctrl+O、Ctrl+Shift+R、Ctrl+F 等）
+> 
+> 如需使用终端功能，请安装 Termy 插件。
+
 ## ✨ 功能特性
 
 ### 🧠 AI 智能命名

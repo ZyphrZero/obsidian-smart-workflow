@@ -7,6 +7,20 @@
 
 [中文文档](./README_CN.md)
 
+> **📢 Important Notice**  
+> The terminal feature has been extracted into a separate plugin: [**Obsidian Termy**](https://github.com/ZyphrZero/Obsidian-Termy)  
+> 
+> **Termy Features:**
+> - Full terminal experience powered by xterm.js with Canvas/WebGL rendering
+> - Cross-platform support (Windows, macOS, Linux)
+> - Multiple shells: cmd, PowerShell, WSL, Git Bash, bash, zsh, custom shells
+> - Split panes (horizontal/vertical) and multiple sessions
+> - Search, font customization, theme support, background images
+> - Preset scripts for common workflows
+> - Rich keyboard shortcuts (Ctrl+O, Ctrl+Shift+R, Ctrl+F, etc.)
+> 
+> If you need terminal functionality, please install Termy instead.
+
 ## ✨ Features
 
 ### 🧠 AI Note Naming
