@@ -8,7 +8,7 @@
 [English](./README.md)
 
 > **📢 重要提示**  
-> 终端功能已拆分到独立插件：[**Obsidian Termy**](https://github.com/ZyphrZero/Obsidian-Termy)  
+> 终端功能已拆分到独立插件：[**Obsidian Termy**](https://github.com/ZyphrZero/Termy)  
 > 
 > **Termy 功能特性：**
 > - 完整终端体验，基于 xterm.js，支持 Canvas/WebGL 渲染
