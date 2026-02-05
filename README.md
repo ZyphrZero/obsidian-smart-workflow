@@ -8,7 +8,7 @@
 [中文文档](./README_CN.md)
 
 > **📢 Important Notice**  
-> The terminal feature has been extracted into a separate plugin: [**Obsidian Termy**](https://github.com/ZyphrZero/Obsidian-Termy)  
+> The terminal feature has been extracted into a separate plugin: [**Obsidian Termy**](https://github.com/ZyphrZero/Termy)  
 > 
 > **Termy Features:**
 > - Full terminal experience powered by xterm.js with Canvas/WebGL rendering
