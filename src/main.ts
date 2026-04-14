@@ -1,12 +1,10 @@
-import type { Menu, WorkspaceLeaf, WorkspaceLeaf as WL } from 'obsidian';
-import { Plugin, TFile, MarkdownView, Modal, Setting, Platform, normalizePath, setIcon, ItemView } from 'obsidian';
+import type { Menu, WorkspaceLeaf } from 'obsidian';
+import { Plugin, TFile, MarkdownView, Modal, Setting, Platform, normalizePath, setIcon } from 'obsidian';
 import type { SmartWorkflowSettings} from './settings/settings';
 import { DEFAULT_SETTINGS } from './settings/settings';
 import { SmartWorkflowSettingTab } from './settings/settingsTab';
 import { FileNameService } from './services/naming/fileNameService';
 import { NoticeHelper } from './ui/noticeHelper';
-import { ChatService } from './services/chat/chatService';
-import { ChatView, CHAT_VIEW_TYPE } from './ui/chat/chatView';
 import { WritingApplyView, WRITING_APPLY_VIEW_TYPE } from './ui/writing/writingApplyView';
 import { SelectionToolbarManager } from './ui/selection';
 import { setDebugMode, debugLog, errorLog } from './utils/logger';
@@ -144,7 +142,6 @@ export default class SmartWorkflowPlugin extends Plugin {
   
   // 延迟初始化的服务（桌面端专用服务使用动态导入）
   private _serverManager: ServerManager | null = null;
-  private _chatService: ChatService | null = null;
   private _selectionToolbarManager: SelectionToolbarManager | null = null;
   
   // 动态导入的模块缓存
@@ -240,33 +237,6 @@ export default class SmartWorkflowPlugin extends Plugin {
   }
 
 
-
-  /**
-   * 获取聊天服务（延迟初始化，仅桌面端）
-   */
-  async getChatService(): Promise<ChatService> {
-    if (Platform.isMobile) {
-      throw new Error('ChatService is not available on mobile');
-    }
-    
-    if (!this._chatService) {
-      debugLog('[SmartWorkflowPlugin] Initializing Chat Service...');
-      const serverManager = await this.getServerManager();
-      this._chatService = new ChatService(this.app, this.settings, serverManager, this.secretService);
-      debugLog('[SmartWorkflowPlugin] Chat Service initialized');
-    }
-    return this._chatService;
-  }
-
-  /**
-   * 同步获取已初始化的 ChatService
-   */
-  get chatService(): ChatService {
-    if (!this._chatService) {
-      throw new Error('ChatService not initialized. Call getChatService() first.');
-    }
-    return this._chatService;
-  }
 
   /**
    * 获取选中工具栏管理器（延迟初始化）
@@ -556,11 +526,6 @@ export default class SmartWorkflowPlugin extends Plugin {
     // 初始化功能可见性管理器并注册功能
     this.registerFeatureVisibility();
 
-    // 注册聊天视图（仅桌面端）
-    if (!Platform.isMobile) {
-      this.registerChatView();
-    }
-
     // 注册写作应用视图
     this.registerView(
       WRITING_APPLY_VIEW_TYPE,
@@ -640,15 +605,6 @@ export default class SmartWorkflowPlugin extends Plugin {
           return true;
         }
         return false;
-      }
-    });
-
-    // 添加打开聊天命令
-    this.addCommand({
-      id: 'open-chat',
-      name: 'Open Smart Chat',
-      callback: async () => {
-        await this.activateChatView();
       }
     });
 
@@ -1984,44 +1940,6 @@ export default class SmartWorkflowPlugin extends Plugin {
   }
 
   /**
-   * 注册聊天视图（使用动态导入）
-   */
-  private registerChatView(): void {
-    this.registerView(
-      CHAT_VIEW_TYPE,
-      (leaf: WorkspaceLeaf) => {
-        const view = new ChatViewWrapper(leaf, this);
-        return view;
-      }
-    );
-  }
-
-  /**
-   * 激活聊天视图
-   */
-  async activateChatView(): Promise<void> {
-    const { workspace } = this.app;
-    
-    // Check if already open
-    let leaf = workspace.getLeavesOfType(CHAT_VIEW_TYPE)[0];
-    
-    if (!leaf) {
-      // Create new leaf (right split by default)
-      const rightLeaf = workspace.getRightLeaf(false);
-      leaf = rightLeaf ?? workspace.getLeaf('split', 'vertical');
-      
-      await leaf.setViewState({
-        type: CHAT_VIEW_TYPE,
-        active: true,
-      });
-    }
-
-    workspace.revealLeaf(leaf);
-  }
-
-
-
-  /**
    * 初始化语音状态栏
    */
   private initVoiceStatusBar(): void {
@@ -2218,67 +2136,6 @@ export default class SmartWorkflowPlugin extends Plugin {
     this._voiceStatusBarItem.style.display = shouldShow ? '' : 'none';
     if (!shouldShow) {
       this.closeVoiceStatusMenu();
-    }
-  }
-}
-
-/**
- * 聊天视图包装器
- */
-class ChatViewWrapper extends ItemView {
-  private plugin: SmartWorkflowPlugin;
-  private realView: ChatView | null = null;
-  private initialized = false;
-
-  constructor(leaf: WL, plugin: SmartWorkflowPlugin) {
-    super(leaf);
-    this.plugin = plugin;
-  }
-
-  getViewType(): string {
-    return CHAT_VIEW_TYPE;
-  }
-
-  getDisplayText(): string {
-    return 'Smart Chat';
-  }
-
-  getIcon(): string {
-    return 'message-circle';
-  }
-
-  async onOpen(): Promise<void> {
-    if (this.initialized) return;
-    this.initialized = true;
-
-    try {
-      const [chatService, voiceInputService] = await Promise.all([
-        this.plugin.getChatService(),
-        this.plugin.getVoiceInputService().catch(() => null) // 语音服务可选
-      ]);
-
-      // 清空并创建真实的聊天视图（不继承 ItemView）
-      this.contentEl.empty();
-      this.realView = new ChatView(
-        this.app,
-        this.contentEl,
-        chatService,
-        voiceInputService as VoiceInputService
-      );
-      await this.realView.render();
-    } catch (error) {
-      errorLog('[ChatViewWrapper] Failed to initialize:', error);
-      this.contentEl.createEl('div', { 
-        text: 'Failed to load chat. This feature is only available on desktop.',
-        cls: 'chat-error'
-      });
-    }
-  }
-
-  async onClose(): Promise<void> {
-    if (this.realView) {
-      await this.realView.destroy();
-      this.realView = null;
     }
   }
 }

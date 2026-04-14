@@ -85,13 +85,6 @@ export interface TranslationKeys {
     binaryInUse: string;
   };
 
-  // 聊天界面
-  chat: {
-    placeholder: string;
-    history: string;
-    newChat: string;
-  };
-
   // 设置标签页
   settings: {
     tabs: {

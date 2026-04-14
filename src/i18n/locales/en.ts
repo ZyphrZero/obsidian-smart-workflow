@@ -71,13 +71,6 @@ export const en: TranslationKeys = {
     binaryInUse: 'Binary file is in use. Close Obsidian or stop the smart-workflow-server process and retry',
   },
 
-  // Chat
-  chat: {
-    placeholder: 'Ask AI...',
-    history: 'Conversations',
-    newChat: 'New Chat',
-  },
-
   settings: {
     tabs: {
       general: 'Model Services',

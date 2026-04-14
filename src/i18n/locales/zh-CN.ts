@@ -71,13 +71,6 @@ export const zhCN: TranslationKeys = {
     binaryInUse: '二进制文件被占用，请关闭 Obsidian 或结束 smart-workflow-server 进程后重试',
   },
 
-  // Chat
-  chat: {
-    placeholder: '向 AI 提问...',
-    history: '对话历史',
-    newChat: '新建对话',
-  },
-
   settings: {
     tabs: {
       general: '模型服务',
