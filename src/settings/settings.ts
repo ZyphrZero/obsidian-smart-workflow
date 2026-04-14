@@ -446,8 +446,8 @@ export interface VoiceSettings {
   // ASR 配置
   /** 主 ASR 引擎配置 */
   primaryASR: VoiceASRProviderConfig;
-  /** 备用 ASR 引擎配置 */
-  backupASR?: VoiceASRProviderConfig;
+  /** 备用 ASR 引擎配置列表（按顺序依次故障转移） */
+  backupASRs: VoiceASRProviderConfig[];
   /** 是否启用自动兜底 */
   enableFallback: boolean;
   
@@ -629,7 +629,7 @@ export const DEFAULT_VOICE_SETTINGS: VoiceSettings = {
     mode: 'realtime',
     qwenApiProvider: 'bailian',
   },
-  backupASR: undefined,
+  backupASRs: [],
   enableFallback: false,
   
   // 文本处理配置

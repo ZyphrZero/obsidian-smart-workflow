@@ -75,8 +75,8 @@ export interface ASRProviderConfig {
 export interface ASRConfig {
   /** 主 ASR 引擎配置 */
   primary: ASRProviderConfig;
-  /** 备用 ASR 引擎配置 */
-  fallback?: ASRProviderConfig;
+  /** 备用 ASR 引擎配置列表（按顺序依次故障转移） */
+  fallbacks?: ASRProviderConfig[];
   /** 是否启用自动兜底 */
   enable_fallback: boolean;
   /** 是否启用音频反馈（提示音） */

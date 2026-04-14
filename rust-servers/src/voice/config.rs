@@ -162,9 +162,9 @@ impl ASRProviderConfig {
 pub struct ASRConfig {
     /// 主 ASR 引擎配置
     pub primary: ASRProviderConfig,
-    /// 备用 ASR 引擎配置
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub fallback: Option<ASRProviderConfig>,
+    /// 备用 ASR 引擎配置列表（按顺序依次故障转移）
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fallbacks: Vec<ASRProviderConfig>,
     /// 是否启用自动兜底
     pub enable_fallback: bool,
     /// 是否启用音频反馈（提示音）
@@ -188,7 +188,7 @@ impl ASRConfig {
     pub fn primary_only(primary: ASRProviderConfig) -> Self {
         Self {
             primary,
-            fallback: None,
+            fallbacks: Vec::new(),
             enable_fallback: false,
             enable_audio_feedback: true,
             recording_device: None,
@@ -196,12 +196,13 @@ impl ASRConfig {
         }
     }
     
-    /// 创建带兜底的配置
-    pub fn with_fallback(primary: ASRProviderConfig, fallback: ASRProviderConfig) -> Self {
+    /// 创建带多个兜底引擎的配置
+    pub fn with_fallbacks(primary: ASRProviderConfig, fallbacks: Vec<ASRProviderConfig>) -> Self {
+        let enable_fallback = !fallbacks.is_empty();
         Self {
             primary,
-            fallback: Some(fallback),
-            enable_fallback: true,
+            fallbacks,
+            enable_fallback,
             enable_audio_feedback: true,
             recording_device: None,
             audio_compression: AudioCompressionLevel::default(),
@@ -211,7 +212,7 @@ impl ASRConfig {
     /// 验证配置
     pub fn validate(&self) -> Result<(), ConfigError> {
         self.primary.validate()?;
-        if let Some(ref fallback) = self.fallback {
+        for fallback in &self.fallbacks {
             fallback.validate()?;
         }
         Ok(())
@@ -288,16 +289,16 @@ mod tests {
 
     #[test]
     fn test_asr_config_serialization() {
-        let config = ASRConfig::with_fallback(
+        let config = ASRConfig::with_fallbacks(
             ASRProviderConfig::qwen(ASRMode::Realtime, "qwen-key".to_string()),
-            ASRProviderConfig::sensevoice("sensevoice-key".to_string()),
+            vec![ASRProviderConfig::sensevoice("sensevoice-key".to_string())],
         );
         
         let json = serde_json::to_string(&config).unwrap();
         let parsed: ASRConfig = serde_json::from_str(&json).unwrap();
         
         assert_eq!(parsed.primary.provider, ASRProvider::Qwen);
-        assert!(parsed.fallback.is_some());
+        assert_eq!(parsed.fallbacks.len(), 1);
         assert!(parsed.enable_fallback);
     }
 
@@ -310,11 +311,11 @@ mod tests {
                 "mode": "realtime",
                 "dashscope_api_key": "sk-xxx"
             },
-            "fallback": {
+            "fallbacks": [{
                 "provider": "sensevoice",
                 "mode": "http",
                 "siliconflow_api_key": "sf-xxx"
-            },
+            }],
             "enable_fallback": true
         }"#;
         
@@ -324,7 +325,7 @@ mod tests {
         assert_eq!(config.primary.mode, ASRMode::Realtime);
         assert_eq!(config.primary.dashscope_api_key, Some("sk-xxx".to_string()));
         
-        let fallback = config.fallback.unwrap();
+        let fallback = config.fallbacks.into_iter().next().unwrap();
         assert_eq!(fallback.provider, ASRProvider::SenseVoice);
         assert_eq!(fallback.mode, ASRMode::Http);
         assert_eq!(fallback.siliconflow_api_key, Some("sf-xxx".to_string()));
@@ -338,7 +339,7 @@ mod tests {
             ASRProviderConfig::qwen(ASRMode::Http, "test-key".to_string())
         );
         
-        assert!(config.fallback.is_none());
+        assert!(config.fallbacks.is_empty());
         assert!(!config.enable_fallback);
         assert!(config.validate().is_ok());
     }

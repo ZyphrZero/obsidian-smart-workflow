@@ -217,37 +217,19 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
       }
     );
     
-    // 备用模型 - 点击可选择
-    const backupProvider = voiceSettings.backupASR?.provider;
-    const backupInfo = backupProvider ? ASR_PROVIDER_INFO[backupProvider] : null;
-    const backupStatus = voiceSettings.enableFallback && backupInfo ? 'success' : 'muted';
-    const backupIcon = voiceSettings.enableFallback && backupInfo ? 'shield-check' : 'shield-off';
-    const backupOptions = [
-      { value: '', label: t('voice.dashboard.notConfigured') },
-      ...ASR_PROVIDER_ORDER.map(p => ({ value: p, label: ASR_PROVIDER_INFO[p].modelName }))
-    ];
-    this.renderSelectableStatusItem(
-      contentEl, 
-      t('voice.dashboard.backupModel'), 
-      backupInfo?.modelName || t('voice.dashboard.notConfigured'),
-      backupIcon,
-      backupStatus,
-      backupOptions,
-      backupProvider || '',
-      async (value) => {
-        if (!value) {
-          this.context.plugin.settings.voice.backupASR = undefined;
-        } else {
-          const provider = value as VoiceASRProvider;
-          const modes = ASR_PROVIDER_INFO[provider].modes;
-          this.context.plugin.settings.voice.backupASR = {
-            provider,
-            mode: modes[0],
-          };
-        }
-        await this.saveSettings();
-      }
-    );
+    const backupConfigs = this.getBackupASRConfigs();
+    if (backupConfigs.length > 0) {
+      const backupModels = backupConfigs
+        .map((config) => ASR_PROVIDER_INFO[config.provider].modelName)
+        .join(' -> ');
+      this.renderStatusItem(
+        contentEl,
+        t('voice.dashboard.backupModel'),
+        backupModels,
+        voiceSettings.enableFallback ? 'shield-check' : 'shield-off',
+        voiceSettings.enableFallback ? 'success' : 'muted'
+      );
+    }
     
     // ASR 模式 - 点击可切换
     const currentMode = voiceSettings.primaryASR.mode;
@@ -823,6 +805,63 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
     this.renderHistorySettings(containerEl);
   }
 
+  private getBackupASRConfigs(): VoiceASRProviderConfig[] {
+    return this.context.plugin.settings.voice.backupASRs;
+  }
+
+  private createASRProviderConfig(provider: VoiceASRProvider): VoiceASRProviderConfig {
+    const modes = ASR_PROVIDER_INFO[provider].modes;
+    return {
+      provider,
+      mode: modes[0],
+    };
+  }
+
+  private getDefaultBackupProvider(): VoiceASRProvider {
+    return ASR_PROVIDER_ORDER.find((provider) => provider !== this.context.plugin.settings.voice.primaryASR.provider)
+      ?? ASR_PROVIDER_ORDER[0];
+  }
+
+  private async updateBackupASRConfig(index: number, updates: Partial<VoiceASRProviderConfig>): Promise<void> {
+    const nextConfigs = [...this.getBackupASRConfigs()];
+    const currentConfig = nextConfigs[index];
+    if (!currentConfig) {
+      return;
+    }
+
+    nextConfigs[index] = {
+      ...currentConfig,
+      ...updates,
+    };
+    this.context.plugin.settings.voice.backupASRs = nextConfigs;
+    await this.saveSettings();
+  }
+
+  private async replaceBackupASRConfig(index: number, config: VoiceASRProviderConfig): Promise<void> {
+    const nextConfigs = [...this.getBackupASRConfigs()];
+    nextConfigs[index] = config;
+    this.context.plugin.settings.voice.backupASRs = nextConfigs;
+    await this.saveSettings();
+  }
+
+  private async addBackupASRConfig(): Promise<void> {
+    const nextConfigs = [...this.getBackupASRConfigs(), this.createASRProviderConfig(this.getDefaultBackupProvider())];
+    this.context.plugin.settings.voice.backupASRs = nextConfigs;
+    if (nextConfigs.length > 0) {
+      this.context.plugin.settings.voice.enableFallback = true;
+    }
+    await this.saveSettings();
+  }
+
+  private async removeBackupASRConfig(index: number): Promise<void> {
+    const nextConfigs = this.getBackupASRConfigs().filter((_, configIndex) => configIndex !== index);
+    this.context.plugin.settings.voice.backupASRs = nextConfigs;
+    if (nextConfigs.length === 0) {
+      this.context.plugin.settings.voice.enableFallback = false;
+    }
+    await this.saveSettings();
+  }
+
   // ============================================================================
   // ASR 配置设置
   // ============================================================================
@@ -864,23 +903,53 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
     // 主 ASR 引擎配置
     const primarySection = createSettingCardBordered(card);
     primarySection.addClass('voice-asr-engine-section');
-    this.renderASRProviderConfig(primarySection, 'primary', t('voice.settings.primaryASR'));
+    this.renderPrimaryASRProviderConfig(primarySection);
 
-    // 备用 ASR 引擎配置
-    const backupSection = createSettingCardBordered(card);
-    backupSection.addClass('voice-asr-engine-section');
-    this.renderASRProviderConfig(backupSection, 'backup', t('voice.settings.backupASR'));
+    const backupActionSetting = new Setting(card)
+      .setName(t('voice.settings.backupASRs'))
+      .setDesc(t('voice.settings.backupASRsDesc'));
+    backupActionSetting.addButton((button) => {
+      button
+        .setButtonText(t('voice.settings.addBackupASR'))
+        .onClick(async () => {
+          await this.addBackupASRConfig();
+          renderBackupSections();
+        });
+    });
 
-    // 启用自动兜底
-    new Setting(card)
-      .setName(t('voice.settings.enableFallback'))
-      .setDesc(t('voice.settings.enableFallbackDesc'))
-      .addToggle(toggle => toggle
-        .setValue(this.context.plugin.settings.voice.enableFallback)
-        .onChange(async (value) => {
-          this.context.plugin.settings.voice.enableFallback = value;
-          await this.saveSettings();
-        }));
+    const backupListEl = card.createDiv({ cls: 'voice-asr-backup-list' });
+    const fallbackToggleContainer = card.createDiv({ cls: 'voice-asr-fallback-toggle' });
+
+    const renderBackupSections = (): void => {
+      backupListEl.empty();
+      fallbackToggleContainer.empty();
+
+      const backupConfigs = this.getBackupASRConfigs();
+      if (backupConfigs.length === 0) {
+        return;
+      }
+
+      backupConfigs.forEach((config, index) => {
+        const backupSection = createSettingCardBordered(backupListEl);
+        backupSection.addClass('voice-asr-engine-section');
+        this.renderBackupASRProviderConfig(backupSection, index, config, async () => {
+          await this.removeBackupASRConfig(index);
+          renderBackupSections();
+        });
+      });
+
+      new Setting(fallbackToggleContainer)
+        .setName(t('voice.settings.enableFallback'))
+        .setDesc(t('voice.settings.enableFallbackDesc'))
+        .addToggle(toggle => toggle
+          .setValue(this.context.plugin.settings.voice.enableFallback)
+          .onChange(async (value) => {
+            this.context.plugin.settings.voice.enableFallback = value;
+            await this.saveSettings();
+          }));
+    };
+
+    renderBackupSections();
 
     // 移除末尾标点
     new Setting(card)
@@ -973,112 +1042,108 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
   /**
    * 渲染 ASR 供应商配置
    */
+  private renderPrimaryASRProviderConfig(containerEl: HTMLElement): void {
+    this.renderASRProviderConfig(containerEl, {
+      title: t('voice.settings.primaryASR'),
+      description: t('voice.settings.primaryASRDesc'),
+      getConfig: () => this.context.plugin.settings.voice.primaryASR,
+      onProviderChange: async (provider) => {
+        this.context.plugin.settings.voice.primaryASR = {
+          ...this.context.plugin.settings.voice.primaryASR,
+          ...this.createASRProviderConfig(provider),
+        };
+        await this.saveSettings();
+      },
+      onUpdateConfig: async (updates) => {
+        this.context.plugin.settings.voice.primaryASR = {
+          ...this.context.plugin.settings.voice.primaryASR,
+          ...updates,
+        };
+        await this.saveSettings();
+      },
+    });
+  }
+
+  private renderBackupASRProviderConfig(
+    containerEl: HTMLElement,
+    index: number,
+    _config: VoiceASRProviderConfig,
+    onRemove: () => Promise<void>
+  ): void {
+    this.renderASRProviderConfig(containerEl, {
+      title: `${t('voice.settings.backupASR')} ${index + 1}`,
+      description: t('voice.settings.backupASRDesc'),
+      getConfig: () => this.getBackupASRConfigs()[index],
+      onProviderChange: async (provider) => {
+        const currentConfig = this.getBackupASRConfigs()[index];
+        if (!currentConfig) {
+          return;
+        }
+
+        await this.replaceBackupASRConfig(index, {
+          ...currentConfig,
+          ...this.createASRProviderConfig(provider),
+        });
+      },
+      onUpdateConfig: async (updates) => {
+        await this.updateBackupASRConfig(index, updates);
+      },
+      onRemove,
+    });
+  }
+
   private renderASRProviderConfig(
     containerEl: HTMLElement,
-    type: 'primary' | 'backup',
-    title: string
+    options: {
+      title: string;
+      description: string;
+      getConfig: () => VoiceASRProviderConfig | undefined;
+      onProviderChange: (provider: VoiceASRProvider) => Promise<void>;
+      onUpdateConfig: (updates: Partial<VoiceASRProviderConfig>) => Promise<void>;
+      onRemove?: () => Promise<void>;
+    }
   ): void {
-    const voiceSettings = this.context.plugin.settings.voice;
-    const config = type === 'primary' ? voiceSettings.primaryASR : voiceSettings.backupASR;
-    const isBackup = type === 'backup';
-    const sectionId = `asr-provider-details-${type}`;
-
-    // 供应商选择
     const providerSetting = new Setting(containerEl)
-      .setName(title)
-      .setDesc(isBackup ? t('voice.settings.backupASRDesc') : t('voice.settings.primaryASRDesc'));
+      .setName(options.title)
+      .setDesc(options.description);
 
-    if (isBackup) {
-      // 备用引擎可以不配置
-      providerSetting.addDropdown(dropdown => {
-        dropdown.addOption('', t('voice.settings.noBackup'));
-        ASR_PROVIDER_ORDER.forEach(provider => {
-          const info = ASR_PROVIDER_INFO[provider];
-          dropdown.addOption(provider, info.name);
-        });
-        dropdown
-          .setValue(config?.provider || '')
-          .onChange(async (value: string) => {
-            if (!value) {
-              this.context.plugin.settings.voice.backupASR = undefined;
-            } else {
-              const provider = value as VoiceASRProvider;
-              const modes = ASR_PROVIDER_INFO[provider].modes;
-              this.context.plugin.settings.voice.backupASR = {
-                provider,
-                mode: modes[0],
-              };
-            }
-            await this.saveSettings();
-            
-            // 使用局部更新替代全量刷新
-            const newConfig = this.context.plugin.settings.voice.backupASR;
-            this.toggleConditionalSection(
-              containerEl,
-              sectionId,
-              !!newConfig,
-              (el) => this.renderASRProviderDetailsContent(el, type, newConfig!),
-              providerSetting.settingEl
-            );
-          });
+    providerSetting.addDropdown((dropdown) => {
+      ASR_PROVIDER_ORDER.forEach((provider) => {
+        const info = ASR_PROVIDER_INFO[provider];
+        dropdown.addOption(provider, info.name);
       });
-    } else {
-      providerSetting.addDropdown(dropdown => {
-        ASR_PROVIDER_ORDER.forEach(provider => {
-          const info = ASR_PROVIDER_INFO[provider];
-          dropdown.addOption(provider, info.name);
+
+      dropdown
+        .setValue(options.getConfig()?.provider || ASR_PROVIDER_ORDER[0])
+        .onChange(async (value: VoiceASRProvider) => {
+          await options.onProviderChange(value);
+          renderDetails();
         });
-        dropdown
-          .setValue(config?.provider || 'doubao')
-          .onChange(async (value: VoiceASRProvider) => {
-            const modes = ASR_PROVIDER_INFO[value].modes;
-            this.context.plugin.settings.voice.primaryASR = {
-              ...this.context.plugin.settings.voice.primaryASR,
-              provider: value,
-              mode: modes[0],
-            };
-            await this.saveSettings();
-            
-            // 使用局部更新替代全量刷新
-            // 先移除旧区域，再创建新区域
-            this.toggleConditionalSection(
-              containerEl,
-              sectionId,
-              false,
-              () => {},
-              providerSetting.settingEl
-            );
-            this.toggleConditionalSection(
-              containerEl,
-              sectionId,
-              true,
-              (el) => this.renderASRProviderDetailsContent(el, type, this.context.plugin.settings.voice.primaryASR),
-              providerSetting.settingEl
-            );
+    });
+
+    if (options.onRemove) {
+      providerSetting.addExtraButton((button) => {
+        button
+          .setIcon('trash')
+          .setTooltip(t('voice.settings.removeBackupASR'))
+          .onClick(async () => {
+            await options.onRemove?.();
           });
       });
     }
 
-    // 如果有配置，显示模式选择和 API Key 输入 - 初始渲染
-    this.toggleConditionalSection(
-      containerEl,
-      sectionId,
-      !!config,
-      (el) => this.renderASRProviderDetailsContent(el, type, config!),
-      providerSetting.settingEl
-    );
-  }
+    const detailsContainer = containerEl.createDiv({ cls: 'voice-asr-provider-details' });
+    const renderDetails = (): void => {
+      detailsContainer.empty();
+      const currentConfig = options.getConfig();
+      if (!currentConfig) {
+        return;
+      }
 
-  /**
-   * 渲染 ASR 供应商详细配置内容
-   * 提取为独立方法，用于 toggleConditionalSection 调用
-   */
-  private renderASRProviderDetailsContent(
-    container: HTMLElement,
-    type: 'primary' | 'backup',
-    config: VoiceASRProviderConfig
-  ): void {
-    this.renderASRProviderDetails(container, type, config);
+      this.renderASRProviderDetails(detailsContainer, currentConfig, options.onUpdateConfig);
+    };
+
+    renderDetails();
   }
 
   /**
@@ -1086,8 +1151,8 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
    */
   private renderASRProviderDetails(
     containerEl: HTMLElement,
-    type: 'primary' | 'backup',
-    config: VoiceASRProviderConfig
+    config: VoiceASRProviderConfig,
+    onUpdateConfig: (updates: Partial<VoiceASRProviderConfig>) => Promise<void>
   ): void {
     const providerInfo = ASR_PROVIDER_INFO[config.provider];
     const supportsRealtime = providerInfo.modes.includes('realtime');
@@ -1109,12 +1174,7 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
         dropdown
           .setValue(config.mode)
           .onChange(async (value: VoiceASRMode) => {
-            if (type === 'primary') {
-              this.context.plugin.settings.voice.primaryASR.mode = value;
-            } else if (this.context.plugin.settings.voice.backupASR) {
-              this.context.plugin.settings.voice.backupASR.mode = value;
-            }
-            await this.saveSettings();
+            await onUpdateConfig({ mode: value });
           });
       });
     } else {
@@ -1128,7 +1188,7 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
     }
 
     // 根据供应商类型显示不同的 API Key 输入
-    this.renderASRApiKeyInputs(containerEl, type, config);
+    this.renderASRApiKeyInputs(containerEl, config, onUpdateConfig);
   }
 
   /**
@@ -1137,24 +1197,9 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
    */
   private renderASRApiKeyInputs(
     containerEl: HTMLElement,
-    type: 'primary' | 'backup',
-    config: VoiceASRProviderConfig
+    config: VoiceASRProviderConfig,
+    updateConfig: (updates: Partial<VoiceASRProviderConfig>) => Promise<void>
   ): void {
-    const updateConfig = async (updates: Partial<VoiceASRProviderConfig>) => {
-      if (type === 'primary') {
-        this.context.plugin.settings.voice.primaryASR = {
-          ...this.context.plugin.settings.voice.primaryASR,
-          ...updates,
-        };
-      } else if (this.context.plugin.settings.voice.backupASR) {
-        this.context.plugin.settings.voice.backupASR = {
-          ...this.context.plugin.settings.voice.backupASR,
-          ...updates,
-        };
-      }
-      await this.saveSettings();
-    };
-
     // 添加 API 申请指南链接
     const providerInfo = ASR_PROVIDER_INFO[config.provider];
     if (providerInfo.guideUrl) {
@@ -1190,7 +1235,6 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
       case 'qwen':
         this.renderQwenApiProviderSettings(
           containerEl,
-          type,
           config,
           secretComponentAvailable,
           updateConfig
@@ -1295,13 +1339,12 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
 
   private renderQwenApiProviderSettings(
     containerEl: HTMLElement,
-    type: 'primary' | 'backup',
     config: VoiceASRProviderConfig,
     secretComponentAvailable: boolean,
     updateConfig: (updates: Partial<VoiceASRProviderConfig>) => Promise<void>
   ): void {
     const apiProvider = config.qwenApiProvider ?? 'bailian';
-    const sectionId = `qwen-api-provider-${type}`;
+    const sectionId = 'qwen-api-provider';
 
     const apiProviderSetting = new Setting(containerEl)
       .setName(t('voice.settings.qwenApiProvider'))
@@ -1319,7 +1362,13 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
             containerEl,
             sectionId,
             true,
-            (el) => this.renderQwenApiProviderDetails(el, config, value, secretComponentAvailable, updateConfig),
+            (el) => this.renderQwenApiProviderDetails(
+              el,
+              { ...config, qwenApiProvider: value },
+              value,
+              secretComponentAvailable,
+              updateConfig
+            ),
             apiProviderSetting.settingEl
           );
         });

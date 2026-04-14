@@ -11,7 +11,7 @@ use crate::voice::config::ASRConfig;
 /// 兜底策略
 pub struct FallbackStrategy {
     primary: Box<dyn ASREngine>,
-    fallback: Option<Box<dyn ASREngine>>,
+    fallbacks: Vec<Box<dyn ASREngine>>,
     enable_fallback: bool,
     retry_config: RetryConfig,
 }
@@ -19,12 +19,12 @@ pub struct FallbackStrategy {
 impl FallbackStrategy {
     pub fn new(
         primary: Box<dyn ASREngine>,
-        fallback: Option<Box<dyn ASREngine>>,
+        fallbacks: Vec<Box<dyn ASREngine>>,
         enable_fallback: bool,
     ) -> Self {
         Self {
             primary,
-            fallback,
+            fallbacks,
             enable_fallback,
             retry_config: RetryConfig::default(),
         }
@@ -32,13 +32,13 @@ impl FallbackStrategy {
     
     pub fn with_retry_config(
         primary: Box<dyn ASREngine>,
-        fallback: Option<Box<dyn ASREngine>>,
+        fallbacks: Vec<Box<dyn ASREngine>>,
         enable_fallback: bool,
         retry_config: RetryConfig,
     ) -> Self {
         Self {
             primary,
-            fallback,
+            fallbacks,
             enable_fallback,
             retry_config,
         }
@@ -46,14 +46,13 @@ impl FallbackStrategy {
     
     pub fn from_config(config: &ASRConfig) -> Result<Self, ASRError> {
         let primary = crate::voice::asr::create_engine(&config.primary)?;
-        
-        let fallback = if let Some(ref fallback_config) = config.fallback {
-            Some(crate::voice::asr::create_engine(fallback_config)?)
-        } else {
-            None
-        };
-        
-        Ok(Self::new(primary, fallback, config.enable_fallback))
+
+        let mut fallbacks = Vec::new();
+        for fallback_config in &config.fallbacks {
+            fallbacks.push(crate::voice::asr::create_engine(fallback_config)?);
+        }
+
+        Ok(Self::new(primary, fallbacks, config.enable_fallback))
     }
     
     pub async fn transcribe(&self, audio: &AudioData) -> Result<TranscriptionResult, ASRError> {
@@ -104,9 +103,10 @@ impl FallbackStrategy {
         }
         
         // 主引擎失败，尝试备用引擎
-        if self.enable_fallback {
-            if let Some(ref fallback) = self.fallback {
-                eprintln!("[INFO] 主引擎所有重试失败，尝试兜底引擎...");
+        if self.enable_fallback && !self.fallbacks.is_empty() {
+            let mut fallback_errors: Vec<String> = Vec::new();
+            for fallback in &self.fallbacks {
+                eprintln!("[INFO] 主引擎所有重试失败，尝试兜底引擎 {}...", fallback.name());
                 match fallback.transcribe(audio).await {
                     Ok(text) => {
                         let duration_ms = start_time.elapsed().as_millis() as u64;
@@ -123,13 +123,15 @@ impl FallbackStrategy {
                         ));
                     }
                     Err(fallback_error) => {
-                        return Err(ASRError::AllEnginesFailed {
-                            primary_error: primary_errors.join("; "),
-                            fallback_error: Some(fallback_error.to_string()),
-                        });
+                        fallback_errors.push(format!("{}: {}", fallback.name(), fallback_error));
                     }
                 }
             }
+
+            return Err(ASRError::AllEnginesFailed {
+                primary_error: primary_errors.join("; "),
+                fallback_error: Some(fallback_errors.join("; ")),
+            });
         }
         
         Err(ASRError::AllEnginesFailed {
@@ -138,16 +140,12 @@ impl FallbackStrategy {
         })
     }
     
-    pub fn primary_name(&self) -> &str {
-        self.primary.name()
-    }
-    
-    pub fn fallback_name(&self) -> Option<&str> {
-        self.fallback.as_ref().map(|e| e.name())
+    pub fn primary_provider(&self) -> String {
+        self.primary.name().to_string()
     }
     
     pub fn is_fallback_enabled(&self) -> bool {
-        self.enable_fallback && self.fallback.is_some()
+        self.enable_fallback && !self.fallbacks.is_empty()
     }
 }
 
@@ -169,10 +167,17 @@ pub struct RaceStrategy {
 
 impl RaceStrategy {
     pub fn from_config(config: ASRConfig) -> Self {
+        let ASRConfig {
+            primary,
+            fallbacks,
+            enable_fallback,
+            ..
+        } = config;
+        let fallback_config = fallbacks.into_iter().next();
         Self {
-            primary_config: config.primary,
-            fallback_config: config.fallback,
-            enable_fallback: config.enable_fallback,
+            primary_config: primary,
+            fallback_config,
+            enable_fallback,
             retry_config: RetryConfig::default(),
         }
     }
@@ -330,10 +335,6 @@ impl RaceStrategy {
         self.primary_config.provider.to_string()
     }
 
-    pub fn fallback_provider(&self) -> Option<String> {
-        self.fallback_config.as_ref().map(|c| c.provider.to_string())
-    }
-
     pub fn is_fallback_enabled(&self) -> bool {
         self.enable_fallback && self.fallback_config.is_some()
     }
@@ -341,10 +342,17 @@ impl RaceStrategy {
 
 impl ParallelFallbackStrategy {
     pub fn from_config(config: ASRConfig) -> Self {
+        let ASRConfig {
+            primary,
+            fallbacks,
+            enable_fallback,
+            ..
+        } = config;
+        let fallback_config = fallbacks.into_iter().next();
         Self {
-            primary_config: config.primary,
-            fallback_config: config.fallback,
-            enable_fallback: config.enable_fallback,
+            primary_config: primary,
+            fallback_config,
+            enable_fallback,
             retry_config: RetryConfig::default(),
         }
     }
@@ -471,10 +479,6 @@ impl ParallelFallbackStrategy {
     
     pub fn primary_provider(&self) -> String {
         self.primary_config.provider.to_string()
-    }
-    
-    pub fn fallback_provider(&self) -> Option<String> {
-        self.fallback_config.as_ref().map(|c| c.provider.to_string())
     }
     
     pub fn is_fallback_enabled(&self) -> bool {

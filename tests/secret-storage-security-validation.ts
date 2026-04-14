@@ -51,7 +51,7 @@ interface VoiceASRProviderConfig {
 
 interface VoiceSettings {
   primaryASR: VoiceASRProviderConfig;
-  backupASR?: VoiceASRProviderConfig;
+  backupASRs?: VoiceASRProviderConfig[];
   recordingDeviceName?: string;
   audioCompressionLevel?: string;
 }
@@ -427,14 +427,15 @@ function auditSettingsSecurity(settings: SmartWorkflowSettings): {
     }
 
     // 备用 ASR
-    if (settings.voice.backupASR) {
-      const backupResults = validateASRConfigSecurity(settings.voice.backupASR, '备用 ASR');
+    const backupConfigs = settings.voice.backupASRs ?? [];
+    backupConfigs.forEach((config, index) => {
+      const backupResults = validateASRConfigSecurity(config, `备用 ASR ${index + 1}`);
       for (const result of backupResults) {
         if (!result.valid && result.error) {
           issues.push(result.error);
         }
       }
-    }
+    });
   }
 
   return {

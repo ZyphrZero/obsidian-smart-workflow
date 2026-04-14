@@ -1133,6 +1133,8 @@ export default class SmartWorkflowPlugin extends Plugin {
     }
 
     // 一次性深度合并所有设置
+    const backupASRs = loaded.voice?.backupASRs?.map((config) => ({ ...config })) ?? [];
+
     this.settings = {
       ...DEFAULT_SETTINGS,
       ...loaded,
@@ -1236,10 +1238,10 @@ export default class SmartWorkflowPlugin extends Plugin {
           ...DEFAULT_SETTINGS.voice.primaryASR,
           ...loaded.voice?.primaryASR
         },
-        backupASR: loaded.voice?.backupASR ? {
-          ...DEFAULT_SETTINGS.voice.backupASR,
-          ...loaded.voice.backupASR
-        } : DEFAULT_SETTINGS.voice.backupASR,
+        backupASRs,
+        enableFallback: backupASRs.length > 0
+          ? (loaded.voice?.enableFallback ?? DEFAULT_SETTINGS.voice.enableFallback)
+          : false,
         llmPresets: loaded.voice?.llmPresets || DEFAULT_SETTINGS.voice.llmPresets,
         assistantConfig: {
           ...DEFAULT_SETTINGS.voice.assistantConfig,

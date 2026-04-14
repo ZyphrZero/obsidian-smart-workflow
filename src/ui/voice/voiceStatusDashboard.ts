@@ -165,37 +165,19 @@ export class VoiceStatusDashboard {
       }
     );
 
-    // 备用模型 - 点击可选择
-    const backupProvider = voiceSettings.backupASR?.provider;
-    const backupInfo = backupProvider ? ASR_PROVIDER_INFO[backupProvider] : null;
-    const backupStatus = voiceSettings.enableFallback && backupInfo ? 'success' : 'muted';
-    const backupIcon = voiceSettings.enableFallback && backupInfo ? 'shield-check' : 'shield-off';
-    const backupOptions = [
-      { value: '', label: t('voice.dashboard.notConfigured') },
-      ...ASR_PROVIDER_ORDER.map(p => ({ value: p, label: ASR_PROVIDER_INFO[p].modelName }))
-    ];
-    this.renderSelectableStatusItem(
-      contentEl,
-      t('voice.dashboard.backupModel'),
-      backupInfo?.modelName || t('voice.dashboard.notConfigured'),
-      backupIcon,
-      backupStatus,
-      backupOptions,
-      backupProvider || '',
-      async (value) => {
-        if (!value) {
-          this.settings.voice.backupASR = undefined;
-        } else {
-          const provider = value as VoiceASRProvider;
-          const modes = ASR_PROVIDER_INFO[provider].modes;
-          this.settings.voice.backupASR = {
-            provider,
-            mode: modes[0],
-          };
-        }
-        await this.saveSettings();
-      }
-    );
+    const backupConfigs = voiceSettings.backupASRs;
+    if (backupConfigs.length > 0) {
+      const backupModels = backupConfigs
+        .map((config) => ASR_PROVIDER_INFO[config.provider].modelName)
+        .join(' -> ');
+      this.renderStatusItem(
+        contentEl,
+        t('voice.dashboard.backupModel'),
+        backupModels,
+        voiceSettings.enableFallback ? 'shield-check' : 'shield-off',
+        voiceSettings.enableFallback ? 'success' : 'muted'
+      );
+    }
 
     // ASR 模式 - 点击可切换
     const currentMode = voiceSettings.primaryASR.mode;

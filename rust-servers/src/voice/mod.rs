@@ -20,7 +20,7 @@ use audio::{
     AudioData,
     list_input_devices,
 };
-use asr::{RaceStrategy, TranscriptionResult, ASRError, RealtimeTaskResult, RealtimeTranscriptionTask};
+use asr::{FallbackStrategy, TranscriptionResult, ASRError, RealtimeTaskResult, RealtimeTranscriptionTask};
 use beep::BeepPlayer;
 use config::{ASRConfig, ASRMode};
 
@@ -758,13 +758,18 @@ async fn perform_transcription(
     asr_config.validate()
         .map_err(|e| ASRError::ConfigError(e.to_string()))?;
     
-    // 创建竞速策略
-    let strategy = RaceStrategy::from_config(asr_config.clone());
+    // 创建顺序故障转移策略
+    let strategy = FallbackStrategy::from_config(asr_config)?;
+    let fallback_providers: Vec<String> = asr_config
+        .fallbacks
+        .iter()
+        .map(|config| config.provider.to_string())
+        .collect();
     
     log_info!(
-        "使用 ASR 引擎: primary={}, fallback={:?}, enable_fallback={}",
+        "使用 ASR 引擎: primary={}, fallbacks={:?}, enable_fallback={}",
         strategy.primary_provider(),
-        strategy.fallback_provider(),
+        fallback_providers,
         strategy.is_fallback_enabled()
     );
     
@@ -790,24 +795,37 @@ async fn perform_fallback_transcription(
     
     log_info!("执行回退转录，音频时长: {}ms", audio_data.duration_ms);
     
-    // 如果配置了 fallback 引擎且启用了 fallback，优先使用 fallback 引擎
+    // 如果配置了 fallback 引擎且启用了 fallback，按顺序依次尝试
     if asr_config.enable_fallback {
-        if let Some(ref fallback_config) = asr_config.fallback {
-            log_info!("使用配置的 fallback 引擎: {}", fallback_config.provider);
-            
-            // 创建 fallback 引擎
-            let engine = asr::create_engine(fallback_config)?;
-            
-            let start_time = std::time::Instant::now();
-            let text = engine.transcribe(audio_data).await?;
-            let duration_ms = start_time.elapsed().as_millis() as u64;
-            
-            return Ok(TranscriptionResult::new(
-                text,
-                engine.name().to_string(),
-                true,
-                duration_ms,
-            ));
+        if !asr_config.fallbacks.is_empty() {
+            let mut fallback_errors: Vec<String> = Vec::new();
+            for fallback_config in &asr_config.fallbacks {
+                log_info!("使用配置的 fallback 引擎: {}", fallback_config.provider);
+
+                let engine = asr::create_engine(fallback_config)?;
+
+                let start_time = std::time::Instant::now();
+                match engine.transcribe(audio_data).await {
+                    Ok(text) => {
+                        let duration_ms = start_time.elapsed().as_millis() as u64;
+
+                        return Ok(TranscriptionResult::new(
+                            text,
+                            engine.name().to_string(),
+                            true,
+                            duration_ms,
+                        ));
+                    }
+                    Err(error) => {
+                        fallback_errors.push(format!("{}: {}", engine.name(), error));
+                    }
+                }
+            }
+
+            return Err(ASRError::AllEnginesFailed {
+                primary_error: "实时模式失败".to_string(),
+                fallback_error: Some(fallback_errors.join("; ")),
+            });
         }
     }
     

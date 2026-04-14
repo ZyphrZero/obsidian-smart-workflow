@@ -23,6 +23,7 @@ import type {
   VoiceInputMode,
   RecordingMode,
   ASRConfig,
+  ASRProviderConfig,
   InputDeviceInfo,
   VoiceServiceEvents,
   TranscriptionCompleteMessage} from './types';
@@ -908,33 +909,30 @@ export class VoiceInputService implements IVoiceInputService {
     return this.resolveQwenApiKey(config);
   }
 
+  private resolveASRProviderConfig(config: VoiceASRProviderConfig): ASRProviderConfig {
+    return {
+      provider: config.provider,
+      mode: config.mode,
+      dashscope_api_key: this.resolveDashscopeApiKey(config),
+      app_id: config.app_id,
+      access_token: this.configManager.resolveKeyValue(config.doubaoKeyConfig),
+      siliconflow_api_key: this.configManager.resolveKeyValue(config.siliconflowKeyConfig),
+    };
+  }
+
   private buildASRConfig(): ASRConfig {
+    const fallbackConfigs = this.settings.backupASRs.map((config) => this.resolveASRProviderConfig(config));
+    const hasFallbacks = this.settings.enableFallback && fallbackConfigs.length > 0;
     const config: ASRConfig = {
-      primary: {
-        provider: this.settings.primaryASR.provider,
-        mode: this.settings.primaryASR.mode,
-        // 使用 ConfigManager 解析密钥值
-        dashscope_api_key: this.resolveDashscopeApiKey(this.settings.primaryASR),
-        app_id: this.settings.primaryASR.app_id,
-        access_token: this.configManager.resolveKeyValue(this.settings.primaryASR.doubaoKeyConfig),
-        siliconflow_api_key: this.configManager.resolveKeyValue(this.settings.primaryASR.siliconflowKeyConfig),
-      },
-      enable_fallback: this.settings.enableFallback,
+      primary: this.resolveASRProviderConfig(this.settings.primaryASR),
+      enable_fallback: hasFallbacks,
       enable_audio_feedback: this.settings.enableAudioFeedback,
       recording_device: this.settings.recordingDeviceName,
       audio_compression: this.settings.audioCompressionLevel,
     };
 
-    if (this.settings.backupASR && this.settings.enableFallback) {
-      config.fallback = {
-        provider: this.settings.backupASR.provider,
-        mode: this.settings.backupASR.mode,
-        // 使用 ConfigManager 解析密钥值
-        dashscope_api_key: this.resolveDashscopeApiKey(this.settings.backupASR),
-        app_id: this.settings.backupASR.app_id,
-        access_token: this.configManager.resolveKeyValue(this.settings.backupASR.doubaoKeyConfig),
-        siliconflow_api_key: this.configManager.resolveKeyValue(this.settings.backupASR.siliconflowKeyConfig),
-      };
+    if (hasFallbacks) {
+      config.fallbacks = fallbackConfigs;
     }
 
     return config;

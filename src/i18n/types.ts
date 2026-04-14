@@ -900,6 +900,10 @@ export interface TranslationKeys {
       audioCompressionMinimum: string;
       primaryASR: string;
       primaryASRDesc: string;
+      backupASRs: string;
+      backupASRsDesc: string;
+      addBackupASR: string;
+      removeBackupASR: string;
       backupASR: string;
       backupASRDesc: string;
       noBackup: string;
