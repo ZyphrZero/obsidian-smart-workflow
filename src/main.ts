@@ -1,6 +1,6 @@
-import type { Menu, WorkspaceLeaf } from 'obsidian';
-import { Plugin, TFile, MarkdownView, Modal, Setting, Platform, normalizePath, setIcon } from 'obsidian';
-import type { SmartWorkflowSettings} from './settings/settings';
+import type { App, Menu, WorkspaceLeaf } from 'obsidian';
+import { Plugin, TFile, MarkdownView, Modal, Setting, Platform, setIcon } from 'obsidian';
+import type { SmartWorkflowSettings, ToolbarButtonConfig } from './settings/settings';
 import { DEFAULT_SETTINGS } from './settings/settings';
 import { SmartWorkflowSettingTab } from './settings/settingsTab';
 import { FileNameService } from './services/naming/fileNameService';
@@ -22,7 +22,6 @@ import { AssistantProcessor } from './services/voice/assistantProcessor';
 import { ConfigManager } from './services/config/configManager';
 import { SecretService, type ISecretService } from './services/secret';
 import { HistoryManager } from './services/voice/historyManager';
-import { LLMProcessingError } from './services/voice/types';
 import { VoiceErrorHandler, isLLMProcessingError } from './services/voice/voiceErrorHandler';
 
 // 标签生成服务
@@ -52,7 +51,7 @@ class RenameConfirmModal extends Modal {
   private onResult: (confirmed: boolean) => void;
   private resolved = false;
 
-  constructor(app: import('obsidian').App, oldName: string, newName: string, onResult: (confirmed: boolean) => void) {
+  constructor(app: App, oldName: string, newName: string, onResult: (confirmed: boolean) => void) {
     super(app);
     this.oldName = oldName;
     this.newName = newName;
@@ -136,16 +135,13 @@ class RenameConfirmModal extends Modal {
  * AI 文件名生成器插件主类
  */
 export default class SmartWorkflowPlugin extends Plugin {
-  settings: SmartWorkflowSettings;
-  fileNameService: FileNameService;
+  settings!: SmartWorkflowSettings;
+  fileNameService!: FileNameService;
   generatingFiles: Set<string> = new Set();
   
   // 延迟初始化的服务（桌面端专用服务使用动态导入）
   private _serverManager: ServerManager | null = null;
   private _selectionToolbarManager: SelectionToolbarManager | null = null;
-  
-  // 动态导入的模块缓存
-  private _serverManagerModule: typeof import('./services/server/serverManager') | null = null;
   
   // 语音输入服务（延迟初始化）
   private _voiceInputService: VoiceInputService | null = null;
@@ -196,16 +192,13 @@ export default class SmartWorkflowPlugin extends Plugin {
     if (!this._serverManager) {
       debugLog('[SmartWorkflowPlugin] Initializing ServerManager...');
       
-      // 动态导入 ServerManager 模块
-      if (!this._serverManagerModule) {
-        this._serverManagerModule = await import('./services/server/serverManager');
-      }
-      
+      const { ServerManager } = await import('./services/server/serverManager');
+
       const pluginDir = this.getPluginDir();
       const version = this.manifest.version;
       const downloadAcceleratorUrl = this.settings.serverConnection?.downloadAcceleratorUrl ?? '';
       const offlineMode = this.settings.serverConnection?.offlineMode ?? false;
-      this._serverManager = new this._serverManagerModule.ServerManager(
+      this._serverManager = new ServerManager(
         pluginDir,
         version,
         downloadAcceleratorUrl,
@@ -257,7 +250,7 @@ export default class SmartWorkflowPlugin extends Plugin {
         try {
           const serverManager = await this.getServerManager();
           this._selectionToolbarManager.setServerManager(serverManager);
-        } catch (e) {
+        } catch {
           debugLog('[SmartWorkflowPlugin] ServerManager not available, using fallback mode');
         }
       }
@@ -542,7 +535,7 @@ export default class SmartWorkflowPlugin extends Plugin {
           return false;
         }
         if (!checking) {
-          this.handleGenerateCommand();
+          void this.handleGenerateCommand();
         }
         return true;
       }
@@ -560,7 +553,7 @@ export default class SmartWorkflowPlugin extends Plugin {
         const file = this.app.workspace.getActiveFile();
         if (file) {
           if (!checking) {
-            this.handleGenerateTagsCommand(file);
+            void this.handleGenerateTagsCommand(file);
           }
           return true;
         }
@@ -580,7 +573,7 @@ export default class SmartWorkflowPlugin extends Plugin {
         const file = this.app.workspace.getActiveFile();
         if (file) {
           if (!checking) {
-            this.handleSmartArchiveCommand(file);
+            void this.handleSmartArchiveCommand(file);
           }
           return true;
         }
@@ -600,7 +593,7 @@ export default class SmartWorkflowPlugin extends Plugin {
         const file = this.app.workspace.getActiveFile();
         if (file && this.autoArchiveService.canProcess(file)) {
           if (!checking) {
-            this.autoArchiveService.execute(file);
+            void this.autoArchiveService.execute(file);
           }
           return true;
         }
@@ -632,10 +625,10 @@ export default class SmartWorkflowPlugin extends Plugin {
           if (!checking) {
             // 如果已在录音中，则停止录音（支持 toggle 行为）
             if (this._voiceInputService?.isRecording()) {
-              this.finishVoiceRecording();
+              void this.finishVoiceRecording();
               return true;
             }
-            this.handleVoiceDictation();
+            void this.handleVoiceDictation();
           }
           return true;
         }
@@ -659,10 +652,10 @@ export default class SmartWorkflowPlugin extends Plugin {
           if (!checking) {
             // 如果已在录音中，则停止录音（支持 toggle 行为）
             if (this._voiceInputService?.isRecording()) {
-              this.finishVoiceRecording();
+              void this.finishVoiceRecording();
               return true;
             }
-            this.handleVoiceAssistant();
+            void this.handleVoiceAssistant();
           }
           return true;
         }
@@ -1223,9 +1216,9 @@ export default class SmartWorkflowPlugin extends Plugin {
    * 保留用户自定义配置，同时确保新按钮被添加
    */
   private mergeButtonConfigs(
-    defaults: import('./settings/settings').ToolbarButtonConfig[],
-    loaded?: import('./settings/settings').ToolbarButtonConfig[]
-  ): import('./settings/settings').ToolbarButtonConfig[] {
+    defaults: ToolbarButtonConfig[],
+    loaded?: ToolbarButtonConfig[]
+  ): ToolbarButtonConfig[] {
     if (!loaded || loaded.length === 0) {
       return [...defaults];
     }
@@ -1234,7 +1227,7 @@ export default class SmartWorkflowPlugin extends Plugin {
     const loadedMap = new Map(loaded.map(c => [c.id, c]));
     
     // 合并配置：优先使用已加载的，补充缺失的默认配置
-    const result: import('./settings/settings').ToolbarButtonConfig[] = [];
+    const result: ToolbarButtonConfig[] = [];
     
     // 先添加已加载的配置（保持用户顺序）
     for (const config of loaded) {
@@ -1565,7 +1558,7 @@ export default class SmartWorkflowPlugin extends Plugin {
       if (normalizedReleasedKey === normalizedHotkeyKey) {
         debugLog('[VoiceInput] 检测到快捷键松开，停止录音');
         this.removePressModeListener();
-        this.finishVoiceRecording();
+        void this.finishVoiceRecording();
       }
     };
     

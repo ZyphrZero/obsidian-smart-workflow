@@ -487,7 +487,7 @@ export class VoiceOverlay implements IVoiceOverlay {
   /**
    * 显示错误状态
    */
-  private showErrorState(message: string): void {
+  private showErrorState(_message: string): void {
     // 隐藏波形
     if (this.waveformEl) {
       this.waveformEl.style.display = 'none';
@@ -562,7 +562,6 @@ export class VoiceOverlay implements IVoiceOverlay {
     const selection = editor.getSelection();
     if (selection) {
       // 有选区时，判断光标位置
-      const from = editor.getCursor('from');
       const to = editor.getCursor('to');
       
       // 如果光标在选区末尾（to 位置），说明选区在上方，悬浮窗应显示在下方

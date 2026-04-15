@@ -97,8 +97,6 @@ export class DiffEngine {
 
     // 1-indexed，跟踪上一个处理的原始行结束位置（相对于本段文本）
     let lastOriginalEndLineNumberExclusive = 1;
-    // 跟踪修改后文本的当前行位置
-    let lastModifiedEndLineNumberExclusive = 1;
 
     changes.forEach((change: DetailedLineRangeMapping) => {
       const oStart = change.original.startLineNumber;
@@ -120,7 +118,6 @@ export class DiffEngine {
             originalEndLine: originalStartLine + oStart - 1,
           });
         }
-        lastModifiedEndLineNumberExclusive = mStart;
       }
 
       // 输出修改块
@@ -141,7 +138,6 @@ export class DiffEngine {
       }
 
       lastOriginalEndLineNumberExclusive = oEnd;
-      lastModifiedEndLineNumberExclusive = mEnd;
     });
 
     // 输出最后的未变化块（如果有）

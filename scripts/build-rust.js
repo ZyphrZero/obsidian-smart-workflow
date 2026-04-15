@@ -1,44 +1,48 @@
 /**
- * Unified Rust Server Build Script
+ * Smart Workflow Server Build Script
  * Auto-detect current platform and build the unified server binary
  * Binary naming: smart-workflow-server-{platform}-{arch}
  */
 
-const { execSync } = require('child_process');
-const fs = require('fs');
-const path = require('path');
-const crypto = require('crypto');
+import { execSync } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Supported platform configurations
 const PLATFORMS = {
-  'win32-x64': { 
+  'win32-x64': {
     target: 'x86_64-pc-windows-msvc',
     ext: '.exe',
     displayName: 'Windows x64'
   },
-  'darwin-x64': { 
+  'darwin-x64': {
     target: 'x86_64-apple-darwin',
     ext: '',
     displayName: 'macOS Intel'
   },
-  'darwin-arm64': { 
+  'darwin-arm64': {
     target: 'aarch64-apple-darwin',
     ext: '',
     displayName: 'macOS Apple Silicon'
   },
-  'linux-x64': { 
+  'linux-x64': {
     target: 'x86_64-unknown-linux-gnu',
     ext: '',
     displayName: 'Linux x64'
   },
-  'linux-arm64': { 
+  'linux-arm64': {
     target: 'aarch64-unknown-linux-gnu',
     ext: '',
     displayName: 'Linux ARM64'
   },
 };
 
-// Unified server configuration
+// Server configuration
 const SERVER_CONFIG = {
   name: 'smart-workflow-server',
   displayName: 'Smart Workflow Server',
@@ -64,7 +68,7 @@ function getPluginVersion() {
       return manifest.version.trim();
     }
   } catch (error) {
-    console.warn(`??  Failed to read manifest version: ${error.message}`);
+    console.warn(`⚠️  Failed to read manifest version: ${error.message}`);
   }
   return null;
 }
@@ -104,7 +108,7 @@ function parseArgs() {
  * Show help message
  */
 function showHelp() {
-  console.log('Unified Rust Server Build Script');
+  console.log('Smart Workflow Server Build Script');
   console.log('');
   console.log('Usage: node build-rust.js [OPTIONS]');
   console.log('');
@@ -122,15 +126,15 @@ function showHelp() {
 }
 
 /**
- * Build the unified server
+ * Build the server
  */
 function buildServer(platformName, config, options) {
   const binaryName = `${SERVER_CONFIG.binaryPrefix}-${platformName}${config.ext}`;
   const outputPath = path.join(BINARIES_DIR, binaryName);
   const pluginVersion = getPluginVersion();
-  
+
   console.log(`📦 Building ${SERVER_CONFIG.displayName}...`);
-  
+
   // 1. Clean cache if requested
   if (options.clean) {
     console.log('  🧹 Cleaning build cache...');
@@ -147,11 +151,11 @@ function buildServer(platformName, config, options) {
       console.log('  ⚠️  Cache clean skipped (may be first build)');
     }
   }
-  
+
   // 2. Compile
   console.log('  📦 Compiling...');
   const startTime = Date.now();
-  
+
   try {
     execSync(
       `cargo build --release --target ${config.target}`,
@@ -168,40 +172,40 @@ function buildServer(platformName, config, options) {
   } catch (error) {
     throw new Error(`Compilation failed: ${error.message}`);
   }
-  
+
   const buildTime = ((Date.now() - startTime) / 1000).toFixed(1);
   console.log(`  ⏱️  Build time: ${buildTime}s`);
-  
+
   // 3. Find build artifact
   const targetDir = path.join(RUST_DIR, 'target', config.target, 'release');
   const sourceBinary = path.join(targetDir, `${SERVER_CONFIG.name}${config.ext}`);
-  
+
   if (!fs.existsSync(sourceBinary)) {
     throw new Error(`Build artifact not found: ${sourceBinary}`);
   }
-  
+
   // 4. Copy to binaries directory
   console.log('  📋 Copying binary...');
   fs.copyFileSync(sourceBinary, outputPath);
-  
+
   // 5. Verify file size
   const stats = fs.statSync(outputPath);
   const sizeMB = (stats.size / 1024 / 1024).toFixed(2);
   const sizeKB = (stats.size / 1024).toFixed(0);
-  
+
   console.log(`  📊 File size: ${sizeMB} MB (${sizeKB} KB)`);
-  
+
   if (stats.size > REFERENCE_BINARY_SIZE) {
-    console.log(`  💡 Note: File size exceeds 5MB reference, this is expected for unified server`);
+    console.log(`  💡 Note: File size exceeds 5MB reference, this is expected`);
   }
-  
+
   // 6. Generate SHA256 checksum
   console.log('  🔐 Generating SHA256 checksum...');
   const checksum = generateChecksum(outputPath);
   const checksumPath = `${outputPath}.sha256`;
   fs.writeFileSync(checksumPath, `${checksum}  ${binaryName}\n`);
   console.log(`  ✓ SHA256: ${checksum}`);
-  
+
   return { binaryName, outputPath, checksum, sizeMB };
 }
 
@@ -215,43 +219,6 @@ function generateChecksum(filePath) {
   return hash.digest('hex');
 }
 
-/**
- * Clean up legacy binary files
- */
-function cleanupLegacyBinaries() {
-  const legacyPatterns = [
-    /^pty-server-/,
-    /^voice-server-/
-  ];
-  
-  if (!fs.existsSync(BINARIES_DIR)) {
-    return;
-  }
-  
-  const files = fs.readdirSync(BINARIES_DIR);
-  let cleaned = 0;
-  
-  for (const file of files) {
-    for (const pattern of legacyPatterns) {
-      if (pattern.test(file)) {
-        const filePath = path.join(BINARIES_DIR, file);
-        try {
-          fs.unlinkSync(filePath);
-          console.log(`  🗑️  Removed legacy binary: ${file}`);
-          cleaned++;
-        } catch (error) {
-          console.warn(`  ⚠️  Failed to remove ${file}: ${error.message}`);
-        }
-        break;
-      }
-    }
-  }
-  
-  if (cleaned > 0) {
-    console.log(`  ✓ Cleaned ${cleaned} legacy binary file(s)`);
-  }
-}
-
 // Main execution
 const options = parseArgs();
 
@@ -260,7 +227,7 @@ if (options.help) {
   process.exit(0);
 }
 
-console.log('🦀 Unified Rust Server Build Script');
+console.log('🦀 Smart Workflow Server Build Script');
 console.log('');
 
 // Detect current platform
@@ -298,11 +265,6 @@ if (!fs.existsSync(BINARIES_DIR)) {
   console.log(`📁 Created binaries directory: ${BINARIES_DIR}`);
 }
 
-// Clean up legacy binaries
-console.log('');
-console.log('🧹 Checking for legacy binaries...');
-cleanupLegacyBinaries();
-
 console.log('');
 
 // Install build target
@@ -310,9 +272,9 @@ if (!options.skipInstall) {
   console.log('📦 Installing Rust build target...');
   try {
     console.log(`  - ${platformConfig.target}`);
-    execSync(`rustup target add ${platformConfig.target}`, { 
+    execSync(`rustup target add ${platformConfig.target}`, {
       stdio: 'pipe',
-      cwd: RUST_DIR 
+      cwd: RUST_DIR
     });
   } catch (error) {
     console.warn(`  ⚠️  Cannot install ${platformConfig.target}, may already be installed`);
@@ -320,23 +282,23 @@ if (!options.skipInstall) {
   console.log('');
 }
 
-// Build the unified server
+// Build the server
 console.log(`🔨 Building for ${platformConfig.displayName}...`);
 console.log('');
 
 try {
   const result = buildServer(currentPlatform, platformConfig, options);
-  
+
   console.log('');
   console.log('📊 Build Summary:');
   console.log(`  ✅ ${SERVER_CONFIG.displayName}`);
   console.log(`     Binary: ${result.binaryName}`);
   console.log(`     Size: ${result.sizeMB} MB`);
   console.log(`     SHA256: ${result.checksum.substring(0, 16)}...`);
-  
+
   console.log('');
   console.log('🎉 Build complete!');
-  console.log(`�u Binary location: ${BINARIES_DIR}`);
+  console.log(`📂 Binary location: ${BINARIES_DIR}`);
 } catch (error) {
   console.error('');
   console.error(`❌ Build failed: ${error.message}`);

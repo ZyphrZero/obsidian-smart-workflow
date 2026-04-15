@@ -94,7 +94,7 @@ export class TranslationModal extends Modal {
     this.renderContent();
     
     // 自动开始翻译
-    this.startTranslation();
+    void this.startTranslation();
   }
 
   /**
@@ -431,7 +431,7 @@ export class TranslationModal extends Modal {
         debugLog('[TranslationModal] 翻译完成');
         
         // 保存上次使用的目标语言
-        this.saveLastTargetLanguage();
+        void this.saveLastTargetLanguage();
       },
       onError: (error: Error) => {
         this.isTranslating = false;
@@ -442,7 +442,16 @@ export class TranslationModal extends Modal {
       },
     };
     
-    await this.options.translationService.translateStream(options, callbacks);
+    try {
+      await this.options.translationService.translateStream(options, callbacks);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.isTranslating = false;
+      this.error = message;
+      this.updateLoadingState(false, false);
+      this.updateErrorState(message);
+      debugLog(`[TranslationModal] 翻译异常: ${message}`);
+    }
   }
 
   /**
@@ -455,7 +464,7 @@ export class TranslationModal extends Modal {
     debugLog(`[TranslationModal] 源语言变更为: ${this.sourceLanguage}`);
     
     // 重新翻译
-    this.startTranslation();
+    void this.startTranslation();
   }
 
   /**
@@ -468,7 +477,7 @@ export class TranslationModal extends Modal {
     debugLog(`[TranslationModal] 目标语言变更为: ${this.targetLanguage}`);
     
     // 重新翻译
-    this.startTranslation();
+    void this.startTranslation();
   }
 
   /**
@@ -580,7 +589,7 @@ export class TranslationModal extends Modal {
    * 处理重试操作
    */
   private handleRetry(): void {
-    this.startTranslation();
+    void this.startTranslation();
   }
 
   /**
@@ -654,12 +663,16 @@ export class TranslationModal extends Modal {
    * 保存上次使用的目标语言
    */
   private async saveLastTargetLanguage(): Promise<void> {
-    const translationSettings = this.options.settings.translation;
-    if (translationSettings?.rememberLastTargetLanguage) {
-      translationSettings.lastTargetLanguage = this.targetLanguage;
-      if (this.options.onSettingsSave) {
-        await this.options.onSettingsSave();
+    try {
+      const translationSettings = this.options.settings.translation;
+      if (translationSettings?.rememberLastTargetLanguage) {
+        translationSettings.lastTargetLanguage = this.targetLanguage;
+        if (this.options.onSettingsSave) {
+          await this.options.onSettingsSave();
+        }
       }
+    } catch (error) {
+      debugLog(`[TranslationModal] 保存目标语言失败: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }

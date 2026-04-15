@@ -27,9 +27,6 @@ export abstract class ModuleClient {
   /** 消息处理器 */
   private messageHandlers: Set<MessageHandler> = new Set();
   
-  /** 是否已初始化 */
-  private initialized = false;
-
   constructor(module: ModuleType) {
     this.module = module;
   }
@@ -40,8 +37,7 @@ export abstract class ModuleClient {
    */
   setWebSocket(ws: WebSocket | null): void {
     this.ws = ws;
-    this.initialized = ws !== null;
-    
+
     if (ws) {
       debugLog(`[${this.module}Client] WebSocket 已设置`);
     }
@@ -82,10 +78,10 @@ export abstract class ModuleClient {
 
   /**
    * 发送二进制数据
-   * 
+   *
    * @param data 二进制数据
    */
-  protected sendBinary(data: ArrayBuffer | Uint8Array): void {
+  protected sendBinary(data: ArrayBuffer | Uint8Array<ArrayBuffer>): void {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       errorLog(`[${this.module}Client] WebSocket 未连接，无法发送二进制数据`);
       return;
@@ -147,6 +143,5 @@ export abstract class ModuleClient {
   destroy(): void {
     this.messageHandlers.clear();
     this.ws = null;
-    this.initialized = false;
   }
 }

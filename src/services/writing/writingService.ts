@@ -8,6 +8,8 @@
 
 import type { App } from 'obsidian';
 import type {
+  ModelConfig,
+  Provider,
   SmartWorkflowSettings} from '../../settings/settings';
 import {
   DEFAULT_POLISH_PROMPT_TEMPLATE
@@ -35,8 +37,8 @@ export interface StreamCallbacks {
  * WritingService 配置选项
  */
 export interface WritingServiceOptions {
-  provider: import('../../settings/settings').Provider;
-  model: import('../../settings/settings').ModelConfig;
+  provider: Provider;
+  model: ModelConfig;
   promptTemplate: string;
   timeout?: number;
 }

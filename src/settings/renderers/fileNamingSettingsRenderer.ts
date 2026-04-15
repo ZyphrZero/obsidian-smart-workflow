@@ -3,7 +3,7 @@
  * 负责渲染 AI 文件名生成功能设置
  */
 
-import { Setting, setIcon } from 'obsidian';
+import { Setting } from 'obsidian';
 import type { RendererContext } from '../types';
 import { BASE_PROMPT_TEMPLATE, ADVANCED_PROMPT_TEMPLATE } from '../settings';
 import { BaseSettingsRenderer } from './baseRenderer';

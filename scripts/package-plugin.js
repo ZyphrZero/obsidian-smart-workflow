@@ -1,31 +1,37 @@
 /**
  * Plugin Package Script
- * Auto-detect current platform and package the unified server binary
- * Binary naming: smart-workflow-server-{platform}-{arch}
+ * Package plugin files for distribution
+ *
+ * Usage:
+ *   node scripts/package-plugin.js        # Package for current platform
+ *   node scripts/package-plugin.js --zip  # Create ZIP archive
  */
 
-const fs = require('fs');
-const path = require('path');
-const { execSync } = require('child_process');
+import fs from 'fs';
+import path from 'path';
+import { execSync } from 'child_process';
+import { fileURLToPath } from 'url';
 
-// Unified server configuration
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Server configuration
 const SERVER_CONFIG = {
   name: 'smart-workflow-server',
   displayName: 'Smart Workflow Server'
 };
-
-/**
- * Get current platform identifier
- */
-function getCurrentPlatform() {
-  return `${process.platform}-${process.arch}`;
-}
 
 // Parse command line arguments
 const args = process.argv.slice(2);
 const createZip = args.includes('--zip');
 
 // Detect current platform
+function getCurrentPlatform() {
+  const platform = process.platform;
+  const arch = process.arch;
+  return `${platform}-${arch}`;
+}
+
 const currentPlatform = getCurrentPlatform();
 
 console.log('📦 Plugin Package Script');
@@ -117,27 +123,30 @@ for (const file of requiredFiles) {
   console.log(`  ${file}: ${sizeKB} KB`);
 }
 
-const packagedBinaryStats = fs.statSync(destBinaryPath);
-totalSize += packagedBinaryStats.size;
-const sizeMB = (packagedBinaryStats.size / 1024 / 1024).toFixed(2);
-console.log(`  ${binaryName}: ${sizeMB} MB`);
+totalSize += binaryStats.size;
+console.log(`  binaries/${binaryName}: ${binarySizeMB} MB`);
 
 const totalSizeMB = (totalSize / 1024 / 1024).toFixed(2);
 console.log(`  Total: ${totalSizeMB} MB`);
 console.log('');
 
-// 7. Create ZIP package (optional)
+// 7. Create ZIP if requested
 if (createZip) {
-  console.log('📦 Creating ZIP package...');
-  
-  const zipName = 'obsidian-smart-workflow.zip';
+  console.log('📦 Creating ZIP archive...');
+
+  // Read version from manifest
+  const manifestPath = path.join(PACKAGE_DIR, 'manifest.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const version = manifest.version || '0.0.0';
+
+  const zipName = `obsidian-smart-workflow-${version}.zip`;
   const zipPath = path.join(ROOT_DIR, zipName);
-  
-  // Delete old ZIP file
+
+  // Remove existing ZIP
   if (fs.existsSync(zipPath)) {
     fs.unlinkSync(zipPath);
   }
-  
+
   try {
     // Use PowerShell Compress-Archive (Windows) or zip command (Unix)
     if (process.platform === 'win32') {
@@ -151,7 +160,7 @@ if (createZip) {
         { stdio: 'inherit' }
       );
     }
-    
+
     const zipStats = fs.statSync(zipPath);
     const zipSizeMB = (zipStats.size / 1024 / 1024).toFixed(2);
     console.log(`  ✅ ZIP created: ${zipName} (${zipSizeMB} MB)`);
@@ -159,13 +168,18 @@ if (createZip) {
     console.error('  ❌ Failed to create ZIP:', error.message);
     console.log('  💡 Tip: You can manually compress the plugin-package/ directory');
   }
-  
+
   console.log('');
 }
 
+// 8. Complete
 console.log('🎉 Package complete!');
-console.log(`📁 Package directory: ${PACKAGE_DIR}`);
-console.log(`📋 Packaged platform: ${currentPlatform}`);
-console.log('');
-console.log('📦 Packaged server:');
-console.log(`  - ${SERVER_CONFIG.displayName}: ${binaryName}`);
+console.log(`📂 Package location: ${PACKAGE_DIR}`);
+
+if (createZip) {
+  console.log('');
+  console.log('📦 Next steps:');
+  console.log('  1. Test the packaged plugin in Obsidian');
+  console.log('  2. Upload to GitHub Releases');
+  console.log('  3. Submit to Obsidian community plugins');
+}

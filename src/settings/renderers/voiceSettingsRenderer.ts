@@ -4,7 +4,7 @@
  */
 
 import type { App } from 'obsidian';
-import { Setting, Notice, setIcon, TextAreaComponent } from 'obsidian';
+import { Setting, Notice, setIcon } from 'obsidian';
 import type { RendererContext } from '../types';
 import { BaseSettingsRenderer } from './baseRenderer';
 import { createHotkeyInput, createSettingCardBordered } from '../components';
@@ -42,12 +42,12 @@ function isSecretComponentAvailable(app: App): boolean {
  * 动态创建 SecretComponent
  * 由于 TypeScript 类型定义可能不包含 SecretComponent，使用动态导入
  */
-function createSecretComponent(app: App, containerEl: HTMLElement): any {
+async function createSecretComponent(app: App, containerEl: HTMLElement): Promise<any> {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const obsidian = require('obsidian');
-    if (obsidian.SecretComponent) {
-      return new obsidian.SecretComponent(app, containerEl);
+    const obsidian = await import('obsidian');
+    const SecretComponent = (obsidian as any).SecretComponent;
+    if (SecretComponent) {
+      return new SecretComponent(app, containerEl);
     }
   } catch {
     // SecretComponent 不可用
@@ -320,7 +320,7 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
   /**
    * 渲染 LLM 状态卡片内容
    */
-  private renderLLMStatusCardContent(contentEl: HTMLElement, isEnabled: boolean): void {
+  private renderLLMStatusCardContent(contentEl: HTMLElement, _isEnabled: boolean): void {
     const voiceSettings = this.context.plugin.settings.voice;
     
     // 当前预设 - 点击可选择
@@ -555,7 +555,7 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
   ): void {
     const toggleEl = headerEl.createDiv({ cls: `voice-status-toggle ${isEnabled ? 'active' : ''}` });
     const toggleTrack = toggleEl.createDiv({ cls: 'voice-status-toggle-track' });
-    const toggleThumb = toggleTrack.createDiv({ cls: 'voice-status-toggle-thumb' });
+    toggleTrack.createDiv({ cls: 'voice-status-toggle-thumb' });
     
     toggleEl.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -1300,11 +1300,13 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
           // 自动同步 API Key 到配置（使用本地模式）
           const currentKeyValue = this.context.configManager.resolveKeyValue(config.siliconflowKeyConfig);
           if (currentKeyValue !== siliconFlowApiKey) {
-            updateConfig({ 
+            void updateConfig({
               siliconflowKeyConfig: {
                 mode: 'local',
                 localValue: siliconFlowApiKey,
               },
+            }).catch((error) => {
+              console.error('[VoiceSettingsRenderer] 同步 SiliconFlow API Key 失败:', error);
             });
           }
         } else {
@@ -1355,8 +1357,8 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
         .addOption('modelService', t('voice.settings.qwenApiProviderModelService'))
         .addOption('bailian', t('voice.settings.qwenApiProviderBailian'))
         .setValue(apiProvider)
-        .onChange(async (value: VoiceQwenApiProvider) => {
-          await updateConfig({ qwenApiProvider: value });
+        .onChange(async (value: string) => {
+          await updateConfig({ qwenApiProvider: value as VoiceQwenApiProvider });
           this.toggleConditionalSection(containerEl, sectionId, false, () => {}, apiProviderSetting.settingEl);
           this.toggleConditionalSection(
             containerEl,
@@ -1364,8 +1366,8 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
             true,
             (el) => this.renderQwenApiProviderDetails(
               el,
-              { ...config, qwenApiProvider: value },
-              value,
+              { ...config, qwenApiProvider: value as VoiceQwenApiProvider },
+              value as VoiceQwenApiProvider,
               secretComponentAvailable,
               updateConfig
             ),
@@ -1512,8 +1514,8 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
             .addOption('local', t('voice.settings.localKey') || '本地密钥')
             .addOption('shared', t('voice.settings.sharedKey') || '共享密钥')
             .setValue(currentMode)
-            .onChange(async (value: SecretStorageMode) => {
-              currentMode = value;
+            .onChange(async (value: string) => {
+              currentMode = value as SecretStorageMode;
               updateStorageModeUI();
               
               // 更新配置
@@ -1538,18 +1540,19 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
         .setDesc(keyDesc);
 
       secretSetting.controlEl.empty();
-      const secretComponent = createSecretComponent(this.context.app, secretSetting.controlEl);
-      if (secretComponent) {
-        secretComponent
-          .setValue(currentSecretId)
-          .onChange(async (value: string) => {
-            currentSecretId = value;
-            await onKeyConfigChange({
-              mode: 'shared',
-              secretId: value,
+      void createSecretComponent(this.context.app, secretSetting.controlEl).then(secretComponent => {
+        if (secretComponent) {
+          secretComponent
+            .setValue(currentSecretId)
+            .onChange(async (value: string) => {
+              currentSecretId = value;
+              await onKeyConfigChange({
+                mode: 'shared',
+                secretId: value,
+              });
             });
-          });
-      }
+        }
+      });
     }
 
     // 本地密钥容器 (TextComponent)
@@ -2120,8 +2123,8 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
         });
         dropdown
           .setValue(voiceSettings.overlayPosition)
-          .onChange(async (value: VoiceOverlayPosition) => {
-            this.context.plugin.settings.voice.overlayPosition = value;
+          .onChange(async (value: string) => {
+            this.context.plugin.settings.voice.overlayPosition = value as VoiceOverlayPosition;
             await this.saveSettings();
           });
       });
@@ -2231,9 +2234,13 @@ export class VoiceSettingsRenderer extends BaseSettingsRenderer {
     historyListEl.style.marginTop = '12px';
 
     // 初始化历史记录管理器并加载数据
-    this.initializeHistoryManager().then(() => {
-      this.renderHistoryList(card);
-    });
+    void this.initializeHistoryManager()
+      .then(() => {
+        this.renderHistoryList(card);
+      })
+      .catch((error) => {
+        console.error('[VoiceSettingsRenderer] 初始化历史记录失败:', error);
+      });
   }
 
   /**

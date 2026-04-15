@@ -96,7 +96,7 @@ export class AdvancedSettingsRenderer extends BaseSettingsRenderer {
           try {
             const serverManager = await this.context.plugin.getServerManager();
             serverManager.updateOfflineMode(value);
-          } catch (error) {
+          } catch {
             // ServerManager 可能还未初始化，忽略错误
           }
         }));

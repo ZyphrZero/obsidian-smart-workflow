@@ -16,23 +16,19 @@ import * as fs from 'fs';
 import { Notice } from 'obsidian';
 import { debugLog, debugWarn, errorLog } from '../../utils/logger';
 import { t } from '../../i18n';
-import type { 
-  ServerInfo, 
+import { TypedEventEmitter } from '../../core/events';
+import type {
+  ServerInfo,
   ServerEvents,
   ServerMessage} from './types';
-import { 
-  ServerErrorCode, 
+import {
+  ServerErrorCode,
   ServerManagerError
 } from './types';
 import { VoiceClient } from './voiceClient';
 import { LLMClient } from './llmClient';
 import { UtilsClient } from './utilsClient';
-import { BinaryDownloader, DownloadProgress } from './binaryDownloader';
-
-/**
- * 事件监听器类型
- */
-type EventListener<K extends keyof ServerEvents> = ServerEvents[K];
+import { BinaryDownloader } from './binaryDownloader';
 
 /**
  * websocket重连配置
@@ -46,10 +42,10 @@ interface ReconnectConfig {
 
 /**
  * 统一服务器管理器
- * 
+ *
  * 替代 BinaryManager + TerminalService + VoiceServerManager
  */
-export class ServerManager {
+export class ServerManager extends TypedEventEmitter<ServerEvents> {
   /** 插件目录 */
   private pluginDir: string;
   
@@ -106,10 +102,7 @@ export class ServerManager {
 
   /** 二进制更新 Promise */
   private binaryUpdatePromise: Promise<void> | null = null;
-  
-  /** 事件监听器 */
-  private eventListeners: Map<keyof ServerEvents, Set<EventListener<keyof ServerEvents>>> = new Map();
-  
+
   // 模块客户端 (懒加载)
   private _voiceClient: VoiceClient | null = null;
   private _llmClient: LLMClient | null = null;
@@ -122,6 +115,7 @@ export class ServerManager {
     debugMode: boolean = false,
     offlineMode: boolean = false
   ) {
+    super();
     this.pluginDir = pluginDir;
     this.version = version;
     this.debugMode = debugMode;
@@ -314,26 +308,6 @@ export class ServerManager {
    */
   getServerPort(): number | null {
     return this.port;
-  }
-
-  /**
-   * 注册事件监听器
-   */
-  on<K extends keyof ServerEvents>(event: K, callback: ServerEvents[K]): void {
-    if (!this.eventListeners.has(event)) {
-      this.eventListeners.set(event, new Set());
-    }
-    this.eventListeners.get(event)!.add(callback as EventListener<keyof ServerEvents>);
-  }
-
-  /**
-   * 移除事件监听器
-   */
-  off<K extends keyof ServerEvents>(event: K, callback: ServerEvents[K]): void {
-    const listeners = this.eventListeners.get(event);
-    if (listeners) {
-      listeners.delete(callback as EventListener<keyof ServerEvents>);
-    }
   }
 
   // ============================================================================
@@ -737,7 +711,7 @@ export class ServerManager {
     
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
-      this.attemptReconnect();
+      void this.attemptReconnect();
     }, delay);
   }
 
@@ -862,7 +836,7 @@ export class ServerManager {
    */
   private handleServerError(error: Error): void {
     const errorCode = (error as NodeJS.ErrnoException).code;
-    
+
     if (errorCode === 'ENOENT') {
       new Notice(
         '❌ 无法启动服务器\n\n' +
@@ -885,27 +859,8 @@ export class ServerManager {
         0
       );
     }
-    
-    this.emit('server-error', error);
-  }
 
-  /**
-   * 触发事件
-   */
-  private emit<K extends keyof ServerEvents>(
-    event: K,
-    ...args: Parameters<ServerEvents[K]>
-  ): void {
-    const listeners = this.eventListeners.get(event);
-    if (listeners) {
-      listeners.forEach(listener => {
-        try {
-          (listener as (...args: Parameters<ServerEvents[K]>) => void)(...args);
-        } catch (error) {
-          errorLog(`[ServerManager] 事件处理器错误 (${event}):`, error);
-        }
-      });
-    }
+    this.emit('server-error', error);
   }
 
   /**

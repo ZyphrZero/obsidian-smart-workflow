@@ -1,35 +1,37 @@
 /**
  * Development Environment Install Script
  * Copy plugin files to Obsidian plugins directory for testing
- * 
- * ⚠️  WARNING: This script will OVERWRITE existing files by default!
- * 
+ *
  * Usage:
- *   node scripts/install-dev.js              # Default: force overwrite + build (no lint/type check)
- *   node scripts/install-dev.js --check      # Run ESLint and TypeScript check before build
- *   node scripts/install-dev.js --kill       # Auto-close Obsidian process
- *   node scripts/install-dev.js --no-build   # Skip build step
- *   node scripts/install-dev.js --reset      # Reset saved configuration
- *   node scripts/install-dev.js -i           # Interactive mode (ask before overwrite)
+ *   pnpm install:dev <obsidian-vault-path> [OPTIONS]
+ *
+ * Options:
+ *   --kill      Close and restart Obsidian
+ *   --no-build  Skip building
+ *   --reset     Reset saved configuration
  */
 
-const fs = require('fs');
-const path = require('path');
-const readline = require('readline');
-const { execSync, spawn } = require('child_process');
+import fs from 'fs';
+import path from 'path';
+import { execSync, spawn } from 'child_process';
+import readline from 'readline';
+import { fileURLToPath } from 'url';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.join(__dirname, '..');
 const CONFIG_FILE = path.join(ROOT_DIR, '.dev-install-config.json');
 
 // Parse command line arguments
 const args = process.argv.slice(2);
-const INTERACTIVE_MODE = args.includes('-i') || args.includes('--interactive');
 const KILL_OBSIDIAN = args.includes('--kill');
-const RESET_CONFIG = args.includes('--reset');
 const SKIP_BUILD = args.includes('--no-build');
-const RUN_CHECK = args.includes('--check');
+const RESET_CONFIG = args.includes('--reset');
 
-// Unified server configuration
+// Get vault path from first non-flag argument
+const VAULT_PATH = args.find(arg => !arg.startsWith('-')) || null;
+
+// Server configuration
 const SERVER_CONFIG = {
   name: 'smart-workflow-server',
   displayName: 'Smart Workflow Server'
@@ -42,39 +44,33 @@ const colors = {
   yellow: '\x1b[33m',
   red: '\x1b[31m',
   cyan: '\x1b[36m',
-  gray: '\x1b[90m',
 };
 
 function log(message, color = 'reset') {
   console.log(`${colors[color]}${message}${colors.reset}`);
 }
 
-// Load saved configuration
+// Load/save configuration
 function loadConfig() {
   try {
     if (fs.existsSync(CONFIG_FILE)) {
       return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8'));
     }
-  } catch (e) {
-    // Ignore errors
-  }
+  } catch (e) {}
   return {};
 }
 
-// Save configuration
 function saveConfig(config) {
   try {
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
-  } catch (e) {
-    log(`  ⚠️  Cannot save config: ${e.message}`, 'yellow');
-  }
+  } catch (e) {}
 }
 
-// Detect operating system
+// Detect platform
 function getPlatform() {
-  const platform = process.platform;
-  if (platform === 'win32') return 'windows';
-  if (platform === 'darwin') return 'macos';
+  const p = process.platform;
+  if (p === 'win32') return 'windows';
+  if (p === 'darwin') return 'macos';
   return 'linux';
 }
 
@@ -82,12 +78,11 @@ function getPlatform() {
 function getObsidianPath() {
   const platform = getPlatform();
   if (platform === 'windows') {
-    const possiblePaths = [
+    const paths = [
       path.join(process.env.LOCALAPPDATA || '', 'Obsidian', 'Obsidian.exe'),
       path.join(process.env.PROGRAMFILES || '', 'Obsidian', 'Obsidian.exe'),
-      path.join(process.env['PROGRAMFILES(X86)'] || '', 'Obsidian', 'Obsidian.exe'),
     ];
-    for (const p of possiblePaths) {
+    for (const p of paths) {
       if (fs.existsSync(p)) return p;
     }
   } else if (platform === 'macos') {
@@ -111,18 +106,18 @@ function killObsidian() {
     } else {
       execSync('pkill -f Obsidian 2>/dev/null || true', { stdio: 'ignore' });
     }
-    log('  ✓ Obsidian process closed', 'green');
+    log('  Closed Obsidian', 'green');
     return true;
   } catch (e) {
     return false;
   }
 }
 
-// Kill unified server process
-function killUnifiedServer() {
+// Kill server process
+function killServer() {
   const platform = getPlatform();
   const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
-  
+
   try {
     if (platform === 'windows') {
       execSync(`taskkill /F /IM smart-workflow-server-win32-${arch}.exe 2>nul`, { stdio: 'ignore' });
@@ -130,30 +125,6 @@ function killUnifiedServer() {
       execSync('pkill -f smart-workflow-server-darwin 2>/dev/null || true', { stdio: 'ignore' });
     } else {
       execSync('pkill -f smart-workflow-server-linux 2>/dev/null || true', { stdio: 'ignore' });
-    }
-    log('  ✓ Unified server process terminated', 'green');
-    return true;
-  } catch (e) {
-    // Process may not exist, ignore error
-    return false;
-  }
-}
-
-// Kill legacy server processes (for cleanup)
-function killLegacyServers() {
-  const platform = getPlatform();
-  const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
-  
-  try {
-    if (platform === 'windows') {
-      execSync(`taskkill /F /IM pty-server-win32-${arch}.exe 2>nul`, { stdio: 'ignore' });
-      execSync(`taskkill /F /IM voice-server-win32-${arch}.exe 2>nul`, { stdio: 'ignore' });
-    } else if (platform === 'macos') {
-      execSync('pkill -f pty-server-darwin 2>/dev/null || true', { stdio: 'ignore' });
-      execSync('pkill -f voice-server-darwin 2>/dev/null || true', { stdio: 'ignore' });
-    } else {
-      execSync('pkill -f pty-server-linux 2>/dev/null || true', { stdio: 'ignore' });
-      execSync('pkill -f voice-server-linux 2>/dev/null || true', { stdio: 'ignore' });
     }
     return true;
   } catch (e) {
@@ -165,7 +136,7 @@ function killLegacyServers() {
 function startObsidian() {
   const platform = getPlatform();
   const obsidianPath = getObsidianPath();
-  
+
   try {
     if (platform === 'windows') {
       if (obsidianPath && fs.existsSync(obsidianPath)) {
@@ -178,82 +149,66 @@ function startObsidian() {
     } else {
       spawn('obsidian', [], { detached: true, stdio: 'ignore' }).unref();
     }
-    log('  ✓ Obsidian started', 'green');
+    log('  Started Obsidian', 'green');
     return true;
   } catch (e) {
-    log(`  ⚠️  Cannot auto-start Obsidian: ${e.message}`, 'yellow');
+    log(`  Failed to start Obsidian: ${e.message}`, 'yellow');
     return false;
   }
 }
 
-// Check if Obsidian is running
-function isObsidianRunning() {
-  const platform = getPlatform();
-  try {
-    if (platform === 'windows') {
-      const result = execSync('tasklist /FI "IMAGENAME eq Obsidian.exe" 2>nul', { encoding: 'utf-8' });
-      return result.includes('Obsidian.exe');
-    } else {
-      const result = execSync('pgrep -f Obsidian 2>/dev/null || echo ""', { encoding: 'utf-8' });
-      return result.trim() !== '';
-    }
-  } catch (e) {
-    return false;
-  }
-}
-
-// Copy file with retry
-async function copyFileWithRetry(srcPath, destPath, maxRetries = 3, retryDelay = 1000) {
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      fs.copyFileSync(srcPath, destPath);
-      return true;
-    } catch (error) {
-      if (error.code === 'EBUSY' || error.code === 'EPERM') {
-        if (attempt < maxRetries) {
-          log(`  ⚠️  File locked, retrying in ${retryDelay / 1000}s (${attempt}/${maxRetries})...`, 'yellow');
-          await sleep(retryDelay);
-          continue;
-        }
-      }
-      throw error;
-    }
-  }
-  return false;
-}
-
+// Sleep utility
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// Create readline interface
+// Readline interface
 let rl = null;
 function getReadline() {
   if (!rl) {
-    rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout
-    });
+    rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   }
   return rl;
 }
 
 function closeReadline() {
-  if (rl) {
-    rl.close();
-    rl = null;
-  }
+  if (rl) { rl.close(); rl = null; }
 }
 
 function question(query) {
   return new Promise(resolve => getReadline().question(query, resolve));
 }
 
+// Validate Obsidian vault path
+function validateObsidianVault(vaultPath) {
+  const normalizedPath = vaultPath.trim().replace(/['"]/g, '');
+
+  if (!fs.existsSync(normalizedPath)) {
+    return { valid: false, error: 'Directory does not exist' };
+  }
+
+  if (!fs.statSync(normalizedPath).isDirectory()) {
+    return { valid: false, error: 'Path is not a directory' };
+  }
+
+  const obsidianDir = path.join(normalizedPath, '.obsidian');
+  if (!fs.existsSync(obsidianDir) || !fs.statSync(obsidianDir).isDirectory()) {
+    return { valid: false, error: 'Not an Obsidian vault (missing .obsidian directory)' };
+  }
+
+  const pluginsDir = path.join(obsidianDir, 'plugins');
+  if (!fs.existsSync(pluginsDir)) {
+    fs.mkdirSync(pluginsDir, { recursive: true });
+  }
+
+  return { valid: true, pluginsDir };
+}
+
 // Get binary name for current platform
 function getBinaryName() {
   const platform = getPlatform();
   const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
-  
+
   if (platform === 'windows') {
     return `${SERVER_CONFIG.name}-win32-${arch}.exe`;
   } else if (platform === 'macos') {
@@ -263,24 +218,31 @@ function getBinaryName() {
   }
 }
 
-async function main() {
-  log('\n📦 Obsidian Plugin Development Install Tool\n', 'cyan');
-  log('   ⚠️  WARNING: Will OVERWRITE existing files by default!', 'yellow');
-  log('   Use -i flag for interactive mode\n', 'gray');
-  
-  if (INTERACTIVE_MODE || KILL_OBSIDIAN || SKIP_BUILD || RUN_CHECK) {
-    const modes = [];
-    if (INTERACTIVE_MODE) modes.push('Interactive mode');
-    if (KILL_OBSIDIAN) modes.push('Auto-close Obsidian');
-    if (SKIP_BUILD) modes.push('Skip build');
-    if (RUN_CHECK) modes.push('Run lint/type check');
-    log(`   Mode: ${modes.join(' + ')}`, 'gray');
+// Copy file with retry
+async function copyFileWithRetry(srcPath, destPath, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      fs.copyFileSync(srcPath, destPath);
+      return true;
+    } catch (error) {
+      if ((error.code === 'EBUSY' || error.code === 'EPERM') && attempt < maxRetries) {
+        await sleep(1000);
+        continue;
+      }
+      throw error;
+    }
   }
+  return false;
+}
 
+async function main() {
+  log('\n[Smart Workflow] Development Install\n', 'cyan');
+
+  // Reset config
   if (RESET_CONFIG) {
     if (fs.existsSync(CONFIG_FILE)) {
       fs.unlinkSync(CONFIG_FILE);
-      log('✓ Configuration reset\n', 'green');
+      log('Configuration reset\n', 'green');
     }
     closeReadline();
     process.exit(0);
@@ -288,167 +250,108 @@ async function main() {
 
   const config = loadConfig();
 
-  // 0. Build the plugin
-  if (!SKIP_BUILD) {
-    // 0.1 ESLint check (only when --check flag is provided)
-    if (RUN_CHECK) {
-      log('🔍 Running ESLint check...', 'cyan');
-      try {
-        execSync('npx eslint src --ext .ts', { cwd: ROOT_DIR, stdio: 'inherit' });
-        log('  ✓ ESLint check passed\n', 'green');
-      } catch (error) {
-        log('\n❌ ESLint check failed', 'red');
-        closeReadline();
-        process.exit(1);
-      }
+  // 1. Validate vault path
+  let pluginsDir = config.pluginsDir;
 
-      // 0.2 TypeScript type check
-      log('🔍 Running TypeScript type check...', 'cyan');
-      try {
-        execSync('npx tsc --noEmit', { cwd: ROOT_DIR, stdio: 'inherit' });
-        log('  ✓ TypeScript check passed\n', 'green');
-      } catch (error) {
-        log('\n❌ TypeScript type check failed', 'red');
-        closeReadline();
-        process.exit(1);
-      }
-    }
+  if (VAULT_PATH) {
+    log(`Validating: ${VAULT_PATH}`, 'cyan');
+    const result = validateObsidianVault(VAULT_PATH);
 
-    // 0.3 Build
-    log('🔨 Building plugin...', 'cyan');
-    try {
-      execSync('pnpm build', { cwd: ROOT_DIR, stdio: 'inherit' });
-      log('  ✓ Build completed\n', 'green');
-    } catch (error) {
-      log('\n❌ Build failed', 'red');
+    if (!result.valid) {
+      log(`\nError: ${result.error}`, 'red');
+      log('Provide your Obsidian vault path (containing .obsidian folder)\n', 'yellow');
       closeReadline();
       process.exit(1);
     }
+
+    pluginsDir = result.pluginsDir;
+    config.vaultPath = VAULT_PATH.trim().replace(/['"]/g, '');
+    config.pluginsDir = pluginsDir;
+    saveConfig(config);
+    log(`  Vault: ${config.vaultPath}`, 'green');
+    log(`  Plugins: ${pluginsDir}\n`, 'green');
+  } else if (!pluginsDir || !fs.existsSync(pluginsDir)) {
+    log('Vault path required', 'cyan');
+    const input = await question('Enter Obsidian vault path: ');
+    const trimmed = input.trim().replace(/['"]/g, '');
+
+    const result = validateObsidianVault(trimmed);
+    if (!result.valid) {
+      log(`\nError: ${result.error}`, 'red');
+      log('Provide a valid Obsidian vault path\n', 'yellow');
+      closeReadline();
+      process.exit(1);
+    }
+
+    pluginsDir = result.pluginsDir;
+    config.vaultPath = trimmed;
+    config.pluginsDir = pluginsDir;
+    saveConfig(config);
+    log(`  Vault: ${trimmed}`, 'green');
+    log(`  Plugins: ${pluginsDir}\n`, 'green');
+  } else {
+    log(`Plugins: ${pluginsDir}`, 'cyan');
+    if (config.vaultPath) log(`  Vault: ${config.vaultPath}`, 'gray');
+    log('', 'reset');
   }
 
-  // 1. Check required files
-  log('🔍 Checking required files...', 'cyan');
-  
+  // 2. Build
+  if (!SKIP_BUILD) {
+    log('Building...', 'cyan');
+    try {
+      execSync('pnpm build', { cwd: ROOT_DIR, stdio: 'inherit' });
+    } catch (e) {
+      log('\nBuild failed', 'red');
+      closeReadline();
+      process.exit(1);
+    }
+    log('Build complete\n', 'green');
+  }
+
+  // 3. Check files
+  log('Checking files...', 'cyan');
   const binaryName = getBinaryName();
   const requiredFiles = [
     'main.js',
     'manifest.json',
-    'styles.css',
     `binaries/${binaryName}`
   ];
 
-  const missingFiles = [];
-  
   for (const file of requiredFiles) {
-    const filePath = path.join(ROOT_DIR, file);
-    if (!fs.existsSync(filePath)) {
-      missingFiles.push(file);
-      log(`  ❌ Missing: ${file}`, 'red');
-    } else {
-      log(`  ✓ ${file}`, 'green');
-    }
+    const exists = fs.existsSync(path.join(ROOT_DIR, file));
+    log(`  ${exists ? '✓' : '✗'} ${file}`, exists ? 'green' : 'red');
   }
 
-  if (missingFiles.length > 0) {
-    log('\n❌ Error: Missing required files', 'red');
-    log('Please run the following commands:', 'yellow');
-    if (missingFiles.some(f => f.endsWith('.js') || f.endsWith('.json') || f.endsWith('.css'))) {
-      log('  pnpm build', 'yellow');
-    }
-    if (missingFiles.some(f => f.includes('binaries'))) {
-      log('  pnpm build:rust', 'yellow');
-    }
+  if (!requiredFiles.every(f => fs.existsSync(path.join(ROOT_DIR, f)))) {
+    log('\nMissing files. Run: pnpm build && pnpm build:rust', 'yellow');
     closeReadline();
     process.exit(1);
   }
+  log('');
 
-  log('\n✅ All required files exist\n', 'green');
-
-  // 2. Get Obsidian plugins directory
-  let pluginDirPath = config.pluginDir;
-
-  if (!pluginDirPath) {
-    log('📁 Please enter your Obsidian plugins directory path:', 'cyan');
-    log('   Example: C:\\Users\\<username>\\Documents\\Obsidian\\<vault>\\.obsidian\\plugins', 'yellow');
-    log('   Or open the plugins folder in Obsidian and copy the path\n', 'yellow');
-
-    const pluginDir = await question('Plugins directory path: ');
-
-    if (!pluginDir || pluginDir.trim() === '') {
-      log('\n❌ No path provided', 'red');
-      closeReadline();
-      process.exit(1);
-    }
-
-    pluginDirPath = pluginDir.trim().replace(/['"]/g, '');
-  } else {
-    log(`📁 Using saved plugins directory: ${pluginDirPath}`, 'cyan');
-    log('   (Run node scripts/install-dev.js --reset to reset)\n', 'gray');
-  }
-
-  if (!fs.existsSync(pluginDirPath)) {
-    log(`\n❌ Directory does not exist: ${pluginDirPath}`, 'red');
-    if (config.pluginDir) {
-      delete config.pluginDir;
-      saveConfig(config);
-    }
-    closeReadline();
-    process.exit(1);
-  }
-
-  if (config.pluginDir !== pluginDirPath) {
-    config.pluginDir = pluginDirPath;
-    saveConfig(config);
-    log('  ✓ Plugins directory path saved (will be used automatically next time)', 'green');
-  }
-
-  // 3. Create plugin folder
-  const targetDir = path.join(pluginDirPath, 'obsidian-smart-workflow');
-  
-  log(`\n📂 Target directory: ${targetDir}`, 'cyan');
-
-  if (fs.existsSync(targetDir)) {
-    if (INTERACTIVE_MODE) {
-      const overwrite = await question('\n⚠️  Target directory exists, overwrite? (y/n): ');
-      if (overwrite.toLowerCase() !== 'y') {
-        log('\n❌ Cancelled', 'yellow');
-        closeReadline();
-        process.exit(0);
-      }
-    } else {
-      log('  ⚠️  Target directory exists, overwriting...', 'yellow');
-    }
-  } else {
-    fs.mkdirSync(targetDir, { recursive: true });
-    log('  ✓ Created target directory', 'green');
-  }
-
-  // 4. If needed, close Obsidian
-  if (KILL_OBSIDIAN && isObsidianRunning()) {
-    log('\n�a Closing Obsidian process...', 'cyan');
+  // 4. Kill Obsidian
+  if (KILL_OBSIDIAN) {
+    log('Closing Obsidian...', 'cyan');
     killObsidian();
+    killServer();
+    await sleep(1000);
+    log('');
   }
-
-  // 4.5. Kill server processes to release file locks
-  log('\n🔄 Terminating server processes...', 'cyan');
-  killUnifiedServer();
-  killLegacyServers(); // Also kill legacy servers for cleanup
 
   // 5. Copy files
-  log('\n📋 Copying files...', 'cyan');
+  const targetDir = path.join(pluginsDir, 'obsidian-smart-workflow');
+  if (!fs.existsSync(targetDir)) {
+    fs.mkdirSync(targetDir, { recursive: true });
+  }
+
+  log('Installing...', 'cyan');
 
   const coreFiles = ['main.js', 'manifest.json', 'styles.css'];
   for (const file of coreFiles) {
-    const srcPath = path.join(ROOT_DIR, file);
-    const destPath = path.join(targetDir, file);
-    try {
-      await copyFileWithRetry(srcPath, destPath);
-      log(`  ✓ ${file}`, 'green');
-    } catch (error) {
-      log(`  ❌ ${file}: ${error.message}`, 'red');
-      closeReadline();
-      process.exit(1);
-    }
+    const src = path.join(ROOT_DIR, file);
+    const dest = path.join(targetDir, file);
+    await copyFileWithRetry(src, dest);
+    log(`  ${file}`, 'green');
   }
 
   const binariesDir = path.join(targetDir, 'binaries');
@@ -456,92 +359,37 @@ async function main() {
     fs.mkdirSync(binariesDir, { recursive: true });
   }
 
-  // Copy unified server binary
-  const binaryFiles = fs.readdirSync(path.join(ROOT_DIR, 'binaries'))
-    .filter(f => f.startsWith('smart-workflow-server-') && !f.endsWith('.md') && !f.endsWith('.sha256'));
+  const srcBinary = path.join(ROOT_DIR, 'binaries', binaryName);
+  const destBinary = path.join(binariesDir, binaryName);
+  await copyFileWithRetry(srcBinary, destBinary);
+  log(`  binaries/${binaryName}`, 'green');
+  log('');
 
-  let hasLockedFile = false;
-  for (const file of binaryFiles) {
-    const srcPath = path.join(ROOT_DIR, 'binaries', file);
-    const destPath = path.join(binariesDir, file);
-    try {
-      await copyFileWithRetry(srcPath, destPath);
-      log(`  ✓ binaries/${file}`, 'green');
-      
-      // Also copy SHA256 file if exists
-      const sha256Src = `${srcPath}.sha256`;
-      if (fs.existsSync(sha256Src)) {
-        fs.copyFileSync(sha256Src, `${destPath}.sha256`);
-      }
-    } catch (error) {
-      if (error.code === 'EBUSY' || error.code === 'EPERM') {
-        hasLockedFile = true;
-        log(`  ❌ binaries/${file}: File locked`, 'red');
-      } else {
-        log(`  ❌ binaries/${file}: ${error.message}`, 'red');
-      }
-    }
-  }
-
-  // Clean up legacy binaries in target directory
-  const legacyPatterns = [/^pty-server-/, /^voice-server-/];
-  const targetBinariesDir = path.join(targetDir, 'binaries');
-  if (fs.existsSync(targetBinariesDir)) {
-    const existingFiles = fs.readdirSync(targetBinariesDir);
-    for (const file of existingFiles) {
-      for (const pattern of legacyPatterns) {
-        if (pattern.test(file)) {
-          try {
-            fs.unlinkSync(path.join(targetBinariesDir, file));
-            log(`  🗑️  Removed legacy: binaries/${file}`, 'yellow');
-          } catch (e) {
-            // Ignore errors
-          }
-          break;
-        }
-      }
-    }
-  }
-
-  if (hasLockedFile) {
-    log('\n⚠️  Some files are locked (Obsidian may be using them)', 'yellow');
-    log('   Solutions:', 'yellow');
-    log('   1. Close Obsidian and run this script again', 'yellow');
-    log('   2. Or use --kill flag to auto-close Obsidian:', 'yellow');
-    log('      node scripts/install-dev.js -f --kill\n', 'cyan');
-    closeReadline();
-    process.exit(1);
-  }
-
-  // 6. If Obsidian was closed earlier, restart it
+  // 6. Restart Obsidian
   if (KILL_OBSIDIAN) {
-    log('\n🚀 Restarting Obsidian...', 'cyan');
+    log('Starting Obsidian...', 'cyan');
+    await sleep(500);
     startObsidian();
+    log('');
   }
 
-  // 7. Complete
-  log('\n🎉 Installation complete!', 'green');
-  
+  // Complete
+  log('Installation complete!\n', 'green');
+
   if (!KILL_OBSIDIAN) {
-    log('\nNext steps:', 'cyan');
+    log('Next steps:', 'cyan');
     log('  1. Open Obsidian', 'yellow');
-    log('  2. Go to Settings → Community plugins', 'yellow');
-    log('  3. Disable "Restricted mode" (if enabled)', 'yellow');
-    log('  4. Find "Smart Workflow" in installed plugins list', 'yellow');
-    log('  5. Enable the plugin', 'yellow');
-    log('  6. Use Command Palette (Ctrl+P) and type "Terminal" to test\n', 'yellow');
+    log('  2. Settings → Community plugins', 'yellow');
+    log('  3. Enable "Smart Workflow" plugin', 'yellow');
+    log('  4. Ctrl+P → "Smart Workflow" to test\n', 'yellow');
   }
 
-  log('💡 Tips:', 'cyan');
-  log('  - After code changes, run pnpm build, then reload plugin in Obsidian', 'yellow');
-  log('  - Press Ctrl+Shift+I to open developer tools for logs', 'yellow');
-  log('  - Quick install: pnpm install:dev:force\n', 'yellow');
-
+  log('Tip: Ctrl+Shift+I for developer console\n', 'gray');
   closeReadline();
 }
 
-main().catch(error => {
-  log(`\n❌ Error: ${error.message}`, 'red');
+main().catch(e => {
+  log(`\nError: ${e.message}`, 'red');
   closeReadline();
   process.exit(1);
 });

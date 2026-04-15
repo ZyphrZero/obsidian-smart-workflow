@@ -18,12 +18,12 @@ function isSecretComponentAvailable(app: App): boolean {
 /**
  * 动态创建 SecretComponent
  */
-function createSecretComponent(app: App, containerEl: HTMLElement): any {
+async function createSecretComponent(app: App, containerEl: HTMLElement): Promise<any> {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const obsidian = require('obsidian');
-    if (obsidian.SecretComponent) {
-      return new obsidian.SecretComponent(app, containerEl);
+    const obsidian = await import('obsidian');
+    const SecretComponent = (obsidian as any).SecretComponent;
+    if (SecretComponent) {
+      return new SecretComponent(app, containerEl);
     }
   } catch {
     // SecretComponent 不可用
@@ -188,14 +188,15 @@ export class ApiKeyManagerModal extends Modal {
         .setName(t('modals.apiKeyManager.selectSharedSecret'));
       
       secretSetting.controlEl.empty();
-      const secretComponent = createSecretComponent(this.app, secretSetting.controlEl);
-      if (secretComponent) {
-        secretComponent
-          .setValue('')
-          .onChange((value: string) => {
-            newSecretId = value;
-          });
-      }
+      void createSecretComponent(this.app, secretSetting.controlEl).then(secretComponent => {
+        if (secretComponent) {
+          secretComponent
+            .setValue('')
+            .onChange((value: string) => {
+              newSecretId = value;
+            });
+        }
+      });
     }
 
     // 本地密钥容器

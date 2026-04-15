@@ -344,7 +344,7 @@ export class CategoryService {
    */
   private parseSuggestions(
     aiResponse: string,
-    folderStructure: FolderInfo
+    _folderStructure: FolderInfo
   ): CategorySuggestion[] {
     try {
       // 尝试解析 JSON 格式

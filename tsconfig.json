@@ -1,26 +1,35 @@
 {
   "compilerOptions": {
-    "baseUrl": ".",
     "inlineSourceMap": true,
     "module": "ESNext",
     "target": "ESNext",
     "allowJs": true,
     "noImplicitAny": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "isolatedModules": true,
     "strictNullChecks": true,
     "skipLibCheck": true,
+    "types": [
+      "node"
+    ],
     "lib": [
       "DOM",
       "ESNext"
     ],
     "paths": {
       "@/*": [
-        "src/*"
+        "./src/*"
       ]
     }
   },
   "include": [
-    "**/*.ts"
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "scripts",
+    "binaries",
+    "rust-servers",
+    "plugin-package"
   ]
 }

@@ -472,7 +472,9 @@ export class ConfigManager {
    */
   private saveSettings(): void {
     if (this.onSettingsChange) {
-      this.onSettingsChange();
+      void this.onSettingsChange().catch((error) => {
+        console.error('[ConfigManager] 保存设置失败:', error);
+      });
     }
   }
 

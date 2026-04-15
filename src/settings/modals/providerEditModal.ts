@@ -1,5 +1,5 @@
 import type { App} from 'obsidian';
-import { Modal, Setting, Notice, setIcon } from 'obsidian';
+import { Modal, Setting, Notice } from 'obsidian';
 import type { ConfigManager } from '../../services/config/configManager';
 import type { Provider, KeyConfig, SecretStorageMode } from '../settings';
 import { t } from '../../i18n';
@@ -113,13 +113,13 @@ function isSecretComponentAvailable(app: App): boolean {
  * 动态创建 SecretComponent
  * 由于 TypeScript 类型定义可能不包含 SecretComponent，使用动态导入
  */
-function createSecretComponent(app: App, containerEl: HTMLElement): any {
+async function createSecretComponent(app: App, containerEl: HTMLElement): Promise<any> {
   try {
     // 尝试从 obsidian 模块动态获取 SecretComponent
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const obsidian = require('obsidian');
-    if (obsidian.SecretComponent) {
-      return new obsidian.SecretComponent(app, containerEl);
+    const obsidian = await import('obsidian');
+    const SecretComponent = (obsidian as any).SecretComponent;
+    if (SecretComponent) {
+      return new SecretComponent(app, containerEl);
     }
   } catch {
     // SecretComponent 不可用
@@ -328,21 +328,22 @@ export class ProviderEditModal extends Modal {
       
       // 使用动态创建的 SecretComponent
       secretSetting.controlEl.empty();
-      const secretComponent = createSecretComponent(this.app, secretSetting.controlEl);
-      if (secretComponent) {
-        secretComponent
-          .setValue(formData.secretId)
-          .onChange((value: string) => {
-            formData.secretId = value;
-          });
-      }
+      void createSecretComponent(this.app, secretSetting.controlEl).then(secretComponent => {
+        if (secretComponent) {
+          secretComponent
+            .setValue(formData.secretId)
+            .onChange((value: string) => {
+              formData.secretId = value;
+            });
+        }
+      });
     }
 
     // 本地密钥容器 (TextComponent with password type)
     localKeyContainer = contentEl.createDiv({ cls: 'local-key-container' });
     let localKeyInput: HTMLInputElement | null = null;
     
-    const localKeySetting = new Setting(localKeyContainer)
+    new Setting(localKeyContainer)
       .setName(t('modals.providerEdit.apiKey'))
       .setDesc(t('modals.providerEdit.apiKeyDesc'))
       .addText(text => {

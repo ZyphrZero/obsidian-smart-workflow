@@ -19,15 +19,14 @@ export const providerExpandedStatus: Map<string, boolean> = new Map();
  * @param path Shell 可执行文件路径
  * @returns 路径是否存在且有效
  */
-export function validateShellPath(path: string): boolean {
+export async function validateShellPath(path: string): Promise<boolean> {
   if (!path || path.trim() === '') return false;
   // 移动端不支持文件系统检查
   if (Platform.isMobile) return true;
   try {
     // 动态导入 fs 模块，避免移动端加载失败
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { existsSync } = require('fs');
-    return existsSync(path);
+    const fs = await import('fs');
+    return fs.existsSync(path);
   } catch {
     return false;
   }
